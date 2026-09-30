@@ -790,7 +790,7 @@ details.more[open] > summary{color:var(--ink)}
 /* ------------------------------------------------------------ 0. IDENTITY -- */
 const APP = {
   name:        'Architecture Advisor PL',
-  version:     '1.102.0',
+  version:     '1.103.0',
   author:      'Nuno Dinis Cortiços',
   institution: 'Lisbon School of Architecture, Universidade de Lisboa',
   builtWith:   'Claude Opus 5 (Anthropic)',
@@ -2189,9 +2189,9 @@ const PLANTING = {
 };
 
 /**
- * Wall finishes, sorted into the three colour classes of the Portuguese
- * thermal regulation (RCCTE Quadro V.5, carried into the REH by Despacho
- * n.º 15793-K/2013): solar absorptance α 0.4 light, 0.5 medium, 0.8 dark.
+ * Wall finishes, sorted into three absorptance classes (after RCCTE Quadro
+ * V.5, used here as pure physics): solar absorptance α 0.4 light, 0.5
+ * medium, 0.8 dark.
  * The albedo — the share of the sun an opaque finish reflects — is 1 − α.
  * Swatches are indicative; the class, not the swatch, carries the number.
  */
@@ -4499,57 +4499,44 @@ function buildEnvironment(host) {
     'The model sets the building drawn on Site — its plan, breaks and patio, turned as set there, under the roof set on Roof — on a disc of base map around its plot: satellite imagery from Esri World Imagery or the street map of OpenStreetMap, each credited on the drawing, loaded by your browser from those services, which see the area of map asked for. Until a plot is found the map may sit on the region’s reference coordinates — its main town’s centre, which can fall in a river or a field.    <b>Find the plot</b> takes an address in Poland (searched on OpenStreetMap’s Nominatim when you press Find, never as you type), coordinates in decimal degrees or degrees, minutes and seconds, or a Google Maps link pasted whole; dragging the ground, or pressing on the small map of the neighbourhood view, moves it. <b>The site follows the plot</b>: once the plot settles, its coordinates become the site’s and every page is rebuilt on them —    the normals by the setup’s own order (the IMGW station within 5 km, else the nearest stations blended; web normals read again where they were the source; normals you typed, or a station you picked, stay yours), the Köppen class, the sun on every page, the ground’s height there (the Copernicus DEM, asked of Open-Meteo) and the place and its voivodeship (asked of Nominatim once the plot has moved 300 m). The model, the windows and the day chosen stay as they were; <b>Back to the coordinates set up</b> returns to the setup’s site. <b>Neighbouring buildings</b> are the footprints mapped on OpenStreetMap within ' + NB_R + ' m, read by your browser from the public Overpass servers (which see the plot’s position; when one is busy the next is asked) and kept in this browser for 30 days, so a spot read once shows at once and its buildings stay when a later request fails; raised to their mapped height, else to their storeys at 3 m each, else to an assumed two storeys (one for a garage or a shed) — those assumed are outlined dashed. The one standing on the plot, and any the design overlaps, give way to the design; any standing between the eye and the design is drawn see-through. Their shadows fall on the ground with the design’s own, and where they fall on the design they are drawn on its walls and roof: each sunlit wall and roof plane is sampled about every 0.7 m and each sample’s ray to the sun followed through the neighbours, which gives the share of the sunlit envelope in their shade at the hour shown. Mapping is thorough in the cities and thinner in the countryside, and trees, walls and the ground’s own slope are not in it: a plot with nothing mapped round it is not necessarily open. The sun is computed for this site in solar time, as everywhere in this application; its paths for 21 June, 20 March and 21 December are drawn on a sky dome over the building, dashed, with the day chosen solid and its even hours marked. Drag the sun — on the dome or on the solar chart — along its path to change the hour, across the paths to change the day. Imagery can be years old and a little off true position; where a service has no imagery at the finest zoom its flat tiles are skipped and the coarser level shows through. In the neighbourhood view a small map in the corner shows the wider area, north up, with the model’s disc in red — press or drag on it to move the plot. The ground takes the light of the hour and the month: brighter under a clear sky and a high sun, duller as the cloud thickens, dark once the sun is down. The dome is a diagram, not to scale with the map; in the neighbourhood view it rises over most of the map and its paths are drawn bolder, on a white edge that keeps them legible over the imagery.')]);
 }
 
-/* ---- the Site optimum for Portugal: Olgyay adapted ----------------------
+/* ---- the Site optimum for Poland: Olgyay adapted ----------------------
    Olgyay's anchors (1963) are New York, Phoenix, Miami and Minneapolis;
-   none is Portuguese, and his hot-arid Phoenix is not the Portuguese Csa,
-   whose winters are wet and still ask for heat. For the two Portuguese
-   Köppen classes the optimum is this application's teaching adaptation,
-   set against the regional houses the Inquérito à Arquitectura Popular em
-   Portugal (1961) and Oliveira & Galhano (1992) record — the single-storey
-   house of the south that grows in length, the house on two floors of the
-   north:
-   · Csa: one storey; 1:1.6 where the year is continental (Alentejo,
-     Ribatejo, Beira Baixa, the Douro and the Terra Quente), 1:1.3 where the
-     sea tempers it (Lisbon, Setúbal, the islands). Continentality is read
-     from the site's own normals as the annual range of the monthly means:
-     13 K or less maritime, 14 K or more continental, in proportion between.
-   · The Algarve keeps 1:1.3 and one storey, and its reading points to the
-     region's own house: small, compact, flat roofs and patios.
-   · Csb: two storeys; 1:1.3 on the mild coast, 1:1.1 in the cold interior
-     (Terra Fria, Beira Alta, Serra da Estrela), read as the coldest month's
-     mean: 9 °C or more mild, 5 °C or less cold, in proportion between.
-   · The Csb of the south-west coast (Alentejo Litoral, the Algarve's west)
-     owes its letter to a cool summer; its winter is the mildest on the
-     mainland and its house the southern one: 1:1.3, one storey.
-   Orientation keeps Olgyay's figures: the main facade 20° (Csa) or 17°
-   (Csb) east of south. Null outside Csa and Csb. */
-function ptOptimum(code, tMonths, nuts) {
-  if (code !== 'Csa' && code !== 'Csb') return null;
+   none is Polish, and his hot-arid Phoenix is the opposite of a Polish
+   heating season. For the Polish Köppen classes the optimum is this
+   application's teaching adaptation, set from heating degree-days and the
+   low winter sun at 52° N rather than from a house survey — compact and on
+   two storeys everywhere, stretching east–west only as far as the winter
+   allows:
+   · Dfb zones I–II: 1:1.4, about 20° east of south;
+   · Dfb zone III: 1:1.3, about 20° east of south;
+   · Dfb zones IV–V: 1:1.2, about 15° east of south;
+   · Dfc (mountains) and Cfb (coast): 1:1.1 and 1:1.4, two storeys.
+   Orientation keeps Olgyay's figures: the main facade about 20° east of
+   south. Null outside Dfb, Dfc and Cfb. */
+function plOptimum(code, tMonths, nuts) {
+  if (code !== 'Dfb' && code !== 'Dfc' && code !== 'Cfb') return null;
   const Tc = Math.min(...tMonths), A = Math.max(...tMonths) - Tc;
-  const base = { pt:true, A, Tc };
-  if (code === 'Csa') {
-    if (nuts === 'Algarve') return Object.assign(base, { az:160, r:1.3, fl:1, type:'algarve' });
-    const s = clamp(A - 13, 0, 1);
-    return Object.assign(base, { az:160, r:+(1.3 + 0.3 * s).toFixed(2), fl:1, type:s >= 0.5 ? 'csa-cont' : 'csa-mar' });
-  }
-  if (nuts === 'Alentejo Litoral' || nuts === 'Algarve') return Object.assign(base, { az:163, r:1.3, fl:1, type:'csb-south' });
-  const c = clamp((9 - Tc) / 4, 0, 1);
-  return Object.assign(base, { az:163, r:+(1.3 - 0.2 * c).toFixed(2), fl:2, type:c >= 0.5 ? 'csb-cold' : 'csb-mild' });
+  const base = { pl:true, A, Tc };
+  const wi = ((VOIV_ZONE[nuts] || [])[0]) || 2;
+  if (code === 'Dfc') return Object.assign(base, { az:160, r:1.1, fl:2, type:'pl-mountain' });
+  if (code === 'Cfb') return Object.assign(base, { az:165, r:1.4, fl:2, type:'pl-coast' });
+  if (wi >= 4) return Object.assign(base, { az:165, r:1.2, fl:2, type:'pl-cold' });
+  if (wi === 3) return Object.assign(base, { az:160, r:1.3, fl:2, type:'pl-cont' });
+  return Object.assign(base, { az:160, r:1.4, fl:2, type:'pl-mild' });
 }
-/** What each Portuguese type of the optimum asks for, in a line. */
-const PT_TYPE = {
-  'csa-cont':'Csa continental — a long single-storey house',
-  'csa-mar':'Csa maritime — a single-storey house, less elongated',
-  'algarve':'Algarve — the region’s small, compact single-storey house',
-  'csb-mild':'Csb mild — a compact house on two storeys',
-  'csb-cold':'Csb cold interior — a squarer house on two storeys',
-  'csb-south':'Csb of the south-west coast — the southern single-storey house' };
+/** What each Polish type of the optimum asks for, in a line. */
+const PL_TYPE = {
+  'pl-mild':'Poland zones I–II — a compact two-storey house, 1:1.4',
+  'pl-cont':'Poland zone III — a compact two-storey house, 1:1.3',
+  'pl-cold':'Poland zones IV–V — a very compact two-storey house, 1:1.2',
+  'pl-mountain':'Polish mountains — a very compact two-storey house, 1:1.1',
+  'pl-coast':'Polish coast — a compact two-storey house, 1:1.4' };
 
 function buildSite(host) {
   const S = STATE.site, C = STATE.clim, K = C.k;
   const lat = S.lat, lon = S.lon, tz = lon / 15;
   pageHead(host, 'Site',
-    "Test a plan's massing against the optimum — Olgyay's, adapted to Portugal in Csa and Csb — scored against the Köppen class and the sun path from Environmental.");
+    "Test a plan's massing against the optimum — Olgyay's, adapted to Poland in Dfb, Dfc and Cfb — scored against the Köppen class and the sun path from Environmental.");
 
   /* --- the plan laboratory: stretch it, turn it, meet Olgyay ----------------
      A top-down massing the student stretches in both directions and rotates,
@@ -4573,17 +4560,17 @@ function buildSite(host) {
   const info = right.appendChild(el('div', { class:'sidegrp' }));     // the readings
   const props = right.appendChild(el('div', { class:'sidegrp' }));   // wall colour
   const stick = () => benchStage(stage);
-  /* Csa and Csb take the optimum adapted to Portugal (ptOptimum); other
+  /* Dfb, Dfc and Cfb take the optimum adapted to Poland (plOptimum); other
      classes interpolate Olgyay's own anchors. */
-  const OI = ptOptimum(K.code, C.t, S.nuts) || ({
-               Cfb:{ az:170, r:1.4 }, Cfa:{ az:170, r:1.4 }, Csc:{ az:170, r:1.4 },
+  const OI = plOptimum(K.code, C.t, S.nuts) || ({
+               Csa:{ az:160, r:1.6 }, Csb:{ az:163, r:1.3 },
                BSk:{ az:160, r:1.3 }, BSh:{ az:160, r:1.3 } }[K.code] || { az:163, r:1.4 });
-  const OPT_NAME = OI.pt ? 'Optimum for Portugal' : 'Olgyay optimum';
+  const OPT_NAME = OI.pl ? 'Optimum for Poland' : 'Olgyay optimum';
   host.appendChild(section('Plan geometry — stretch it, turn it',
-    OI.pt ? t('The solid plan is yours; the green dashed plan is the optimum for Portugal —') + ' ' + t(PT_TYPE[OI.type])
+    OI.pl ? t('The solid plan is yours; the green dashed plan is the optimum for Poland —') + ' ' + t(PL_TYPE[OI.type])
           : t('The solid plan is yours; the green dashed plan is the Olgyay optimum for') + ' ' + K.code));
   host.appendChild(hint('ori-lab',
-    'Olgyay put the most sun on the facade in the underheated period and the least in the overheated one: New York–New Jersey came out <b>17° east of south</b>, Phoenix <b>25° east of south</b>, heat weighted four-to-one (1963, p. 58). For form, the square is never the optimum, north–south elongation is worse than the square, and the optimum always lies somewhere along east–west — 1:1.6 adopted for New York, 1:1.3 for Phoenix (p. 88), with east–west elongation “definitely desirable” in the temperate zone (p. 90). Outside Portugal’s two classes the green form interpolates those anchors for <b>%1</b>; in Csa and Csb it follows the adaptation to Portugal set out below. Stretch and turn yours against it.',
+    'Olgyay put the most sun on the facade in the underheated period and the least in the overheated one: New York–New Jersey came out <b>17° east of south</b>, Phoenix <b>25° east of south</b>, heat weighted four-to-one (1963, p. 58). For form, the square is never the optimum, north–south elongation is worse than the square, and the optimum always lies somewhere along east–west — 1:1.6 adopted for New York, 1:1.3 for Phoenix (p. 88), with east–west elongation “definitely desirable” in the temperate zone (p. 90). Outside Poland’s classes the green form interpolates those anchors for <b>%1</b>; in Dfb, Dfc and Cfb it follows the adaptation to Poland set out below. Stretch and turn yours against it.',
     [K.code]));
 
   if (lat < 0) OI.az = (180 + OI.az) % 360;   // southern hemisphere: mirror to east of north
@@ -4623,7 +4610,7 @@ function buildSite(host) {
     const prox = Math.max(0, 1 - Math.abs(labRatio() - OI.r) / 1.5);
     const k = { ew:1, diag:0.8, sq:0.6, ns:0.4 }[formClass()];
     const form = 100 * prox * k;
-    /* where the climate asks for storeys (Csa: one; Csb: two), they weigh a fifth:
+    /* where the climate asks for storeys (Dfb: two), they weigh a fifth:
        full marks on the number asked, 60 one above it, none below it */
     if (OI.fl) {
       const st = G.fl === OI.fl ? 100 : G.fl > OI.fl ? 60 : 0;
@@ -4643,7 +4630,7 @@ function buildSite(host) {
    * off the one model of the plan and its roof that Roof and Ventilation also
    * draw — walls up to the roof's own profile round the whole outline (a
    * patio's walls included), every roof plane at its pitch, the ground floor.
-   * Single zone, everything exterior: the ratio the REH calls factor de forma,
+   * Single zone, everything exterior: the ratio regulations call form factor,
    * stated here as pure geometry with no limits attached.
    */
   const labFF = () => formFactor(G, RF);
@@ -4856,7 +4843,7 @@ function buildSite(host) {
   }
   function refreshLab() {
     const dev = circDev(G.rot, OI.az), fc = formClass(), r = labRatio();
-    if (dev <= 10) { pillOri.className = 'pill ok'; pillOri.textContent = t(OI.pt ? 'At the optimum' : 'At the Olgyay optimum'); }
+    if (dev <= 10) { pillOri.className = 'pill ok'; pillOri.textContent = t(OI.pl ? 'At the optimum' : 'At the Olgyay optimum'); }
     else if (dev <= 25) { pillOri.className = 'pill empty'; pillOri.textContent = t('Close — nudge it east of south'); }
     else { pillOri.className = 'pill bad'; pillOri.textContent = t('Far from the optimum — follow the green normal'); }
     if (fc === 'ew' && Math.abs(r - OI.r) <= 0.35) { pillForm.className = 'pill ok'; pillForm.textContent = t('East–west near 1 : ') + fmt(OI.r, 1); }
@@ -4927,7 +4914,7 @@ function buildSite(host) {
       }
     }, 150);
   }});
-  const snap = el('button', { class:'btn solid', text:OI.pt ? 'Snap to the optimum for Portugal' : 'Snap to the Olgyay optimum', onclick: () => {
+  const snap = el('button', { class:'btn solid', text:OI.pl ? 'Snap to the optimum for Poland' : 'Snap to the Olgyay optimum', onclick: () => {
     const ob = optBox();                       // the same floor area, re-cut
     G.L = clamp(Math.round(ob.Li * 2) / 2, 6, 24);
     G.D = clamp(Math.round(ob.Di * 2) / 2, 4, 16);
@@ -4937,7 +4924,7 @@ function buildSite(host) {
     syncCtl(cD, G.D, v => fmt(v, 1) + ' m');
     syncCtl(cR, G.rot, v => fmt(v, 0) + '°');
     labDraw();
-    toast(OI.pt ? 'Snapped to the optimum for Portugal' : 'Snapped to the Olgyay optimum');
+    toast(OI.pl ? 'Snapped to the optimum for Poland' : 'Snapped to the Olgyay optimum');
   }});
   planBox.appendChild(el('div', { class:'gh', text:'Plan' }));
   planBox.appendChild(controls([cL, cD, cR, cF, cFH]));
@@ -4945,9 +4932,9 @@ function buildSite(host) {
   sunGrp.appendChild(controls([segDay, cH, playBtn]));
 
   /* --- the wall colour, read as albedo against this site's summer ----------
-     Colour sets how much sun the walls absorb. It is a summer decision: the
-     REH counts the sun absorbed by opaque walls only in the cooling season,
-     and light surfaces are the standard warm-climate advice. So the fit
+     Colour sets how much sun the walls absorb. It is a summer decision: only
+     sun absorbed in the cooling season can overheat,
+     and light surfaces are the standard advice against it. So the fit
      weighs each step above the light class by how hot this summer is — the
      June-to-September mean of the normals (December to March south of the
      equator): no weight at 17 °C or below, full weight at 23 °C or above. */
@@ -4958,7 +4945,7 @@ function buildSite(host) {
   props.appendChild(finishPicker(() => G.col, k => { G.col = k; labDraw(); })).classList.add('fpick');
   const pillCol = el('span', { class:'pill empty' });
   host.appendChild(hint('site-albedo',
-    'The wall colour decides how much of the sun the envelope absorbs. The finishes follow the three colour classes of the Portuguese thermal regulation — light α 0.4, medium 0.5, dark 0.8 (RCCTE Quadro V.5, carried into the REH by Despacho n.º 15793-K/2013) — and the albedo shown is the part reflected, 1 − α. Colour is a summer decision: the REH counts the sun absorbed by opaque walls only in the cooling season, and light surfaces are the standard warm-climate advice (Lechner; Gonçalves &amp; Graça). So <b>Albedo fit</b> weighs every step above the light class by this site’s summer — June to September averages <b>%1 °C</b> here, a <b>%2</b> summer — with no weight at 17 °C or below and full weight at 23 °C or above. The box beneath it gives the albedo itself and names the summer it is read against. Within a class the regulation gives one value; a fresh lime wash reflects more than a cream paint. The 80/50 colour bands are this application’s teaching cuts. The walls take the colour in every 3D view; the roof keeps its own finish.',
+    'The wall colour decides how much of the sun the envelope absorbs. The finishes are grouped in three absorptance classes — light α 0.4, medium 0.5, dark 0.8 (classes after RCCTE Quadro V.5, used here as pure physics) — and the albedo shown is the part reflected, 1 − α. Colour is a summer decision: only sun absorbed in the cooling season can overheat, and light surfaces are the standard advice against it (Lechner). So <b>Albedo fit</b> weighs every step above the light class by this site’s summer — June to September averages <b>%1 °C</b> here, a <b>%2</b> summer — with no weight at 17 °C or below and full weight at 23 °C or above. The box beneath it gives the albedo itself and names the summer it is read against. Within a class one value is used; a fresh lime wash reflects more than a cream paint. The 80/50 colour bands are this application’s teaching cuts. The walls take the colour in every 3D view; the roof keeps its own finish.',
     [fmt(sumT, 1), t(sumBand)]));
   refreshCol = () => {
     const f = finishOf(G.col), sc = albedoFit();
@@ -5347,7 +5334,7 @@ function buildSite(host) {
         desk.block(bx - 2, by - 2, bx + bw + 2, by + bh + 2);
       };
       const sc = labScore(), ff = labFF();
-      badge(0, String(sc.total), t(OI.pt ? 'Optimum fit' : 'Olgyay fit') + ' /100', sc.total >= 80 ? GREEN : sc.total >= 50 ? '#D97706' : '#DC2626');
+      badge(0, String(sc.total), t(OI.pl ? 'Optimum fit' : 'Olgyay fit') + ' /100', sc.total >= 80 ? GREEN : sc.total >= 50 ? '#D97706' : '#DC2626');
       badge(1, fmt(ff.ff, 2), t('Form factor'), ff.ff <= 0.7 ? GREEN : ff.ff <= 1.1 ? '#D97706' : '#DC2626');
       // the wall colour: its fit to this summer, then the albedo it reads as
       const af = albedoFit(), fin = finishOf(G.col);
@@ -5460,14 +5447,14 @@ function buildSite(host) {
       return csvRows([['Parameter', 'Value'],
       ['Student length (m)', +G.L.toFixed(1)], ['Student depth (m)', +G.D.toFixed(1)],
       ['Student main facade azimuth (°)', +G.rot.toFixed(0)],
-      ['Optimum rule', OI.pt ? 'Olgyay adapted to Portugal: ' + PT_TYPE[OI.type] : 'Olgyay (1963), ' + K.code],
+      ['Optimum rule', OI.pl ? 'Olgyay adapted to Poland: ' + PL_TYPE[OI.type] : 'Olgyay (1963), ' + K.code],
       ['Optimum azimuth (°)', +OI.az.toFixed(0)],
       ['Optimum elongation (long:short)', +OI.r.toFixed(2)],
-      ...(OI.pt ? [['Annual range of the monthly means (K)', +OI.A.toFixed(1)], ['Coldest month mean (°C)', +OI.Tc.toFixed(1)]] : []),
+      ...(OI.pl ? [['Annual range of the monthly means (K)', +OI.A.toFixed(1)], ['Coldest month mean (°C)', +OI.Tc.toFixed(1)]] : []),
       ['Storeys the climate asks for', OI.fl || 'any'], ['Student storeys', G.fl],
       ['Envelope per floor area (m²/m²)', +(labFF().A / (planOf().area * G.fl)).toFixed(2)],
       ['Deviation (°)', +circDev(G.rot, OI.az).toFixed(0)],
-      [OI.pt ? 'Optimum fit (0–100)' : 'Olgyay fit (0–100)', labScore().total],
+      [OI.pl ? 'Optimum fit (0–100)' : 'Olgyay fit (0–100)', labScore().total],
       ['Wall colour', finishOf(G.col) ? finishOf(G.col).en + ' (' + finishOf(G.col).cls + ')' : 'not chosen'],
       ['Wall solar absorptance α', finishOf(G.col) ? FINISH_ALPHA[finishOf(G.col).cls] : ''],
       ['Wall albedo (1 − α)', finishOf(G.col) ? +(1 - FINISH_ALPHA[finishOf(G.col).cls]).toFixed(2) : ''],
@@ -5670,9 +5657,9 @@ function buildSite(host) {
   optGrp.appendChild(el('div', { class:'gh', text:'Optimum' }));
   optGrp.appendChild(el('div', { class:'rgroup' }, [snap]));
   /* the rule the optimum follows, and the site's own figures it read */
-  optGrp.appendChild(el('div', { class:'hint', html:(OI.pt ? '<b>' + t('Olgyay adapted to Portugal') + '</b> · ' + t(PT_TYPE[OI.type]) : '<b>' + t('Olgyay (1963)') + '</b> · ' + K.code)
+    optGrp.appendChild(el('div', { class:'hint', html:(OI.pl ? '<b>' + t('Olgyay adapted to Poland') + '</b> · ' + t(PL_TYPE[OI.type]) : '<b>' + t('Olgyay (1963)') + '</b> · ' + K.code)
     + ' — 1 : ' + fmt(OI.r, 2) + (OI.fl ? ' · ' + t(OI.fl === 1 ? 'one storey' : 'two storeys') : '') + ' · ' + fmt(Math.abs(180 - OI.az), 0) + '° ' + t('east of south')
-    + (OI.pt ? '<br>' + t('annual range') + ' ' + fmt(OI.A, 1) + ' K · ' + t('coldest month') + ' ' + fmt(OI.Tc, 1) + ' °C' : '') }));
+    + (OI.pl ? '<br>' + t('annual range') + ' ' + fmt(OI.A, 1) + ' K · ' + t('coldest month') + ' ' + fmt(OI.Tc, 1) + ' °C' : '') }));
   rail.appendChild(el('div', { class:'keys', text:t('Drag the black points on the model: a corner stretches the bar, the break’s point sizes a wing or carves a recess (a U has one on each leg and one in the middle of its court), the patio’s point opens it wider or deeper, a balcony’s round point slides it along the walls and round the corners, its square point sizes it.') }));
   syncFormTools();
   /* the readings, under the model: what each decision does, in words */
@@ -5697,20 +5684,20 @@ function buildSite(host) {
   host.appendChild(hint('ori-score',
     'The badge is a didactic index, not an energy prediction: 60 % orientation — full marks on the green normal, zero at 90° off — plus 40 % form — closeness to the 1:X elongation, discounted for square, diagonal and north–south plans. Where the climate asks for a number of storeys (Csa: one; Csb: two) the weights become 50 % orientation, 30 % form and 20 % storeys — full marks on the number asked, 60 above it, none below — so the wrong number cannot reach 100. Two plans can share a score and behave differently; read it with the pills.'));
   host.appendChild(hint('ori-height',
-    'The two boxes extrude the plan — floors above ground times an editable floor height. The sun below it is driven, not decorative: pick 21 December, 20 March or 21 June, drag the solar hour — or press play — and the shadow follows the trajectory, long and northern in the December morning, short and tight at the June noon. The December noon shadow stays the governing case for spacing. Height moves the fit badge only where the climate asks for a number of storeys (Csa: one; Csb: two); elsewhere the badge knows orientation and plan form alone.'));
-  if (OI.pt) host.appendChild(hint('site-pt',
-    '<b>Olgyay adapted to Portugal.</b> Olgyay’s four anchors — New York, Phoenix, Miami, Minneapolis — include no Portuguese climate, and his hot-arid Phoenix is not the Portuguese Csa, whose winters are wet and still ask for heat. In Csa and Csb the green form follows this application’s adaptation instead, set against the regional houses recorded by the <i>Inquérito à Arquitectura Popular em Portugal</i> (1961) and by Oliveira &amp; Galhano (1992): the single-storey house of the south, which grew in length rather than in height, and the house on two floors of the north. <b>Csa</b> asks for one storey: 1:1.6 where the year is continental — the Alentejo, the Ribatejo, Beira Baixa, the Douro and the Terra Quente — and 1:1.3 where the sea tempers it — Lisbon, Setúbal, the islands. The <b>Algarve</b> keeps 1:1.3 and one storey, and points to the region’s own house: small, compact, with flat roofs (açoteias) and patios — the patio on the left opens one. <b>Csb</b> asks for two storeys and grows squarer as the winter hardens: 1:1.3 on the mild coast, 1:1.1 in the cold interior — the Terra Fria, Beira Alta, Serra da Estrela. The Csb of the south-west coast — the Alentejo coast and the Algarve’s west — owes its letter to a cool summer; its winter is the mildest on the mainland and its house the southern one, so it keeps 1:1.3 and one storey. Continental and maritime are read from this site’s own normals, as the annual range of the monthly means (13 K or less maritime, 14 K or more continental), and the winter as the coldest month’s mean (9 °C or more mild, 5 °C or less cold); between the limits the proportion moves in step. Here: <b>%1</b> — range %2 K, coldest month %3 °C, so 1:%4. The classes follow IPMA’s reading of Köppen for the mainland: Csa south of the Montejunto–Estrela ridge and in the inner Douro valley, Csb to the north and on the west coasts of the Alentejo and the Algarve. The proportions and storeys are this application’s teaching values, read from the pattern of those surveys — neither a regulation nor figures printed in them. One tension to keep in view: the traditional house of Trás-os-Montes, the Terra Quente included, stands on two floors — animals and stores below, the dwelling above — for reasons of the farm and the winter that a thermal optimum does not weigh. Orientation keeps Olgyay’s figures: the main facade 20° east of south in Csa, 17° in Csb.',
-    [t(PT_TYPE[OI.type]), fmt(OI.A, 1), fmt(OI.Tc, 1), fmt(OI.r, 2)]));
+    'The two boxes extrude the plan — floors above ground times an editable floor height. The sun below it is driven, not decorative: pick 21 December, 20 March or 21 June, drag the solar hour — or press play — and the shadow follows the trajectory, long and northern in the December morning, short and tight at the June noon. The December noon shadow stays the governing case for spacing. Height moves the fit badge only where the climate asks for a number of storeys (Dfb: two); elsewhere the badge knows orientation and plan form alone.'));
+  if (OI.pl) host.appendChild(hint('site-pt',
+    '<b>Heating-led optimum for Poland.</b> Olgyay’s method still rules — most sun on the facade in the underheated period — but here that period is October to March, and the December noon sun stands only about 14° above the horizon at 52° N, so the south facade works a short, low arc. The optimum stays compact and on two storeys in every Polish class and stretches east–west only as far as the winter allows: <b>1:1.4</b> in zones I–II, <b>1:1.3</b> in zone III, <b>1:1.2</b> in zones IV–V and <b>1:1.1</b> in the mountains. Here: <b>%1</b> — range %2 K, coldest month %3 °C, so 1:%4. The proportions and storeys are this application’s teaching values, set from heating degree-days and winter sun geometry — neither a regulation nor figures printed in one. Orientation keeps Olgyay’s figures: the main facade about 20° east of south.',
+    [t(PL_TYPE[OI.type]), fmt(OI.A, 1), fmt(OI.Tc, 1), fmt(OI.r, 2)]));
   if (OI.fl === 1) host.appendChild(hint('site-storey1',
-    'In <b>%1</b> the optimum stands on one storey. The southern house grew in length, not in height: one floor keeps every room on the ground and within reach of cross-ventilation, and a long east–west bar gives each room a south wall for the low winter sun and short ends to the low east and west sun of summer. <b>Snap to the optimum for Portugal</b> keeps your floor area and lays it out on one storey; the green volume shows it. A second storey is not wrong — it halves the roof and the footprint — but it gives up the plan’s reach to the south, so the badge holds it at 60 for storeys.',
+    'In <b>%1</b> the optimum stands on one storey: every room on the ground, within reach of the garden and of cross-ventilation, a long east–west bar giving each room a south wall for the low winter sun. <b>Snap to the optimum for Poland</b> keeps your floor area and lays it out on one storey; the green volume shows it. A second storey is not wrong — it halves the roof and the footprint — but it gives up the plan’s reach to the south.',
     [K.code]));
   else if (OI.fl) host.appendChild(hint('site-storeys',
-    'In <b>%1</b> the optimum stands on two storeys, on a squarer plan than the south’s. The compactness a heating-led climate asks for is found in section as well as in plan — the same floor area on two storeys stands on half the footprint, with half the roof and half the ground floor to lose heat through, against more wall: for the 96 m² starting bar, 15 to 20 % less envelope per square metre of floor (3.9 to 3.1 m²/m² under a 41° pitched roof, 3.3 to 2.8 under a flat one). The <b>Form factor</b> divides by volume and counts a pitched roof’s attic as heated, so under a steep roof it can hide that gain; the CSV gives the envelope per floor area. <b>Snap to the optimum for Portugal</b> keeps your floor area and re-cuts it onto two storeys; the green volume shows the optimum at that height. A third storey adds stairs, catches more wind and throws a longer winter shadow on its neighbours, so it earns less than two.',
+    'In <b>%1</b> the optimum stands on two storeys. The compactness a heating-led climate asks for is found in section as well as in plan — the same floor area on two storeys stands on half the footprint, with half the roof and half the ground floor to lose heat through, against more wall: for the 96 m² starting bar, 15 to 20 % less envelope per square metre of floor (3.9 to 3.1 m²/m² under a 41° pitched roof, 3.3 to 2.8 under a flat one). The <b>Form factor</b> divides by volume and counts a pitched roof’s attic as heated, so under a steep roof it can hide that gain; the CSV gives the envelope per floor area. <b>Snap to the optimum for Poland</b> keeps your floor area and re-cuts it onto two storeys; the green volume shows the optimum at that height. A third storey adds stairs, catches more wind and throws a longer winter shadow on its neighbours, so it earns less than two.',
     [K.code]));
   host.appendChild(hint('site-windows',
     'The windows on the model are the ones sized on <b>Windows &amp; Shading</b> — the same width, sill and head, each set by its facade’s window-to-wall ratio — so turning the plan here turns them with it. Each blue tag names the way that window really faces once the plan is turned, then its width × height and the facade’s WWR; on Windows &amp; Shading the facades keep the names they have with the main facade to the south. The rule to read them by: <b>the larger the window, the more it should face south; the smaller, the more it faces north</b> (north and south swap below the equator). South glass collects the low winter sun and is the easiest to shade from the high summer sun; north glass gives even, diffuse light but gains almost no winter sun while it loses heat (Lechner; Gonçalves &amp; Graça). <b>Window fit</b> reads it: every window counts as an arrow out of its facade, as long as the glass its WWR asks for, and the fit is 100 when their sum points due south, 50 east or west, 0 north. The sizes change on Windows &amp; Shading; the plan’s turn, here, decides where they look. Windows &amp; Shading draws each window as one strip on the ground floor, no wider than 92 % of its wall — on two or three floors the strips can reach that limit and look alike while their WWR, and the fit, still differ. On a broken plan every wall at least 1.5 m long carries its orientation’s window, sized from its own area, and the tag counts the windows facing that way with their widths; <b>Window fit</b> then adds all the glass of each orientation.'));
   host.appendChild(hint('ori-ff',
-    'Form factor FF = exterior envelope ÷ heated volume, in m⁻¹ — walls to the eaves, gable triangles, roof planes and ground floor over the volume they enclose, one single zone, everything exterior. Lower is more compact: the round shepherd shelters of Monchique are the vernacular extreme (Gonçalves & Graça). It is the same ratio the REH calls <i>factor de forma</i>, stated here as pure geometry with no limits attached — Construction Advisor takes it from there. The badge paints it green at or below 0.7 (compact), amber to 1.1 (moderate) and red above (dispersed): didactic bands, not limits. It does not move the fit badge.'));
+    'Form factor FF = exterior envelope ÷ heated volume, in m⁻¹ — walls to the eaves, gable triangles, roof planes and ground floor over the volume they enclose, one single zone, everything exterior. Lower is more compact: the sphere is the geometric extreme. It is stated here as pure geometry with no limits attached. The badge paints it green at or below 0.7 (compact), amber to 1.1 (moderate) and red above (dispersed): didactic bands, not limits. It does not move the fit badge.'));
 
   /* --- direct manipulation: drag the body to stretch, the knob to turn ----- */
   const cv = labPanel.canvas;
@@ -8494,8 +8481,8 @@ function buildVentilation(host) {
     let ok = false;
     const notes = [];
     /* Relief and wind derive independently: a blind elevation service
-       must never cost wind that is available, from the Alentejo plain
-       to a Madeiran slope. */
+       must never cost wind that is available, from a flat plain
+       to a mountain slope. */
     try {
       const dLat = 0.009, dLon = 0.009 / Math.max(0.2, Math.cos(lat * RAD));
       const pts = [[0, 0]];
@@ -10134,10 +10121,8 @@ const REFS = [
    'The summer design zones I–II on the setup screen: I coastal 28 °C at 52 % RH, II rest 30 °C at 45 % RH.', null],
   ['IMGW-PIB. Station metadata (codes, coordinates, altitude).',
    'The coordinates and heights of the embedded synoptic stations.', 'https://klimat.imgw.pl/en/meta-dane'],
-  ['Sindicato Nacional dos Arquitectos. (1961). <i>Arquitectura popular em Portugal</i> (2 vols.). Lisboa: SNA.',
-   'The survey of the regional houses the Site optimum for Portugal is set against: the single-storey house of the south that grew in length, the house on two floors of the north, the compact house of the Algarve.', null],
-  ['Oliveira, E. V. de, &amp; Galhano, F. (1992). <i>Arquitectura tradicional portuguesa</i>. Lisboa: Publicações Dom Quixote.',
-   'The two basic Portuguese houses and their geography — the house on two floors of the north, the single-storey house of the south — read by the Site optimum for Portugal.', null],
+  ['PN-EN 12831-1:2017, Table NB.',
+   'The heating degree-days behind the Site optimum: the winter design temperatures and mean annual temperatures it stretches against.', null],
   ['AEMET &amp; Instituto de Meteorologia de Portugal. (2011). <i>Atlas climático ibérico / Iberian climate atlas</i>. Madrid and Lisboa: AEMET and IM.',
    'The Köppen–Geiger classes of the Iberian peninsula, 1971–2000: Csa south of the Montejunto–Estrela ridge and in the inner Douro valley, Csb to the north and on the south-west coast.', 'https://www.ipma.pt/resources.www/docs/publicacoes.site/atlas_clima_iberico.pdf'],
   ['IMGW-PIB. Climate normals 1991–2020 (klimat.imgw.pl).',
