@@ -557,8 +557,8 @@ details.more[open] > summary{color:var(--ink)}
         <h2 data-t="setupTitle">Where are you building, and in what climate?</h2>
         <p data-t="setupBody">This application applies no limit from a regulation. It works from the position of the
           building and from the climate that position sits in, classified by <b>Köppen–Geiger</b>, because that
-          is the classification the design literature is written against — and, in Portugal, placed in the winter
-          and summer <b>climate zones of the SCE</b>, the regulation’s own reading of the territory. Name the place,
+           is the classification the design literature is written against — and, in Poland, placed in the winter
+           zones of <b>PN-EN 12831</b> and the summer zones of <b>PN-76/B-03420</b>. Name the place,
           give its coordinates and altitude, then enter the monthly normals of the nearest station. What follows is
           orientation, compactness, roof, glazing, shading, the organisation of the plan and the movement of air —
           the decisions taken before any limit can be applied to them.</p>
@@ -569,26 +569,26 @@ details.more[open] > summary{color:var(--ink)}
           <div class="sbox">
             <div class="fld">
               <label for="selConc" data-t="fldConc">Place</label>
-              <input list="concList" id="selConc" placeholder="Lisboa" autocomplete="off" spellcheck="false">
-              <datalist id="concList"></datalist>
-              <span class="sub" id="concSub" data-t="fldConcSub">Type a Portuguese municipality, or any name you want the exports to carry.</span>
+               <input list="concList" id="selConc" placeholder="Warszawa" autocomplete="off" spellcheck="false">
+               <datalist id="concList"></datalist>
+               <span class="sub" id="concSub" data-t="fldConcSub">Type a Polish city, or any name you want the exports to carry.</span>
             </div>
             <div class="fld">
               <label for="selNuts" data-t="fldNuts">Region</label>
               <select id="selNuts"></select>
-              <span class="sub" data-t="fldNutsSub">Seeds the coordinates with the region’s main town and labels the site. With the altitude it sets the SCE climate zones (Manual SCE, Anexo II), and it tunes the Site optimum for Portugal.</span>
+               <span class="sub" data-t="fldNutsSub">Seeds the coordinates with the voivodeship capital and labels the site. With the place it sets the PN-EN 12831 winter zone and the PN-76 summer zone.</span>
             </div>
           </div>
           <div class="gh" data-t="ghCoords">Coordinates</div>
           <div class="sbox two">
             <div class="fld">
               <label for="inpLat" data-t="fldLat">Latitude</label>
-              <input type="number" id="inpLat" min="-90" max="90" step="0.01" value="38.7">
+               <input type="number" id="inpLat" min="-90" max="90" step="0.01" value="52.23">
               <span class="sub" id="latSub" data-t="fldLatSub">Degrees, north positive. Seeded from the region’s main town; replace it with the building's own.</span>
             </div>
             <div class="fld">
               <label for="inpLon" data-t="fldLon">Longitude</label>
-              <input type="number" id="inpLon" min="-180" max="180" step="0.01" value="-9.14">
+               <input type="number" id="inpLon" min="-180" max="180" step="0.01" value="21.01">
               <span class="sub" data-t="fldLonSub">Degrees, east positive. Read it off a map at the site itself.</span>
             </div>
             <div class="fld wide">
@@ -597,7 +597,7 @@ details.more[open] > summary{color:var(--ink)}
                 <input type="number" id="inpAlt" min="0" max="4000" step="5" value="100" style="flex:1">
                 <button type="button" class="btn" id="btnAltLookup" data-t="altLookup">Look up</button>
               </div>
-              <span class="sub" data-t="fldAltSub">Metres above sea level, at the building, not at the town hall. The SCE zones are corrected to it.</span>
+               <span class="sub" data-t="fldAltSub">Metres above sea level, at the building, not at the town hall.</span>
               <span class="fieldstatus" id="altStatus"></span>
             </div>
           </div>
@@ -627,53 +627,41 @@ details.more[open] > summary{color:var(--ink)}
             <h3 data-t="normTitle">Monthly normals</h3>
             <p data-t="normBody">Köppen–Geiger is computed, not looked up, so it needs the twelve monthly
               mean temperatures and the twelve monthly precipitation totals. This application ships none: normals are
-              measured data and it has no authority to invent them. Take them from the IPMA <i>normais climatológicas</i>
-              for the nearest station, from another national service, or from a gridded product such as WorldClim, and
-              name the source so the export carries it. The boxes fill themselves in this order: the embedded IPMA station within 5 km of the coordinates above; where there is none, a blend of the nearest stations, weighted by inverse distance; and, on request, web normals — reanalysis for these exact coordinates. Blend nearest and Fetch web normals open only where no station lies within 5 km. Change the coordinates and the choice is made again; type in the boxes and they stay yours.</p>
+               measured data and it has no authority to invent them. Take them from the IMGW-PIB climate normals
+               for the nearest synoptic station, from another national service, or from a gridded product such as WorldClim, and
+               name the source so the export carries it. The boxes fill themselves in this order: the embedded IMGW station within 5 km of the coordinates above; where there is none, a blend of the nearest stations, weighted by inverse distance; and, on request, web normals — reanalysis for these exact coordinates. Blend nearest and Fetch web normals open only where no station lies within 5 km. Change the coordinates and the choice is made again; type in the boxes and they stay yours.</p>
           </div></div>
           <div class="panel-body">
             <div id="normGrid"></div>
             <div class="fld srcfld">
               <label for="inpSource" data-t="fldSource">Where the normals come from</label>
               <div class="srcrow">
-                <input type="text" id="inpSource" list="srcList" placeholder="IPMA, Lisboa/Gago Coutinho, 1981–2010" autocomplete="off">
+                <input type="text" id="inpSource" list="srcList" placeholder="IMGW, Warszawa/Okęcie, 1991–2020" autocomplete="off">
                 <button type="button" class="btn" id="btnSrcBlend" data-t="srcBlend">Blend nearest</button>
                 <button type="button" class="btn" id="btnSrcWeb" data-t="srcWeb">Fetch web normals</button>
               </div>
               <datalist id="srcList">
-                <option value="IPMA, Lisboa/Gago Coutinho, 1981–2010"></option>
-                <option value="IPMA, Lisboa/Geofísico, 1981–2010"></option>
-                <option value="IPMA, Porto/Pedras Rubras, 1981–2010"></option>
-                <option value="IPMA, Porto/Serra do Pilar, 1981–2010"></option>
-                <option value="IPMA, Coimbra, 1981–2010"></option>
-                <option value="IPMA, Aveiro, 1981–2010"></option>
-                <option value="IPMA, Viana do Castelo, 1981–2010"></option>
-                <option value="IPMA, Vila Real, 1981–2010"></option>
-                <option value="IPMA, Bragança, 1981–2010"></option>
-                <option value="IPMA, Chaves, 1981–2010"></option>
-                <option value="IPMA, Montalegre, 1981–2010"></option>
-                <option value="IPMA, Mirandela, 1981–2010"></option>
-                <option value="IPMA, Viseu, 1981–2010"></option>
-                <option value="IPMA, Guarda, 1981–2010"></option>
-                <option value="IPMA, Penhas Douradas, 1981–2010"></option>
-                <option value="IPMA, Castelo Branco, 1981–2010"></option>
-                <option value="IPMA, Portalegre, 1981–2010"></option>
-                <option value="IPMA, Évora, 1981–2010"></option>
-                <option value="IPMA, Beja, 1981–2010"></option>
-                <option value="IPMA, Setúbal, 1981–2010"></option>
-                <option value="IPMA, Sines, 1981–2010"></option>
-                <option value="IPMA, Sagres, 1981–2010"></option>
-                <option value="IPMA, Faro, 1981–2010"></option>
-                <option value="IPMA, Cabo Carvoeiro (Peniche), 1981–2010"></option>
-                <option value="IPMA, Funchal, 1981–2010"></option>
-                <option value="IPMA, Porto Santo, 1981–2010"></option>
-                <option value="IPMA, Ponta Delgada, 1981–2010"></option>
-                <option value="IPMA, Angra do Heroísmo, 1981–2010"></option>
-                <option value="IPMA, Horta, 1981–2010"></option>
-                <option value="IPMA, Santa Cruz das Flores, 1981–2010"></option>
-                <option value="WorldClim v2.1, 1970–2000"></option>
+                <option value="IMGW, Łeba, 1991–2020"></option>
+                <option value="IMGW, Szczecin/Dąbie, 1991–2020"></option>
+                <option value="IMGW, Gorzów Wielkopolski, 1991–2020"></option>
+                <option value="IMGW, Zielona Góra, 1991–2020"></option>
+                <option value="IMGW, Poznań/Ławica, 1991–2020"></option>
+                <option value="IMGW, Toruń, 1991–2020"></option>
+                <option value="IMGW, Olsztyn/Dajtki, 1991–2020"></option>
+                <option value="IMGW, Białystok, 1991–2020"></option>
+                <option value="IMGW, Suwałki, 1991–2020"></option>
+                <option value="IMGW, Warszawa/Okęcie, 1991–2020"></option>
+                <option value="IMGW, Łódź/Lublinek, 1991–2020"></option>
+                <option value="IMGW, Lublin/Radawiec, 1991–2020"></option>
+                <option value="IMGW, Kielce/Suków, 1991–2020"></option>
+                <option value="IMGW, Kraków/Balice, 1991–2020"></option>
+                <option value="IMGW, Katowice/Muchowiec, 1991–2020"></option>
+                <option value="IMGW, Opole, 1991–2020"></option>
+                <option value="IMGW, Wrocław/Strachowice, 1991–2020"></option>
+                <option value="IMGW, Rzeszów/Jasionka, 1991–2020"></option>
+                <option value="IMGW, Zakopane, 1991–2020"></option>
               </datalist>
-              <span class="sub" data-t="fldSourceSub">Written into every CSV and PNG this application exports. A station can still be picked from the list — fichas at ipma.pt/oclima/normais.clima — or your own source named. Stations, blends and web fetches name themselves.</span>
+              <span class="sub" data-t="fldSourceSub">Written into every CSV and PNG this application exports. A station can still be picked from the list — norms tables at klimat.imgw.pl — or your own source named. Stations, blends and web fetches name themselves.</span>
               <span class="fieldstatus" id="srcStatus"></span>
             </div>
           </div>
@@ -709,8 +697,8 @@ details.more[open] > summary{color:var(--ink)}
             </div>
             <div>
               <h4 data-t="ex3h">A companion, not a replacement</h4>
-              <p data-t="ex3p">Construction Advisor answers to the SCE and reports what an envelope may not exceed.
-                 This one carries only the SCE’s climate zones, as a reading of the territory, and none of its limits.
+              <p data-t="ex3p">Construction Advisor answers to a regulation and reports what an envelope may not exceed.
+                 This one carries only climate zones, as a reading of the territory, and none of any regulation's limits.
                  Use them in that order: shape the building here, then take it there to be checked.</p>
             </div>
           </div>
@@ -743,10 +731,10 @@ details.more[open] > summary{color:var(--ink)}
       <div>
         <h5 data-t="footClass">Classification</h5>
         <p data-t="footClassBody">Köppen–Geiger, in the formalisation of Peel, Finlayson and McMahon (2007),
-           computed from the normals you enter; for a site in Portugal, the winter and summer climate zones of the
-           Manual SCE, from the region and the altitude.</p>
+           computed from the normals you enter; for a site in Poland, the winter zones of PN-EN 12831-1 and the
+           summer zones of PN-76/B-03420, from the nearest synoptic station.</p>
         <h5 style="margin-top:14px" data-t="footPriv">Privacy</h5>
-        <p style="color:var(--muted)" data-t="footPrivBody">Nothing is uploaded or stored outside this browser. Coordinates go only to the services that fill something in: elevation (Look up), Open-Meteo (Fetch web normals), the map tiles (Esri, OpenStreetMap), the neighbouring buildings (Overpass), the address search (Nominatim) and, when the plot moves, its height (Open-Meteo) and municipality (Nominatim).</p>
+        <p style="color:var(--muted)" data-t="footPrivBody">Nothing is uploaded or stored outside this browser. Coordinates go only to the services that fill something in: elevation (Look up), Open-Meteo (Fetch web normals), the map tiles (Esri, OpenStreetMap), the neighbouring buildings (Overpass), the address search (Nominatim) and, when the plot moves, its height (Open-Meteo) and place (Nominatim).</p>
       </div>
     </div>
 
@@ -759,7 +747,7 @@ details.more[open] > summary{color:var(--ink)}
       © 2026 Nuno Dinis Cortiços. This is a teaching instrument. It reports what the design literature
       recommends and names the source of every recommendation, but a guideline is not a calculation and this
       application is not an energy model. Nothing it reports is a compliance statement, and none of it
-      substitutes for the checks required under the SCE.
+      substitutes for the checks required for compliance.
     </p>
   </div>
 </footer>
@@ -772,14 +760,14 @@ details.more[open] > summary{color:var(--ink)}
 "use strict";
 
 /* ============================================================================
-   ARCHITECTURE ADVISOR PT — a single-file bioclimatic design advisor for
+   ARCHITECTURE ADVISOR PL — a single-file bioclimatic design advisor for
    architecture students
    ----------------------------------------------------------------------------
    The companion to Construction Advisor, and its opposite in method.
-   Construction Advisor answers to a regulation: it takes a NUTS III region and
-   an altitude and reports the limits the SCE puts on an envelope. This
-   application carries none of those limits — only the SCE's climate zones, on
-   the setup screen, as the regulation's reading of the territory and the
+   Construction Advisor answers to a regulation: it takes a region and
+   an altitude and reports the limits the regulation puts on an envelope. This
+   application carries none of those limits — only climate zones, on
+   the setup screen, as a reading of the territory and the
    strategies each zone asks for. It answers to the design literature
    instead — Olgyay, Lechner, DeKay and Brown, Hyde, Ching and Shapiro, Brophy
    and Lewis and the rest of the shared bibliography — and it works on the
@@ -791,8 +779,8 @@ details.more[open] > summary{color:var(--ink)}
    A site here is a coordinate and a climate, not a table row. The climate is
    classified by Köppen–Geiger, computed from monthly normals the student
    supplies, because that is the classification the design literature is
-   written against; the SCE zones sit beside it, read from the region and the
-   altitude as the Manual SCE reads them.
+   written against; the design zones sit beside it, read from the nearest
+   synoptic station.
 
    Sections:  0 utilities · 1 solar geometry · 2 chart engine · 3 geography ·
               4 climate and design data · 5 the site engine · 6 page furniture ·
@@ -802,7 +790,7 @@ details.more[open] > summary{color:var(--ink)}
 /* ------------------------------------------------------------ 0. IDENTITY -- */
 const APP = {
   name:        'Architecture Advisor PL',
-  version:     '1.101.0',
+  version:     '1.102.0',
   author:      'Nuno Dinis Cortiços',
   institution: 'Lisbon School of Architecture, Universidade de Lisboa',
   builtWith:   'Claude Opus 5 (Anthropic)',
@@ -1323,13 +1311,13 @@ function convexHull(pts) {
 
 /* --- the plot on the ground: where it is, and what stands around it -------
    A plot is found from an address (OpenStreetMap's Nominatim, searched in
-   Portugal only, on request, never as-you-type), from coordinates, or from
+   Poland only, on request, never as-you-type), from coordinates, or from
    a Google Maps link pasted whole. The buildings round it are read from
    OpenStreetMap through the Overpass API: footprints kept in latitude and
    longitude, so the plot can slide under them without asking again, asked
    afresh once it moves more than 50 m from where they were read. */
-const PT_BOXES = [[36.8, 42.2, -9.6, -6.1], [32.3, 33.2, -17.4, -16.2], [36.8, 39.9, -31.4, -24.9], [29.9, 30.2, -16.1, -15.8]];
-const inPortugal = (la, lo) => PT_BOXES.some(b => la >= b[0] && la <= b[1] && lo >= b[2] && lo <= b[3]);
+const PL_BOXES = [[49.0, 54.9, 14.1, 24.2]];
+const inPoland = (la, lo) => PL_BOXES.some(b => la >= b[0] && la <= b[1] && lo >= b[2] && lo <= b[3]);
 const distM = (a, b) => Math.hypot((a.lat - b.lat) * 111320, (a.lon - b.lon) * 111320 * Math.cos(a.lat * Math.PI / 180));
 /** Coordinates in any of the forms a student is likely to paste. */
 function parseSpot(s) {
@@ -1615,7 +1603,7 @@ function sectionHead(title, note) {
   return el('div', { class:'sechead' }, [ el('h3', { text:title }), note ? el('span', { text:note }) : null ]);
 }
 /**
- * A Portuguese spreadsheet expects the semicolon as list separator and the
+ * A continental spreadsheet expects the semicolon as list separator and the
  * comma as decimal mark, so the export follows the interface language. Numeric
  * fields are converted at this single point rather than at every call site.
  */
@@ -1644,114 +1632,81 @@ function csvHeader(extra) {
 }
 
 /* ------------------------------------------------------- 1. GEOGRAPHY --
-   Shared by both applications: the municipality list is the same country
-   whichever set of rules is being applied to it.
+   Polish cities and voivodeships: the place list the setup screen matches,
+   and each voivodeship's reference town for seeding coordinates.
    ====================================================================== */
-
 /**
- * The 308 municipalities and the NUTS III each belongs to — Anexo II, Tabela
- * 116 of the Manual SCE, whose composition follows Decreto-Lei n.º 68/2008.
- * Calheta and Lagoa each name two municipalities in different regions, so the
- * value is a list and the ambiguity is reported rather than resolved silently.
+ * Major Polish cities and towns and the voivodeship each belongs to.
+ * A name two voivodeships share would take a list; none does, so every
+ * value is a single-element list and the setup code needs no change.
  */
-
 const CONCELHOS = {
-  'Abrantes':['Médio Tejo'],'Aguiar da Beira':['Dão-Lafões'],'Alandroal':['Alentejo Central'],
-  'Albergaria-a-Velha':['Baixo Vouga'],'Albufeira':['Algarve'],'Alcanena':['Médio Tejo'],'Alcobaça':['Oeste'],
-  'Alcochete':['Península de Setúbal'],'Alcoutim':['Algarve'],'Alcácer do Sal':['Alentejo Litoral'],
-  'Alenquer':['Oeste'],'Alfândega da Fé':['Alto Trás-os-Montes'],'Alijó':['Douro'],'Aljezur':['Algarve'],
-  'Aljustrel':['Baixo Alentejo'],'Almada':['Península de Setúbal'],'Almeida':['Beira Interior Norte'],
-  'Almeirim':['Lezíria do Tejo'],'Almodôvar':['Baixo Alentejo'],'Alpiarça':['Lezíria do Tejo'],
-  'Alter do Chão':['Alto Alentejo'],'Alvaiázere':['Pinhal Interior Norte'],'Alvito':['Baixo Alentejo'],
-  'Amadora':['Grande Lisboa'],'Amarante':['Tâmega'],'Amares':['Cávado'],'Anadia':['Baixo Vouga'],
-  'Angra do Heroísmo':['RA dos Açores'],'Ansião':['Pinhal Interior Norte'],'Arcos de Valdevez':['Minho-Lima'],
-  'Arganil':['Pinhal Interior Norte'],'Armamar':['Douro'],'Arouca':['Entre Douro e Vouga'],
-  'Arraiolos':['Alentejo Central'],'Arronches':['Alto Alentejo'],'Arruda dos Vinhos':['Oeste'],
-  'Aveiro':['Baixo Vouga'],'Avis':['Alto Alentejo'],'Azambuja':['Lezíria do Tejo'],'Baião':['Tâmega'],
-  'Barcelos':['Cávado'],'Barrancos':['Baixo Alentejo'],'Barreiro':['Península de Setúbal'],
-  'Batalha':['Pinhal Litoral'],'Beja':['Baixo Alentejo'],'Belmonte':['Cova da Beira'],'Benavente':['Lezíria do Tejo'],
-  'Bombarral':['Oeste'],'Borba':['Alentejo Central'],'Boticas':['Alto Trás-os-Montes'],'Braga':['Cávado'],
-  'Bragança':['Alto Trás-os-Montes'],'Cabeceiras de Basto':['Ave'],'Cadaval':['Oeste'],'Caldas da Rainha':['Oeste'],
-  'Calheta':['RA dos Açores','RA da Madeira'],'Caminha':['Minho-Lima'],'Campo Maior':['Alto Alentejo'],
-  'Cantanhede':['Baixo Mondego'],'Carrazeda de Ansiães':['Douro'],'Carregal do Sal':['Dão-Lafões'],
-  'Cartaxo':['Lezíria do Tejo'],'Cascais':['Grande Lisboa'],'Castanheira de Pera':['Pinhal Interior Norte'],
-  'Castelo Branco':['Beira Interior Sul'],'Castelo de Paiva':['Tâmega'],'Castelo de Vide':['Alto Alentejo'],
-  'Castro Daire':['Dão-Lafões'],'Castro Marim':['Algarve'],'Castro Verde':['Baixo Alentejo'],
-  'Celorico da Beira':['Beira Interior Norte'],'Celorico de Basto':['Tâmega'],'Chamusca':['Lezíria do Tejo'],
-  'Chaves':['Alto Trás-os-Montes'],'Cinfães':['Tâmega'],'Coimbra':['Baixo Mondego'],
-  'Condeixa-a-Nova':['Baixo Mondego'],'Constância':['Médio Tejo'],'Coruche':['Lezíria do Tejo'],
-  'Covilhã':['Cova da Beira'],'Crato':['Alto Alentejo'],'Cuba':['Baixo Alentejo'],'Câmara de Lobos':['RA da Madeira'],
-  'Elvas':['Alto Alentejo'],'Entroncamento':['Médio Tejo'],'Espinho':['Grande Porto'],'Esposende':['Cávado'],
-  'Estarreja':['Baixo Vouga'],'Estremoz':['Alentejo Central'],'Fafe':['Ave'],'Faro':['Algarve'],
-  'Felgueiras':['Tâmega'],'Ferreira do Alentejo':['Baixo Alentejo'],'Ferreira do Zêzere':['Médio Tejo'],
-  'Figueira da Foz':['Baixo Mondego'],'Figueira de Castelo Rodrigo':['Beira Interior Norte'],
-  'Figueiró dos Vinhos':['Pinhal Interior Norte'],'Fornos de Algodres':['Serra da Estrela'],
-  'Freixo de Espada à Cinta':['Douro'],'Fronteira':['Alto Alentejo'],'Funchal':['RA da Madeira'],
-  'Fundão':['Cova da Beira'],'Gavião':['Alto Alentejo'],'Golegã':['Lezíria do Tejo'],'Gondomar':['Grande Porto'],
-  'Gouveia':['Serra da Estrela'],'Grândola':['Alentejo Litoral'],'Guarda':['Beira Interior Norte'],
-  'Guimarães':['Ave'],'Góis':['Pinhal Interior Norte'],'Horta':['RA dos Açores'],
-  'Idanha-a-Nova':['Beira Interior Sul'],'Lagoa':['Algarve','RA dos Açores'],'Lagos':['Algarve'],
-  'Lajes das Flores':['RA dos Açores'],'Lajes do Pico':['RA dos Açores'],'Lamego':['Douro'],
-  'Leiria':['Pinhal Litoral'],'Lisboa':['Grande Lisboa'],'Loulé':['Algarve'],'Loures':['Grande Lisboa'],
-  'Lourinhã':['Oeste'],'Lousada':['Tâmega'],'Lousã':['Pinhal Interior Norte'],
-  'Macedo de Cavaleiros':['Alto Trás-os-Montes'],'Machico':['RA da Madeira'],'Madalena':['RA dos Açores'],
-  'Mafra':['Grande Lisboa'],'Maia':['Grande Porto'],'Mangualde':['Dão-Lafões'],'Manteigas':['Beira Interior Norte'],
-  'Marco de Canaveses':['Tâmega'],'Marinha Grande':['Pinhal Litoral'],'Marvão':['Alto Alentejo'],
-  'Matosinhos':['Grande Porto'],'Mação':['Médio Tejo'],'Mealhada':['Baixo Mondego'],'Melgaço':['Minho-Lima'],
-  'Mesão Frio':['Douro'],'Mira':['Baixo Mondego'],'Miranda do Corvo':['Pinhal Interior Norte'],
-  'Miranda do Douro':['Alto Trás-os-Montes'],'Mirandela':['Alto Trás-os-Montes'],'Mogadouro':['Alto Trás-os-Montes'],
-  'Moimenta da Beira':['Douro'],'Moita':['Península de Setúbal'],'Monchique':['Algarve'],'Mondim de Basto':['Ave'],
-  'Monforte':['Alto Alentejo'],'Montalegre':['Alto Trás-os-Montes'],'Montemor-o-Novo':['Alentejo Central'],
-  'Montemor-o-Velho':['Baixo Mondego'],'Montijo':['Península de Setúbal'],'Monção':['Minho-Lima'],
-  'Mora':['Alentejo Central'],'Mortágua':['Baixo Mondego'],'Moura':['Baixo Alentejo'],'Mourão':['Alentejo Central'],
-  'Murtosa':['Baixo Vouga'],'Murça':['Douro'],'Mértola':['Baixo Alentejo'],'Mêda':['Beira Interior Norte'],
-  'Nazaré':['Oeste'],'Nelas':['Dão-Lafões'],'Nisa':['Alto Alentejo'],'Nordeste':['RA dos Açores'],
-  'Odemira':['Alentejo Litoral'],'Odivelas':['Grande Lisboa'],'Oeiras':['Grande Lisboa'],
-  'Oleiros':['Pinhal Interior Sul'],'Olhão':['Algarve'],'Oliveira de Azeméis':['Entre Douro e Vouga'],
-  'Oliveira de Frades':['Dão-Lafões'],'Oliveira do Bairro':['Baixo Vouga'],
-  'Oliveira do Hospital':['Pinhal Interior Norte'],'Ourique':['Baixo Alentejo'],'Ourém':['Médio Tejo'],
-  'Ovar':['Baixo Vouga'],'Palmela':['Península de Setúbal'],'Pampilhosa da Serra':['Pinhal Interior Norte'],
-  'Paredes':['Tâmega'],'Paredes de Coura':['Minho-Lima'],'Paços de Ferreira':['Tâmega'],
-  'Pedrógão Grande':['Pinhal Interior Norte'],'Penacova':['Baixo Mondego'],'Penafiel':['Tâmega'],
-  'Penalva do Castelo':['Dão-Lafões'],'Penamacor':['Beira Interior Sul'],'Penedono':['Douro'],
-  'Penela':['Pinhal Interior Norte'],'Peniche':['Oeste'],'Peso da Régua':['Douro'],'Pinhel':['Beira Interior Norte'],
-  'Pombal':['Pinhal Litoral'],'Ponta Delgada':['RA dos Açores'],'Ponta do Sol':['RA da Madeira'],
-  'Ponte da Barca':['Minho-Lima'],'Ponte de Lima':['Minho-Lima'],'Ponte de Sor':['Alto Alentejo'],
-  'Portalegre':['Alto Alentejo'],'Portel':['Alentejo Central'],'Portimão':['Algarve'],'Porto':['Grande Porto'],
-  'Porto Moniz':['RA da Madeira'],'Porto Santo':['RA da Madeira'],'Porto de Mós':['Pinhal Litoral'],
-  'Povoação':['RA dos Açores'],'Praia da Vitória':['RA dos Açores'],'Proença-a-Nova':['Pinhal Interior Sul'],
-  'Póvoa de Lanhoso':['Ave'],'Póvoa de Varzim':['Grande Porto'],'Redondo':['Alentejo Central'],
-  'Reguengos de Monsaraz':['Alentejo Central'],'Resende':['Tâmega'],'Ribeira Brava':['RA da Madeira'],
-  'Ribeira Grande':['RA dos Açores'],'Ribeira de Pena':['Alto Trás-os-Montes'],'Rio Maior':['Lezíria do Tejo'],
-  'S. Brás de Alportel':['Algarve'],'Sabrosa':['Douro'],'Sabugal':['Beira Interior Norte'],
-  'Salvaterra de Magos':['Lezíria do Tejo'],'Santa Comba Dão':['Dão-Lafões'],'Santa Cruz':['RA da Madeira'],
-  'Santa Cruz da Graciosa':['RA dos Açores'],'Santa Cruz das Flores':['RA dos Açores'],
-  'Santa Maria da Feira':['Entre Douro e Vouga'],'Santa Marta de Penaguião':['Douro'],'Santana':['RA da Madeira'],
-  'Santarém':['Lezíria do Tejo'],'Santiago do Cacém':['Alentejo Litoral'],'Santo Tirso':['Grande Porto'],
-  'Sardoal':['Médio Tejo'],'Seia':['Serra da Estrela'],'Seixal':['Península de Setúbal'],'Sernancelhe':['Douro'],
-  'Serpa':['Baixo Alentejo'],'Sertã':['Pinhal Interior Sul'],'Sesimbra':['Península de Setúbal'],
-  'Setúbal':['Península de Setúbal'],'Sever do Vouga':['Baixo Vouga'],'Silves':['Algarve'],
-  'Sines':['Alentejo Litoral'],'Sintra':['Grande Lisboa'],'Sobral de Monte Agraço':['Oeste'],
-  'Soure':['Baixo Mondego'],'Sousel':['Alto Alentejo'],'Sátão':['Dão-Lafões'],
-  'São João da Madeira':['Entre Douro e Vouga'],'São João da Pesqueira':['Douro'],'São Pedro do Sul':['Dão-Lafões'],
-  'São Roque do Pico':['RA dos Açores'],'São Vicente':['RA da Madeira'],'Tabuaço':['Douro'],'Tarouca':['Douro'],
-  'Tavira':['Algarve'],'Terras de Bouro':['Cávado'],'Tomar':['Médio Tejo'],'Tondela':['Dão-Lafões'],
-  'Torre de Moncorvo':['Douro'],'Torres Novas':['Médio Tejo'],'Torres Vedras':['Oeste'],
-  'Trancoso':['Beira Interior Norte'],'Trofa':['Grande Porto'],'Tábua':['Pinhal Interior Norte'],
-  'Vagos':['Baixo Vouga'],'Vale de Cambra':['Entre Douro e Vouga'],'Valença':['Minho-Lima'],
-  'Valongo':['Grande Porto'],'Valpaços':['Alto Trás-os-Montes'],'Velas':['RA dos Açores'],
-  'Vendas Novas':['Alentejo Central'],'Viana do Alentejo':['Alentejo Central'],'Viana do Castelo':['Minho-Lima'],
-  'Vidigueira':['Baixo Alentejo'],'Vieira do Minho':['Ave'],'Vila Flor':['Alto Trás-os-Montes'],
-  'Vila Franca de Xira':['Grande Lisboa'],'Vila Franca do Campo':['RA dos Açores'],
-  'Vila Nova da Barquinha':['Médio Tejo'],'Vila Nova de Cerveira':['Minho-Lima'],'Vila Nova de Famalicão':['Ave'],
-  'Vila Nova de Foz Côa':['Douro'],'Vila Nova de Gaia':['Grande Porto'],'Vila Nova de Paiva':['Dão-Lafões'],
-  'Vila Nova de Poiares':['Pinhal Interior Norte'],'Vila Pouca de Aguiar':['Alto Trás-os-Montes'],
-  'Vila Real':['Douro'],'Vila Real de Santo António':['Algarve'],'Vila Velha de Ródão':['Beira Interior Sul'],
-  'Vila Verde':['Cávado'],'Vila Viçosa':['Alentejo Central'],'Vila de Rei':['Pinhal Interior Sul'],
-  'Vila do Bispo':['Algarve'],'Vila do Conde':['Grande Porto'],'Vila do Corvo':['RA dos Açores'],
-  'Vila do Porto':['RA dos Açores'],'Vimioso':['Alto Trás-os-Montes'],'Vinhais':['Alto Trás-os-Montes'],
-  'Viseu':['Dão-Lafões'],'Vizela':['Ave'],'Vouzela':['Dão-Lafões'],'Águeda':['Baixo Vouga'],
-  'Évora':['Alentejo Central'],'Ílhavo':['Baixo Vouga'],'Óbidos':['Oeste']
+  'Wrocław':['Dolnośląskie'],'Legnica':['Dolnośląskie'],'Wałbrzych':['Dolnośląskie'],'Jelenia Góra':['Dolnośląskie'],
+  'Lubin':['Dolnośląskie'],'Głogów':['Dolnośląskie'],'Świdnica':['Dolnośląskie'],'Oleśnica':['Dolnośląskie'],
+  'Oława':['Dolnośląskie'],'Kłodzko':['Dolnośląskie'],'Dzierżoniów':['Dolnośląskie'],'Bolesławiec':['Dolnośląskie'],
+  'Toruń':['Kujawsko-pomorskie'],'Bydgoszcz':['Kujawsko-pomorskie'],'Grudziądz':['Kujawsko-pomorskie'],'Włocławek':['Kujawsko-pomorskie'],
+  'Inowrocław':['Kujawsko-pomorskie'],'Brodnica':['Kujawsko-pomorskie'],'Świecie':['Kujawsko-pomorskie'],'Chełmno':['Kujawsko-pomorskie'],
+  'Nakło nad Notecią':['Kujawsko-pomorskie'],'Rypin':['Kujawsko-pomorskie'],'Lipno':['Kujawsko-pomorskie'],'Aleksandrów Kujawski':['Kujawsko-pomorskie'],
+  'Lublin':['Lubelskie'],'Biała Podlaska':['Lubelskie'],'Chełm':['Lubelskie'],'Zamość':['Lubelskie'],
+  'Puławy':['Lubelskie'],'Świdnik':['Lubelskie'],'Kraśnik':['Lubelskie'],'Łuków':['Lubelskie'],
+  'Biłgoraj':['Lubelskie'],'Lubartów':['Lubelskie'],'Tomaszów Lubelski':['Lubelskie'],'Hrubieszów':['Lubelskie'],
+  'Międzyrzec Podlaski':['Lubelskie'],'Radzyń Podlaski':['Lubelskie'],'Dęblin':['Lubelskie'],'Kazimierz Dolny':['Lubelskie'],
+  'Gorzów Wielkopolski':['Lubuskie'],'Zielona Góra':['Lubuskie'],'Nowa Sól':['Lubuskie'],'Żary':['Lubuskie'],
+  'Żagań':['Lubuskie'],'Świebodzin':['Lubuskie'],'Międzyrzecz':['Lubuskie'],'Słubice':['Lubuskie'],
+  'Łódź':['Łódzkie'],'Piotrków Trybunalski':['Łódzkie'],'Pabianice':['Łódzkie'],'Tomaszów Mazowiecki':['Łódzkie'],
+  'Bełchatów':['Łódzkie'],'Zgierz':['Łódzkie'],'Skierniewice':['Łódzkie'],'Radomsko':['Łódzkie'],
+  'Kutno':['Łódzkie'],'Sieradz':['Łódzkie'],'Łowicz':['Łódzkie'],'Opoczno':['Łódzkie'],
+  'Rawa Mazowiecka':['Łódzkie'],'Łęczyca':['Łódzkie'],'Zduńska Wola':['Łódzkie'],'Wieluń':['Łódzkie'],
+  'Łask':['Łódzkie'],'Kraków':['Małopolskie'],'Tarnów':['Małopolskie'],'Nowy Sącz':['Małopolskie'],
+  'Oświęcim':['Małopolskie'],'Chrzanów':['Małopolskie'],'Olkusz':['Małopolskie'],'Nowy Targ':['Małopolskie'],
+  'Zakopane':['Małopolskie'],'Bochnia':['Małopolskie'],'Gorlice':['Małopolskie'],'Wieliczka':['Małopolskie'],
+  'Myślenice':['Małopolskie'],'Wadowice':['Małopolskie'],'Sucha Beskidzka':['Małopolskie'],'Limanowa':['Małopolskie'],
+  'Skawina':['Małopolskie'],'Andrychów':['Małopolskie'],'Kęty':['Małopolskie'],'Trzebinia':['Małopolskie'],
+  'Miechów':['Małopolskie'],'Dąbrowa Tarnowska':['Małopolskie'],'Brzesko':['Małopolskie'],'Krynica-Zdrój':['Małopolskie'],
+  'Rabka-Zdrój':['Małopolskie'],'Warszawa':['Mazowieckie'],'Radom':['Mazowieckie'],'Płock':['Mazowieckie'],
+  'Siedlce':['Mazowieckie'],'Legionowo':['Mazowieckie'],'Pruszków':['Mazowieckie'],'Otwock':['Mazowieckie'],
+  'Żyrardów':['Mazowieckie'],'Ciechanów':['Mazowieckie'],'Mińsk Mazowiecki':['Mazowieckie'],'Ostrołęka':['Mazowieckie'],
+  'Wołomin':['Mazowieckie'],'Nowy Dwór Mazowiecki':['Mazowieckie'],'Piaseczno':['Mazowieckie'],'Grodzisk Mazowiecki':['Mazowieckie'],
+  'Marki':['Mazowieckie'],'Sulejówek':['Mazowieckie'],'Konstancin-Jeziorna':['Mazowieckie'],'Płońsk':['Mazowieckie'],
+  'Mława':['Mazowieckie'],'Sierpc':['Mazowieckie'],'Sochaczew':['Mazowieckie'],'Garwolin':['Mazowieckie'],
+  'Kozienice':['Mazowieckie'],'Grójec':['Mazowieckie'],'Warka':['Mazowieckie'],'Wyszków':['Mazowieckie'],
+  'Pułtusk':['Mazowieckie'],'Przasnysz':['Mazowieckie'],'Sokołów Podlaski':['Mazowieckie'],'Szydłowiec':['Mazowieckie'],
+  'Opole':['Opolskie'],'Kędzierzyn-Koźle':['Opolskie'],'Nysa':['Opolskie'],'Brzeg':['Opolskie'],
+  'Kluczbork':['Opolskie'],'Prudnik':['Opolskie'],'Rzeszów':['Podkarpackie'],'Krosno':['Podkarpackie'],
+  'Przemyśl':['Podkarpackie'],'Mielec':['Podkarpackie'],'Tarnobrzeg':['Podkarpackie'],'Stalowa Wola':['Podkarpackie'],
+  'Dębica':['Podkarpackie'],'Jarosław':['Podkarpackie'],'Sanok':['Podkarpackie'],'Jasło':['Podkarpackie'],
+  'Łańcut':['Podkarpackie'],'Przeworsk':['Podkarpackie'],'Białystok':['Podlaskie'],'Suwałki':['Podlaskie'],
+  'Łomża':['Podlaskie'],'Augustów':['Podlaskie'],'Bielsk Podlaski':['Podlaskie'],'Zambrów':['Podlaskie'],
+  'Grajewo':['Podlaskie'],'Hajnówka':['Podlaskie'],'Sokółka':['Podlaskie'],'Siemiatycze':['Podlaskie'],
+  'Łapy':['Podlaskie'],'Wysokie Mazowieckie':['Podlaskie'],'Kolno':['Podlaskie'],'Gdańsk':['Pomorskie'],
+  'Gdynia':['Pomorskie'],'Sopot':['Pomorskie'],'Słupsk':['Pomorskie'],'Chojnice':['Pomorskie'],
+  'Tczew':['Pomorskie'],'Starogard Gdański':['Pomorskie'],'Wejherowo':['Pomorskie'],'Lębork':['Pomorskie'],
+  'Malbork':['Pomorskie'],'Kwidzyn':['Pomorskie'],'Bytów':['Pomorskie'],'Człuchów':['Pomorskie'],
+  'Puck':['Pomorskie'],'Kartuzy':['Pomorskie'],'Kościerzyna':['Pomorskie'],'Łeba':['Pomorskie'],
+  'Katowice':['Śląskie'],'Częstochowa':['Śląskie'],'Sosnowiec':['Śląskie'],'Gliwice':['Śląskie'],
+  'Zabrze':['Śląskie'],'Bytom':['Śląskie'],'Bielsko-Biała':['Śląskie'],'Tychy':['Śląskie'],
+  'Rybnik':['Śląskie'],'Dąbrowa Górnicza':['Śląskie'],'Chorzów':['Śląskie'],'Jaworzno':['Śląskie'],
+  'Mysłowice':['Śląskie'],'Żory':['Śląskie'],'Tarnowskie Góry':['Śląskie'],'Jastrzębie-Zdrój':['Śląskie'],
+  'Racibórz':['Śląskie'],'Wodzisław Śląski':['Śląskie'],'Mikołów':['Śląskie'],'Pszczyna':['Śląskie'],
+  'Cieszyn':['Śląskie'],'Żywiec':['Śląskie'],'Zawiercie':['Śląskie'],'Lubliniec':['Śląskie'],
+  'Siemianowice Śląskie':['Śląskie'],'Kielce':['Świętokrzyskie'],'Ostrowiec Świętokrzyski':['Świętokrzyskie'],'Starachowice':['Świętokrzyskie'],
+  'Skarżysko-Kamienna':['Świętokrzyskie'],'Sandomierz':['Świętokrzyskie'],'Końskie':['Świętokrzyskie'],'Busko-Zdrój':['Świętokrzyskie'],
+  'Jędrzejów':['Świętokrzyskie'],'Staszów':['Świętokrzyskie'],'Opatów':['Świętokrzyskie'],'Włoszczowa':['Świętokrzyskie'],
+  'Olsztyn':['Warmińsko-mazurskie'],'Elbląg':['Warmińsko-mazurskie'],'Ełk':['Warmińsko-mazurskie'],'Iława':['Warmińsko-mazurskie'],
+  'Ostróda':['Warmińsko-mazurskie'],'Giżycko':['Warmińsko-mazurskie'],'Kętrzyn':['Warmińsko-mazurskie'],'Bartoszyce':['Warmińsko-mazurskie'],
+  'Szczytno':['Warmińsko-mazurskie'],'Mrągowo':['Warmińsko-mazurskie'],'Działdowo':['Warmińsko-mazurskie'],'Pisz':['Warmińsko-mazurskie'],
+  'Olecko':['Warmińsko-mazurskie'],'Gołdap':['Warmińsko-mazurskie'],'Braniewo':['Warmińsko-mazurskie'],'Lidzbark Warmiński':['Warmińsko-mazurskie'],
+  'Nidzica':['Warmińsko-mazurskie'],'Morąg':['Warmińsko-mazurskie'],'Pasłęk':['Warmińsko-mazurskie'],'Biskupiec':['Warmińsko-mazurskie'],
+  'Olsztynek':['Warmińsko-mazurskie'],'Mikołajki':['Warmińsko-mazurskie'],'Węgorzewo':['Warmińsko-mazurskie'],'Poznań':['Wielkopolskie'],
+  'Piła':['Wielkopolskie'],'Ostrów Wielkopolski':['Wielkopolskie'],'Gniezno':['Wielkopolskie'],'Leszno':['Wielkopolskie'],
+  'Kalisz':['Wielkopolskie'],'Konin':['Wielkopolskie'],'Śrem':['Wielkopolskie'],'Turek':['Wielkopolskie'],
+  'Września':['Wielkopolskie'],'Kościan':['Wielkopolskie'],'Jarocin':['Wielkopolskie'],'Krotoszyn':['Wielkopolskie'],
+  'Chodzież':['Wielkopolskie'],'Wągrowiec':['Wielkopolskie'],'Środa Wielkopolska':['Wielkopolskie'],'Rawicz':['Wielkopolskie'],
+  'Gostyń':['Wielkopolskie'],'Koło':['Wielkopolskie'],'Luboń':['Wielkopolskie'],'Swarzędz':['Wielkopolskie'],
+  'Oborniki':['Wielkopolskie'],'Szczecin':['Zachodniopomorskie'],'Koszalin':['Zachodniopomorskie'],'Świnoujście':['Zachodniopomorskie'],
+  'Kołobrzeg':['Zachodniopomorskie'],'Stargard':['Zachodniopomorskie'],'Police':['Zachodniopomorskie'],'Goleniów':['Zachodniopomorskie'],
+  'Wałcz':['Zachodniopomorskie'],'Białogard':['Zachodniopomorskie'],'Szczecinek':['Zachodniopomorskie'],'Gryfino':['Zachodniopomorskie'],
+  'Kamień Pomorski':['Zachodniopomorskie'],'Drawsko Pomorskie':['Zachodniopomorskie'],'Myślibórz':['Zachodniopomorskie'],'Choszczno':['Zachodniopomorskie'],
 };
 
 /* ================================== 4. CLIMATE AND DESIGN DATA ==
@@ -1810,18 +1765,20 @@ const KOPPEN_SUB = {
 };
 
 /**
- * The classes a Portuguese or wider Mediterranean site actually falls in, and
+ * The classes a Polish or wider Central-European site actually falls in, and
  * what each one asks of a building. The readings are the design literature's,
  * not the classification's — Köppen says nothing about architecture. Each is
  * attributed where it is used rather than here.
  */
 const KOPPEN_NOTE = {
   Csa: 'The Mediterranean summer-dry climate with a hot summer. The design problem is asymmetric: a mild winter that a modest amount of south glazing will carry, against a summer that punishes any surface left unshaded. Shading, thermal mass and night ventilation do more here than insulation alone.',
-  Csb: 'The same summer-dry regime with a warm rather than a hot summer — the Atlantic coast of the Iberian peninsula. Winter carries more weight than in Csa and the summer peak is softer, so solar gain in the heating season is worth more and the cooling problem is shorter.',
+  Csb: 'The same summer-dry regime with a warm rather than a hot summer. Winter carries more weight than in Csa and the summer peak is softer, so solar gain in the heating season is worth more and the cooling problem is shorter.',
   Csc: 'Summer-dry with a short cool summer, found only at altitude. Heating dominates the year and the summer is too brief to drive the form.',
   Cfa: 'Temperate without a dry season and with a hot summer. Humidity, not dry heat, sets the summer problem, so air movement matters more than mass.',
-  Cfb: 'Temperate without a dry season and with a warm summer — the oceanic climate of northwest Iberia and much of northern Europe. Overcast skies make daylight the scarce resource and cooling is rarely the governing case.',
-  BSk: 'Cold semi-arid steppe. A large daily temperature swing is the resource: mass charged by the cold night carries the building through the day. The southeastern Portuguese interior touches this class.',
+  Cfb: 'Temperate without a dry season and with a warm summer — the oceanic climate of the Polish coast and much of western Europe. Overcast skies make daylight the scarce resource; winters hover near zero and the summer peak is soft, so heating runs long but shallow and cooling is rarely the governing case.',
+  Dfb: 'Cold snowy winter, warm summer — the continental temperate climate of most of Poland. Heating dominates the year: the heating season runs October to March, January sits a few degrees below zero while July barely reaches twenty. Compact form, insulation and airtightness first; generous south glass with movable summer shade; mass inside the insulation; shelter from the east and north-east winter wind. The summer is short and mild — night ventilation carries it.',
+  Dfc: 'Cold snowy winter with a short cool summer — the Polish mountains above about 800 m. Heating dominates absolutely and the summer never drives the form: compact, heavily insulated, wind-sheltered, with snow and freeze–thaw governing the detailing.',
+  BSk: 'Cold semi-arid steppe. A large daily temperature swing is the resource: mass charged by the cold night carries the building through the day.',
   BSh: 'Hot semi-arid steppe. The daily swing is still the resource, but the night no longer falls far enough to discharge mass on its own.'
 };
 
@@ -1836,165 +1793,84 @@ const KOPPEN_NOTE = {
     until the student enters the building's own. Two decimals: a town, not a
     plot. */
 const NUTS_REF = {
-  'Minho-Lima':[41.69, -8.83], 'Cávado':[41.55, -8.42], 'Ave':[41.44, -8.29], 'Grande Porto':[41.15, -8.61],
-  'Tâmega':[41.21, -8.28], 'Entre Douro e Vouga':[40.93, -8.54], 'Douro':[41.30, -7.74], 'Alto Trás-os-Montes':[41.81, -6.76],
-  'Baixo Vouga':[40.64, -8.65], 'Baixo Mondego':[40.21, -8.43], 'Pinhal Litoral':[39.74, -8.81],
-  'Pinhal Interior Norte':[40.11, -8.25], 'Pinhal Interior Sul':[39.80, -8.10], 'Dão-Lafões':[40.66, -7.91],
-  'Serra da Estrela':[40.42, -7.70], 'Beira Interior Norte':[40.54, -7.27], 'Beira Interior Sul':[39.82, -7.49],
-  'Cova da Beira':[40.28, -7.50], 'Oeste':[39.40, -9.14], 'Grande Lisboa':[38.72, -9.14], 'Península de Setúbal':[38.52, -8.89],
-  'Médio Tejo':[39.60, -8.41], 'Lezíria do Tejo':[39.24, -8.69], 'Alentejo Litoral':[38.02, -8.69],
-  'Alto Alentejo':[39.29, -7.43], 'Alentejo Central':[38.57, -7.91], 'Baixo Alentejo':[38.02, -7.86], 'Algarve':[37.02, -7.93],
-  'RA da Madeira':[32.65, -16.91], 'RA dos Açores':[37.74, -25.67]
+  'Dolnośląskie':[51.11, 16.89], 'Kujawsko-pomorskie':[53.01, 18.60], 'Lubelskie':[51.25, 22.57],
+  'Lubuskie':[51.94, 15.51], 'Łódzkie':[51.77, 19.46], 'Małopolskie':[50.06, 19.94],
+  'Mazowieckie':[52.23, 21.01], 'Opolskie':[50.67, 17.93], 'Podkarpackie':[50.04, 22.00],
+  'Podlaskie':[53.13, 23.16], 'Pomorskie':[54.35, 18.65], 'Śląskie':[50.26, 19.03],
+  'Świętokrzyskie':[50.87, 20.63], 'Warmińsko-mazurskie':[53.78, 20.49],
+  'Wielkopolskie':[52.41, 16.93], 'Zachodniopomorskie':[53.43, 14.55]
 };
 
-/** The thirty NUTS III, taken from the municipality table so that the two
- *  applications cannot drift apart on which regions exist. */
+/** The sixteen voivodeships, taken from the city table so the list cannot
+ *  drift from the regions the table knows. */
 const NUTS_LIST = (() => {
   const s = new Set();
   for (const c in CONCELHOS) CONCELHOS[c].forEach(n => s.add(n));
-  return Array.from(s).sort((a, b) => a.localeCompare(b, 'pt'));
+  return Array.from(s).sort((a, b) => a.localeCompare(b, 'pl')); // NUTS_LIST
 })();
 
-/* ------------------------------------------- 3a. THE SCE CLIMATE ZONES --
-   The one piece of the SCE this application carries, and only as a reading
-   of the territory: the winter and summer zones a site falls in, and what
-   each asks of a building and of its surroundings. The limits a zone puts on
-   an envelope stay in Construction Advisor.
-
-   Manual SCE (Despacho n.º 6476-H/2021, de 1 de julho), §5.3. The NUTS III
-   of the municipality (Anexo II, Tabela 116 — CONCELHOS above) gives the
-   reference values, and the altitude of the site corrects them (Eq. 2):
-       X = X_REF + a · (z − z_REF),   z and z_REF in km
-   The winter zone reads the degree-days of the heating season on a base of
-   18 °C (Tabela 7: I1 ≤ 1300 < I2 ≤ 1800 < I3); the summer zone the mean
-   outdoor temperature of the conventional cooling season, June to September
-   (Tabela 8: V1 ≤ 20 < V2 ≤ 22 < V3). Neither reads the station or the
-   coordinates: the regulation knows the municipality and the altitude only.
-   ======================================================================== */
-const SCE_GD = [1300, 1800];         // °C·d, Tabela 7
-const SCE_TV = [20, 22];             // °C, Tabela 8
-/**
- * Per NUTS III: z_REF (m), GD_REF (°C·d) and its slope (°C·d/km), θext,v REF
- * (°C) and its slope (°C/km) — Manual SCE, Tabelas 9 and 10, checked figure
- * by figure against the published text, and the same figures Construction
- * Advisor carries. Then the lowest and highest ground of the region's
- * municipalities (m; DGT, published via PORDATA, 2025), which is not an SCE
- * quantity: it only bounds the altitude ladder and flags an altitude the
- * region's ground never reaches.
- */
-const SCE_CLIMA = {
-  'Alentejo Central':[221, 1150, 1100, 24.3, 0, 25, 653],
-  'Alentejo Litoral':[88, 1089, 1100, 22.2, 0, 0, 515],
-  'Algarve':[145, 987, 1800, 23.1, 0, 0, 902],
-  'Alto Alentejo':[246, 1221, 1200, 24.5, 0, 46, 1027],
-  'Alto Trás-os-Montes':[680, 2015, 1400, 21.5, -7, 123, 1527],
-  'Ave':[426, 1653, 1500, 20.8, -3, 25, 1307],
-  'Baixo Alentejo':[178, 1068, 1000, 24.7, 0, 24, 584],
-  'Baixo Mondego':[67, 1304, 1000, 20.9, 0, 0, 768],
-  'Baixo Vouga':[50, 1337, 1100, 20.6, -2, 0, 841],
-  'Beira Interior Norte':[717, 1924, 1000, 21.7, -5, 124, 1993],
-  'Beira Interior Sul':[328, 1274, 1800, 25.3, -7, 50, 1227],
-  'Cávado':[171, 1491, 1300, 20.7, -3, 0, 1525],
-  'Cova da Beira':[507, 1687, 1400, 22.5, -6, 275, 1993],
-  'Dão-Lafões':[497, 1702, 1900, 21.2, -3, 50, 1375],
-  'Douro':[579, 1764, 1400, 22.7, -6, 50, 1416],
-  'Entre Douro e Vouga':[298, 1544, 1400, 20.6, -3, 25, 1222],
-  'Grande Lisboa':[109, 1071, 1700, 21.7, -10, 0, 528],
-  'Grande Porto':[94, 1250, 1600, 20.9, 0, 0, 535],
-  'Lezíria do Tejo':[73, 1135, 2700, 23.1, -6, 0, 529],
-  'Médio Tejo':[168, 1330, 1300, 22.1, -7, 13, 678],
-  'Minho-Lima':[268, 1629, 1500, 20.5, -4, 0, 1416],
-  'Oeste':[99, 1165, 2200, 21, 0, 0, 666],
-  'Península de Setúbal':[47, 1045, 1500, 22.8, -5, 0, 501],
-  'Pinhal Interior Norte':[361, 1555, 1600, 21.2, -2, 42, 1418],
-  'Pinhal Interior Sul':[361, 1511, 1500, 22.4, -3, 114, 1085],
-  'Pinhal Litoral':[126, 1323, 1900, 20.1, -2, 0, 615],
-  'RA da Madeira':[380, 818, 1500, 20.2, -6, 0, 1862],
-  'RA dos Açores':[10, 604, 1500, 21.3, -6, 0, 2351],
-  'Serra da Estrela':[553, 1851, 1600, 21, -4, 175, 1993],
-  'Tâmega':[320, 1570, 1600, 21.4, -3, 8, 1416]
+/* --------------------------------- 3a. POLISH DESIGN ZONES ------
+   Winter zones I-V (PN-EN 12831-1:2017, heating season October-March):
+   design outdoor temperatures -16, -18, -20, -22, -24 C with mean annual
+   7.7, 7.9, 7.6, 6.9, 5.5 C (Table NB). Summer zones I-II (PN-76/B-03420,
+   withdrawn 2011, cooling season April-September): I coastal 28 C at 52 %
+   RH, II rest 30 C at 45 % RH. Zone boundaries read from the PN-82/B-02403
+   = PN-EN 12831 figure; sites on a boundary check the map. Polish zones know
+   no altitude correction - the map assigns by locality, and mountains and
+   the Suwalki corner carry their own zones through the nearest station. */
+const ZONE_TE = [-16, -18, -20, -22, -24];   // C, winter design, PN-EN 12831-1 Table NB
+const ZONE_TM = [7.7, 7.9, 7.6, 6.9, 5.5];   // C, mean annual, same table
+const ZONE_TES = [28, 30];                   // C, summer design, PN-76/B-03420 (withdrawn)
+const ZONE_RH = [52, 45];                    // %, summer design RH, same norm
+const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V'];
+/** Voivodeship majority pair [winter, summer]: feeds the zone table figure
+    and the where-else list. The site itself always reads the nearest
+    synoptic station (sceZone); the table gives voivodeship majorities. */
+const VOIV_ZONE = {
+  'Dolnośląskie':[3,2], 'Kujawsko-pomorskie':[2,2], 'Lubelskie':[3,2], 'Lubuskie':[2,2],
+  'Łódzkie':[2,2], 'Małopolskie':[3,2], 'Mazowieckie':[3,2], 'Opolskie':[3,2],
+  'Podkarpackie':[3,2], 'Podlaskie':[4,2], 'Pomorskie':[2,2], 'Śląskie':[3,2],
+  'Świętokrzyskie':[3,2], 'Warmińsko-mazurskie':[4,2], 'Wielkopolskie':[2,2], 'Zachodniopomorskie':[1,1]
 };
-
-/** The zones at one altitude, with every figure the working needs. */
-function sceZone(nuts, z) {
-  const R = SCE_CLIMA[nuts];
-  if (!R || !isFinite(z)) return null;
-  const [zr, gd0, aGd, tv0, aTv, lo, hi] = R, dz = (z - zr) / 1000;
-  const GD = Math.max(0, gd0 + aGd * dz), tv = tv0 + aTv * dz;
-  const wi = GD <= SCE_GD[0] ? 1 : GD <= SCE_GD[1] ? 2 : 3;
-  const si = tv <= SCE_TV[0] ? 1 : tv <= SCE_TV[1] ? 2 : 3;
-  return { nuts, z, zr, gd0, aGd, tv0, aTv, lo, hi, GD, tv, wi, si, key:'I' + wi + 'V' + si };
+/** The zones at the site: the nearest embedded synoptic station's pair, with
+    its design temperatures and heating degree-days (base 18 C, from the
+    station's own 1991-2020 normals). */
+function sceZone(nuts, z, la, lo) {
+  const ns = (isFinite(la) && isFinite(lo)) ? nearestStation(la, lo) : null;
+  if (!ns) return null;
+  const wi = ns.v.wi, si = ns.v.si;
+  return { nuts, z, wi, si, key:wi + '-' + si, te:ZONE_TE[wi - 1], teS:ZONE_TES[si - 1],
+    rh:ZONE_RH[si - 1], hdd:ns.v.hdd, st:ns.v.st, d:ns.d };
 }
-/** A region's ground climbed metre by metre: the runs of its winter zone,
- *  its summer zone and the pair, each [zone, from m, to m]. */
-const SCE_RUNS = {};
-function sceRuns(nuts) {
-  if (SCE_RUNS[nuts]) return SCE_RUNS[nuts];
-  const R = SCE_CLIMA[nuts];
-  if (!R) return null;
-  const out = { w:[], s:[], k:[] };
-  for (let z = R[5]; z <= R[6]; z++) {
-    const Z = sceZone(nuts, z);
-    [['w', Z.wi], ['s', Z.si], ['k', Z.key]].forEach(([f, v]) => {
-      const L = out[f], last = L[L.length - 1];
-      if (last && last[0] === v) last[2] = z; else L.push([v, z, z]);
-    });
-  }
-  return (SCE_RUNS[nuts] = out);
-}
-/** Every region whose ground reaches a zone, with the band it holds it on. */
-function sceWhere(key) {
-  const out = [];
-  NUTS_LIST.forEach(n => { const r = sceRuns(n); if (r) r.k.forEach(x => { if (x[0] === key) out.push([n, x[1], x[2]]); }); });
-  return out;
-}
-
 /**
- * What each zone asks. The intention and the passive system of each season
- * are Gonçalves and Mariz Graça (2004), zone by zone — the names the
- * regulation kept, although the thresholds behind them have changed since —
- * and `ch` says what changes from one zone to the next. `w` and `s` are the
- * building in winter and in summer: [intention, passive system, icons];
- * `site` is the same intentions at the scale of the plot — sun, wind, canopy,
- * water, ground.
+ * What each Polish zone pair asks. Winter-led in all five: the heating
+ * season runs October to March (PN-EN 12831-1), design outdoor -16 to -24 C;
+ * summer (PN-76/B-03420, withdrawn 2011) peaks at 28 C on the coast, 30 C
+ * inland, and rarely governs. `ch` says what changes from one zone to the
+ * next. `w` and `s` are the building in winter and in summer: [intention,
+ * passive system, icons]; `site` is the same intentions at the plot scale.
  */
 const SCE_STRAT = {
-  I1V1: { ch:'Mild in both seasons. The air is humid: ventilation serves, evaporative cooling does not.',
-    w:['Promote solar gains; restrict conduction losses.', 'Any gain system; envelope insulation.', ['gain', 'insul']],
-    s:['Restrict solar gains; restrict conduction gains.', 'Shaded glazing; insulated envelope; cross-ventilation at night; buried pipes.', ['shade', 'insul', 'night', 'earth']],
-    site:['sun', 'breeze'] },
-  I1V2: { ch:'Summer begins to lead: shading comes before mass.',
-    w:['Promote solar gains; restrict conduction losses.', 'Any gain system; envelope insulation.', ['gain', 'insul']],
-    s:['Restrict solar gains; promote ventilation.', 'Effective overhangs; cross-ventilation; night ventilation.', ['shade', 'xvent', 'night']],
-    site:['sun', 'canopy', 'breeze'] },
-  I1V3: { ch:'Summer-led. The dry air makes evaporative cooling available.',
-    w:['Promote solar gains; strong inertia.', 'Gain systems with heavy storage mass.', ['gain', 'mass']],
-    s:['Restrict solar gains; evaporative cooling.', 'Effective shading; fountains and water mirrors; night ventilation and buried pipes.', ['shade', 'evap', 'night', 'earth']],
-    site:['sun', 'canopy', 'water', 'surface'] },
-  I2V1: { ch:'Winter-led, with a mild summer: moderate mass, no evaporative cooling.',
-    w:['Promote solar gains on the south; restrict conduction.', 'Direct gain with storage; envelope insulation.', ['gain', 'mass', 'insul']],
-    s:['Restrict solar gains; promote ventilation.', 'Shaded glazing; cross-ventilation.', ['shade', 'xvent']],
+  '1-1': { ch:'The mildest Polish pair: a Baltic winter and a cool coastal summer. Heating still leads, but modestly; the summer never governs.',
+    w:['Promote solar gains; restrict conduction losses.', 'Direct gain with storage; envelope insulation.', ['gain', 'mass', 'insul']],
+    s:['Restrict solar gains; ventilate.', 'Shaded glazing; cross-ventilation.', ['shade', 'xvent']],
     site:['sun', 'shelter', 'breeze'] },
-  I2V2: { ch:'Balanced between the seasons: mass earns its cost.',
-    w:['Promote solar gains on the south; strong inertia.', 'Direct gain; heavy walls with external insulation.', ['gain', 'mass', 'insul']],
-    s:['Restrict solar gains; promote strong inertia.', 'Effective shading; night ventilation.', ['shade', 'mass', 'night']],
-    site:['sun', 'canopy', 'shelter'] },
-  I2V3: { ch:'Both seasons demanding.',
-    w:['Restrict conduction losses; promote gains with storage.', 'Heavy walls with external insulation.', ['insul', 'gain', 'mass']],
-    s:['Restrict solar gains; evaporative cooling; strong inertia.', 'Effective overhangs; water; night ventilation and buried pipes.', ['shade', 'evap', 'mass', 'night', 'earth']],
-    site:['sun', 'canopy', 'water', 'surface'] },
-  I3V1: { ch:'Winter dominates by far: passive solar heating is the priority.',
-    w:['Promote solar gains with strong storage mass.', 'Passive solar heating systems are highly suitable.', ['gain', 'mass', 'solar']],
-    s:['Restrict solar gains; restrict conduction.', 'Shaded glazing; insulated envelope.', ['shade', 'insul']],
+  '2-2': { ch:'The lowland pair: a real winter, a warm but short summer. Heating leads clearly.',
+    w:['Promote solar gains with storage mass.', 'Passive solar heating; heavy walls, external insulation.', ['gain', 'mass', 'solar', 'insul']],
+    s:['Restrict solar gains; night ventilation.', 'Effective overhangs; cross-ventilation; night flush.', ['shade', 'xvent', 'night']],
+    site:['sun', 'canopy', 'shelter', 'breeze'] },
+  '3-2': { ch:'The continental pair most of Poland builds in: a long heating season, design -20 C.',
+    w:['Promote solar gains; compact form; heavy insulation.', 'Passive solar heating; compact two-storey form; envelope insulation; airtightness.', ['gain', 'mass', 'solar', 'insul']],
+    s:['Restrict solar gains; short summer.', 'Movable shade; cross-ventilation; night flush.', ['shade', 'xvent', 'night']],
+    site:['sun', 'shelter', 'slope', 'canopy'] },
+  '4-2': { ch:'Severe winter country: design -22 C, snow cover for months.',
+    w:['Compact form; maximum solar gain with storage; wind shelter.', 'Compact form; passive solar; heavy insulation; sheltered north and east.', ['gain', 'mass', 'solar', 'insul']],
+    s:['Brief mild summer; restrict gains lightly.', 'Light fixed shade; cross-ventilation.', ['shade', 'xvent']],
     site:['sun', 'shelter', 'slope'] },
-  I3V2: { ch:'Winter-led, but the summer swing is wide enough to need mass anyway.',
-    w:['Promote solar gains with good storage mass.', 'Passive solar heating; heavy walls, external insulation.', ['gain', 'mass', 'solar', 'insul']],
-    s:['Restrict solar gains; heavy inertia; evaporative cooling.', 'Shading; water; night ventilation.', ['shade', 'mass', 'evap', 'night']],
-    site:['sun', 'shelter', 'slope', 'canopy', 'water'] },
-  I3V3: { ch:'The most demanding in both seasons.',
-    w:['Promote solar gains with heavy storage.', 'Passive solar heating; heavy walls, external insulation.', ['gain', 'mass', 'solar', 'insul']],
-    s:['Restrict solar gains; heavy inertia; evaporative cooling.', 'Shading; water; night ventilation; buried pipes.', ['shade', 'mass', 'evap', 'night', 'earth']],
-    site:['sun', 'shelter', 'slope', 'canopy', 'water', 'surface'] }
+  '5-2': { ch:'The cold pole and the high mountains: design -24 C. Heating dominates absolutely.',
+    w:['The most compact form; solar gains where the sun reaches; extreme insulation.', 'Compact form; triple glazing south; heavy insulation; wind-tight shelter.', ['gain', 'mass', 'insul', 'solar']],
+    s:['Summer too short to drive the form.', 'Cross-ventilation only.', ['xvent']],
+    site:['shelter', 'slope', 'sun'] }
 };
 /** Each icon's name under it, and the sentence its title carries. */
 const SCE_ICON = {
@@ -3264,7 +3140,7 @@ const KEEP = {}, KEEPERS = [];
  * totals, mm, January first. The application ships neither: monthly normals
  * are measured data and this file has no authority to invent them. The
  * student enters the normals for the station nearest the site — from the
- * IPMA normais climatológicas, from a national meteorological service, or
+ * IMGW climate normals, from a national meteorological service, or
  * from a gridded product such as WorldClim — and the classification is
  * computed from what they enter and shown with its own arithmetic exposed.
  */
@@ -3354,9 +3230,9 @@ function csvSiteRows() {
     ['# Latitude', S ? S.lat : '', 'Longitude', S ? S.lon : ''],
     ['# Köppen–Geiger', K ? K.code : 'not yet classified',
      'Normals', STATE.clim && STATE.clim.source ? STATE.clim.source : 'entered by hand'],
-    (Z => ['# SCE climate zone', Z ? 'I' + Z.wi + ' V' + Z.si : 'n/a (outside Portugal)', 'GD (°C·d)', Z ? Math.round(Z.GD) : '',
-      'θext,v (°C)', Z ? Z.tv.toFixed(1) : '', 'Source', 'Manual SCE (Despacho 6476-H/2021) Eq. 2, Tabelas 7–10'])
-      (S && inPortugal(S.lat, S.lon) ? sceZone(S.nuts, S.alt) : null),
+    (Z => ['# PN-EN 12831 winter zone', Z ? ROMAN[Z.wi] + ' (design ' + Z.te + ' °C)' : 'n/a (outside Poland)', 'HDD18 (°C·d)', Z ? Z.hdd : '',
+      'Summer zone', Z ? ROMAN[Z.si] + ' (design ' + Z.teS + ' °C)' : '', 'Source', 'PN-EN 12831-1:2017 (winter), PN-76/B-03420 (summer, withdrawn); station ' + (Z ? Z.st : '')])
+      (S && inPoland(S.lat, S.lon) ? sceZone(S.nuts, S.alt, S.lat, S.lon) : null),
     ['# Use', S && S.use === 'cs' ? 'Commerce and services' : 'Dwelling',
      'Intervention', S && S.operation === 'renovation' ? 'Major renovation' : 'New construction'],
     ['# Basis', 'Köppen–Geiger after Peel, Finlayson and McMahon (2007); design guidance as cited per page']
@@ -3665,6 +3541,7 @@ function orientationLead(code, main) {
   if (main === 'B') return 'ori-lead-B';
   if (code === 'Csa' || code === 'BSk') return 'ori-lead-Csa';
   if (code === 'Csb') return 'ori-lead-Csb';
+  if (main === 'D') return 'ori-lead-D';
   if (code === 'Cfb' || code === 'Cfa' || code === 'Csc' || code === 'Cfc') return 'ori-lead-Cfb';
   return 'ori-lead-none';
 }
@@ -4380,8 +4257,8 @@ function buildEnvironment(host) {
   const settle = found => resite(plotPos(), txt => { if (host.isConnected) findMsg.textContent = txt; }, found || undefined);
   const place = (pos, name, found) => {
     let note = '';
-    if (!inPortugal(pos.lat, pos.lon) && inPortugal(pos.lat, -Math.abs(pos.lon))) { pos = { lat:pos.lat, lon:-Math.abs(pos.lon) }; note = t('Longitude read as west.') + ' '; }
-    if (!inPortugal(pos.lat, pos.lon)) { findMsg.textContent = t('That point lies outside Portugal and its islands.'); return; }
+    if (!inPoland(pos.lat, pos.lon) && inPoland(pos.lat, -Math.abs(pos.lon))) { pos = { lat:pos.lat, lon:-Math.abs(pos.lon) }; note = t('Longitude read as west.') + ' '; }
+    if (!inPoland(pos.lat, pos.lon)) { findMsg.textContent = t('That point lies outside Portugal and its islands.'); return; }
     ENV.plot = { lat:pos.lat, lon:pos.lon };
     findMsg.textContent = (name ? name + '. ' : '') + note;
     refreshEnv();
@@ -4552,7 +4429,8 @@ function buildEnvironment(host) {
   rec.appendChild(hint(leadId, {
     'ori-lead-Csa': 'Elongate the plan east–west on one storey — up to 1:1.6 where the year is continental, 1:1.3 by the sea — so the long facades face south and north; open the living rooms south with fixed plus movable shade; keep the west nearly blind; let mass and night ventilation carry July and August.',
     'ori-lead-Csb': 'Keep the plan compact on two storeys — 1:1.3 on the coast, squarer to 1:1.1 in the cold interior, still east–west; generous south glass for the winter with light fixed shade for a short summer; cross ventilation and moderate mass.',
-    'ori-lead-Cfb': 'Daylight and wind govern, not heat: shallow plan for daylight, high windows to the south and south-east, shelter the north from prevailing Atlantic winds and driving rain, moderate inertia against condensation.',
+    'ori-lead-D': 'Compact and solar-led for a long heating season: two storeys, living rooms south behind generous glazing with movable shade for the short summer, mass inside the insulation, the north closed and sheltered from the winter wind; ventilate for air quality and summer nights.',
+    'ori-lead-Cfb': 'Daylight and wind govern, not heat: shallow plan for daylight, high windows to the south and south-east, shelter from the prevailing westerlies and driving rain, moderate inertia against condensation.',
     'ori-lead-B': 'The daily swing is the resource: compact form, small openings except a south mass or Trombe wall, heavy mass discharged by night ventilation; patio or earth tempering where the slope allows.',
     'ori-lead-none': 'Apply the hemisphere rule below: collect winter sun from the south, refuse summer sun from the east and above all the west.'
   }[leadId]));
@@ -10250,20 +10128,20 @@ const REFS = [
    'Daylight read qualitatively, against the quantitative guidance the other sources give.', null],
   ['Sustainable Buildings Industry Council. (2007). <i>Green building guidelines: Meeting the demand for low-energy, resource-efficient homes</i> (5th ed.).',
    'Guideline values for dwellings, used as a cross-check where the other sources disagree.', null],
-  ['Gonçalves, H., &amp; Mariz Graça, J. (2004). <i>Conceitos bioclimáticos para os edifícios em Portugal</i>. DGGE/IP-3E.',
-   'The Portuguese reading of bioclimatic strategy, the character of the country’s own climatic zones, and each zone’s intentions and passive systems on the setup screen.', null],
-  ['Despacho n.º 6476-H/2021, de 1 de julho. <i>Manual SCE</i>. Diário da República, 2.ª série, n.º 126.',
-   'The climate zones on the setup screen: the NUTS III of each municipality (Anexo II, Tabela 116), the reference values and altitude slopes of the heating and cooling seasons (Tabelas 9 and 10), the altitude correction (Eq. 2) and the zone thresholds (Tabelas 7 and 8).', null],
-  ['Direção-Geral do Território. (2025). <i>Altitude mínima</i> and <i>Altitude máxima</i>, by município. Published via PORDATA, Fundação Francisco Manuel dos Santos.',
-   'The lowest and highest ground of each region, which bounds the altitude ladder of the climate zones. Not an SCE quantity.', 'https://www.pordata.pt/municipios'],
+  ['PN-EN 12831-1:2017. <i>Heating systems in buildings — Method for calculation of the design heat load</i>, national annex.',
+   'The winter design zones I–V on the setup screen (design outdoor −16 to −24 °C, heating season October–March) and the mean annual temperatures behind them.', null],
+  ['PN-76/B-03420 (withdrawn 2011, unreplaced). <i>Ventilation and air-conditioning — outdoor design parameters</i>.',
+   'The summer design zones I–II on the setup screen: I coastal 28 °C at 52 % RH, II rest 30 °C at 45 % RH.', null],
+  ['IMGW-PIB. Station metadata (codes, coordinates, altitude).',
+   'The coordinates and heights of the embedded synoptic stations.', 'https://klimat.imgw.pl/en/meta-dane'],
   ['Sindicato Nacional dos Arquitectos. (1961). <i>Arquitectura popular em Portugal</i> (2 vols.). Lisboa: SNA.',
    'The survey of the regional houses the Site optimum for Portugal is set against: the single-storey house of the south that grew in length, the house on two floors of the north, the compact house of the Algarve.', null],
   ['Oliveira, E. V. de, &amp; Galhano, F. (1992). <i>Arquitectura tradicional portuguesa</i>. Lisboa: Publicações Dom Quixote.',
    'The two basic Portuguese houses and their geography — the house on two floors of the north, the single-storey house of the south — read by the Site optimum for Portugal.', null],
   ['AEMET &amp; Instituto de Meteorologia de Portugal. (2011). <i>Atlas climático ibérico / Iberian climate atlas</i>. Madrid and Lisboa: AEMET and IM.',
    'The Köppen–Geiger classes of the Iberian peninsula, 1971–2000: Csa south of the Montejunto–Estrela ridge and in the inner Douro valley, Csb to the north and on the south-west coast.', 'https://www.ipma.pt/resources.www/docs/publicacoes.site/atlas_clima_iberico.pdf'],
-  ['IPMA (2022). <i>Fichas Climatológicas 1981–2010</i>, v2.2. Divisão de Clima e Alterações Climáticas.',
-   'The observed monthly means and totals embedded for 28 stations — homogeneous series plus WRF-modelled infill after WMO-No. 1203.', 'https://www.ipma.pt/pt/oclima/normais.clima/'],
+  ['IMGW-PIB. Climate normals 1991–2020 (klimat.imgw.pl).',
+   'The observed monthly means and totals embedded for 19 synoptic stations — homogeneous series after WMO-No. 1203.', 'https://klimat.imgw.pl/en/climate-normals/'],
   ['Despacho n.º 15793-K/2013, de 3 de dezembro. Parâmetros térmicos do REH. Diário da República, 2.ª série. (Colour classes as in RCCTE, Decreto-Lei n.º 80/2006, Quadro V.5.)',
    'The three colour classes of solar absorptance — light 0.4, medium 0.5, dark 0.8 — the wall colour on Site reads its albedo from.', null],
   ['Portarias n.º 52/2019 a 58/2019, de 11 de fevereiro, alteradas pela Portaria n.º 18/2022. <i>Programas Regionais de Ordenamento Florestal</i> (PROF LVT, ALG, ALT, CI, CL, TMAD, EDM). Diário da República, 1.ª série.',
@@ -10719,117 +10597,89 @@ function saveNormals(c) {
   try { localStorage.setItem(LS_CLIM, JSON.stringify(c)); } catch (e) {}
 }
 
-/* --------------------------------------------------- IPMA NORMALS --
-   Official 1981–2010 climatological normals, transcribed from the IPMA
-   fichas climatológicas (v2.2, 2022; homogeneous observed series plus
-   WRF-modelled infill after WMO-No. 1203). TT = monthly mean of daily-mean
-   air temperature (°C); Prec = monthly mean total precipitation (mm).
-   Selecting one of these sources fills the twelve boxes and the station
-   coordinates — the altitude must then be corrected to the building, not
-   the station. No values are invented: stations without a ficha here stay
-   manual. */
-const IPMA_DATA = {
-  'IPMA, Lisboa/Gago Coutinho, 1981–2010': { st:'Lisboa / Gago Coutinho', lat:38.77, lon:-9.13, alt:104,
-    t:[10.8,12.0,14.2,15.4,17.7,21.0,23.0,23.5,22.0,18.4,14.3,11.7],
-    p:[99.5,82.9,50.8,63.4,50.2,15.3,4.3,5.7,31.4,100.6,124.1,116.4] },
-  'IPMA, Lisboa/Geofísico, 1981–2010': { st:'Lisboa / Instituto Geofísico', lat:38.72, lon:-9.15, alt:77,
-    t:[11.5,12.6,14.9,15.9,18.0,21.2,23.1,23.5,22.1,18.8,15.0,12.3],
-    p:[99.2,84.3,52.1,68.0,52.6,15.6,3.9,6.1,32.6,97.7,127.5,126.2] },
-  'IPMA, Porto/Pedras Rubras, 1981–2010': { st:'Porto / Pedras Rubras', lat:41.23, lon:-8.68, alt:68,
-    t:[10.0,10.9,12.8,13.7,15.7,18.6,19.9,20.1,19.1,16.4,13.2,11.1],
-    p:[137.1,96.7,89.2,102.1,83.0,36.2,17.4,29.5,70.0,142.7,166.9,168.8] },
-  'IPMA, Aveiro, 1981–2010': { st:'Aveiro / Universidade', lat:40.64, lon:-8.66, alt:4,
-    t:[10.4,11.4,13.3,14.3,16.3,18.9,20.1,20.3,19.5,17.0,13.6,11.4],
-    p:[119.8,87.5,67.2,91.2,74.9,29.2,13.5,19.3,49.3,129.3,127.8,134.5] },
-  'IPMA, Viana do Castelo, 1981–2010': { st:'Viana do Castelo / Meadela', lat:41.71, lon:-8.80, alt:16,
-    t:[9.7,10.5,12.6,13.7,15.9,19.2,20.8,20.8,19.2,16.1,12.7,10.8],
-    p:[180.8,131.0,112.5,125.9,99.0,52.0,29.1,38.5,94.5,190.0,199.9,213.3] },
-  'IPMA, Vila Real, 1981–2010': { st:'Vila Real', lat:41.27, lon:-7.72, alt:562,
-    t:[6.0,7.7,10.5,11.7,14.8,19.0,21.6,21.7,19.0,14.3,9.6,7.0],
-    p:[129.6,98.4,75.4,91.6,66.1,38.7,12.8,24.4,53.2,130.8,128.5,168.6] },
-  'IPMA, Bragança, 1981–2010': { st:'Bragança', lat:41.80, lon:-6.74, alt:691,
-    t:[4.5,6.1,9.1,10.7,14.0,18.7,21.7,21.6,18.3,13.1,8.2,5.4],
-    p:[92.8,63.7,53.9,65.2,65.0,35.4,15.4,17.4,47.7,102.2,92.4,121.6] },
-  'IPMA, Chaves, 1981–2010': { st:'Chaves / Aeródromo', lat:41.73, lon:-7.47, alt:353,
-    t:[6.0,7.5,10.3,12.2,15.2,19.5,21.9,21.8,18.9,14.3,9.6,6.9],
-    p:[79.6,52.8,50.4,61.2,53.7,27.8,15.2,21.0,37.5,93.0,82.4,104.1] },
-  'IPMA, Montalegre, 1981–2010': { st:'Montalegre', lat:41.82, lon:-7.79, alt:1005,
-    t:[4.1,4.9,7.1,8.2,11.2,15.6,18.1,18.2,15.5,11.0,7.2,5.0],
-    p:[197.6,136.8,123.7,126.1,112.2,52.6,21.8,30.6,72.0,199.0,178.1,243.8] },
-  'IPMA, Mirandela, 1981–2010': { st:'Mirandela', lat:41.51, lon:-7.19, alt:250,
-    t:[5.9,7.7,10.8,12.9,16.4,21.2,24.0,23.8,20.5,15.2,9.9,6.9],
-    p:[58.9,39.7,41.7,45.4,45.9,29.8,15.1,16.3,33.9,75.5,65.5,76.9] },
-  'IPMA, Viseu, 1981–2010': { st:'Viseu', lat:40.71, lon:-7.90, alt:644,
-    t:[7.1,8.4,11.0,11.8,14.5,18.7,21.1,21.6,18.5,14.5,10.0,7.7],
-    p:[183.2,103.5,98.2,118.7,98.2,37.6,19.5,28.5,60.4,173.7,161.8,201.0] },
-  'IPMA, Guarda, 1981–2010': { st:'Guarda', lat:40.54, lon:-7.27, alt:1019,
-    t:[4.1,5.2,7.8,8.8,12.1,16.9,20.1,19.9,16.9,11.9,7.6,5.0],
-    p:[96.0,74.0,64.2,82.9,76.7,32.5,15.3,13.0,55.7,131.1,118.7,135.7] },
-  'IPMA, Penhas Douradas, 1981–2010': { st:'Penhas Douradas', lat:40.41, lon:-7.56, alt:1380,
-    t:[3.1,3.7,6.0,6.5,9.8,14.9,18.0,18.2,15.1,10.1,6.2,4.1],
-    p:[189.2,148.4,110.8,143.2,110.3,49.3,20.0,23.2,72.4,202.3,223.6,242.8] },
-  'IPMA, Castelo Branco, 1981–2010': { st:'Castelo Branco', lat:39.84, lon:-7.48, alt:386,
-    t:[8.1,9.5,12.4,13.6,16.8,21.7,24.7,24.6,21.7,16.6,11.8,8.9],
-    p:[93.6,71.6,53.4,65.1,54.6,22.6,7.8,7.7,38.7,110.2,121.4,122.3] },
-  'IPMA, Portalegre, 1981–2010': { st:'Portalegre (st. 571)', lat:39.29, lon:-7.42, alt:597,
-    t:[8.6,9.6,12.2,13.0,16.1,21.0,24.0,24.1,21.4,16.5,12.0,9.4],
-    p:[104.2,81.6,62.2,78.1,61.9,24.6,7.1,9.0,40.7,113.0,122.4,128.3] },
-  'IPMA, Évora, 1981–2010': { st:'Évora / Cidade', lat:38.57, lon:-7.91, alt:309,
-    t:[9.4,10.5,13.0,14.0,16.8,21.1,23.6,23.7,21.6,17.3,13.1,10.3],
-    p:[66.5,54.1,41.8,57.6,48.1,16.6,3.9,7.7,29.8,82.9,85.9,91.9] },
-  'IPMA, Beja, 1981–2010': { st:'Beja', lat:38.03, lon:-7.87, alt:246,
-    t:[9.7,10.8,13.4,14.6,17.7,22.0,24.6,24.8,22.4,18.2,13.6,10.7],
-    p:[65.3,55.0,40.0,58.3,43.1,13.1,2.4,4.0,29.5,70.9,76.3,97.1] },
-  'IPMA, Setúbal, 1981–2010': { st:'Setúbal / Estação de Fruticultura', lat:38.55, lon:-8.89, alt:19,
-    t:[10.1,11.2,13.5,14.8,17.3,20.9,23.0,23.2,21.3,17.8,13.9,11.2],
-    p:[98.9,75.5,52.9,66.7,48.7,16.8,3.7,3.7,27.2,97.6,119.4,124.7] },
-  'IPMA, Sines, 1981–2010': { st:'Sines', lat:37.95, lon:-8.84, alt:98,
-    t:[11.5,12.2,13.9,14.7,16.9,19.4,20.5,21.1,19.9,18.0,14.6,12.5],
-    p:[74.1,58.1,45.1,50.4,35.4,10.4,1.2,3.3,24.9,85.9,90.7,98.5] },
-  'IPMA, Sagres, 1981–2010': { st:'Sagres / Quartel da Marinha', lat:37.01, lon:-8.95, alt:23,
-    t:[12.4,12.9,14.4,15.4,17.3,19.9,21.2,21.6,20.9,18.6,15.6,13.8],
-    p:[54.0,52.1,44.1,36.5,20.2,5.6,1.4,2.0,19.7,52.6,88.1,93.0] },
-  'IPMA, Faro, 1981–2010': { st:'Faro', lat:37.02, lon:-7.97, alt:5,
-    t:[12.0,12.8,14.7,16.1,18.4,21.8,24.2,24.1,22.3,19.3,15.6,13.3],
-    p:[59.7,52.0,39.4,38.8,21.6,4.3,1.8,3.9,22.5,60.6,91.2,115.8] },
-  'IPMA, Cabo Carvoeiro (Peniche), 1981–2010': { st:'Cabo Carvoeiro / Farol', lat:39.36, lon:-9.41, alt:32,
-    t:[11.9,12.3,13.6,14.2,15.8,17.8,18.6,19.0,18.7,17.1,14.8,12.8],
-    p:[78.8,63.5,40.9,53.1,37.8,14.6,6.2,10.3,27.5,86.1,101.0,86.4] },
-  'IPMA, Funchal, 1981–2010': { st:'Funchal', lat:32.65, lon:-16.89, alt:58,
-    t:[16.7,16.6,17.2,17.5,18.6,20.5,22.2,23.2,23.2,21.8,19.6,17.9],
-    p:[74.1,83.0,60.2,44.0,28.9,7.2,1.6,2.0,32.9,89.5,88.8,115.0] },
-  'IPMA, Porto Santo, 1981–2010': { st:'Porto Santo', lat:33.07, lon:-16.35, alt:78,
-    t:[15.8,15.7,16.3,16.8,18.2,20.1,21.7,22.8,22.6,20.9,18.7,17.0],
-    p:[42.8,41.8,32.5,25.6,15.0,10.0,4.0,4.2,21.5,40.2,55.4,70.2] },
-  'IPMA, Ponta Delgada, 1981–2010': { st:'Ponta Delgada / Observatório Afonso Chaves', lat:37.75, lon:-25.66, alt:35,
-    t:[14.8,14.4,15.0,15.6,17.0,19.2,21.4,22.6,21.8,19.5,17.2,15.6],
-    p:[111.5,95.2,98.6,83.3,70.2,45.9,28.1,47.3,87.9,109.6,116.0,158.9] },
-  'IPMA, Angra do Heroísmo, 1981–2010': { st:'Angra do Heroísmo / Observatório José Agostinho', lat:38.66, lon:-27.22, alt:90,
-    t:[14.1,13.8,14.2,14.9,16.2,18.5,21.0,22.1,21.2,18.9,16.4,14.9],
-    p:[107.4,110.2,109.5,87.7,72.0,53.7,28.8,48.0,92.4,114.4,122.1,154.9] },
-  'IPMA, Horta, 1981–2010': { st:'Horta / Observatório Príncipe Alberto do Mónaco', lat:38.53, lon:-28.63, alt:55,
-    t:[14.6,14.2,14.5,15.2,16.6,18.8,21.5,22.8,21.8,19.4,17.0,15.5],
-    p:[98.5,91.4,93.1,70.8,70.9,63.9,34.7,48.9,91.7,121.7,118.7,135.7] },
-  'IPMA, Santa Cruz das Flores, 1981–2010': { st:'Flores / Aeroporto', lat:39.46, lon:-31.13, alt:28,
-    t:[14.5,14.1,14.5,15.4,16.8,19.0,21.7,22.8,21.6,19.1,16.9,15.3],
-    p:[196.0,170.4,154.0,103.8,104.1,96.4,59.8,69.7,122.5,175.7,178.2,223.1] }
+/* ------------------------------------------------- IMGW NORMALS --
+   Official 1991-2020 climatological normals for Polish synoptic stations:
+   monthly mean air temperature TT (C) from the IMGW-PIB climate-normals
+   tables (klimat.imgw.pl, daily means, WMO-1203 homogeneous series), monthly
+   precipitation sums (mm) from the stations' 1991-2020 normals boxes
+   compiled from the synoptic record and cross-checked month by month
+   against the IMGW means. wi/si = winter/summer design zone (PN-EN 12831-1
+   / PN-76/B-03420, read from the norms figure); hdd = heating degree-days,
+   base 18 C, from TT. Selecting one of these sources fills the twelve boxes
+   and the station coordinates - the altitude must then be corrected to the
+   building, not the station. No values are invented. */
+const IMGW_DATA = {
+  'IMGW, Łeba, 1991–2020': { st:'Łeba', lat:54.75, lon:17.53, alt:2, wi:1, si:1, hdd:3477,
+    t:[0.2,0.6,2.7,6.9,11.2,15.0,17.5,17.5,13.9,9.3,4.9,1.6],
+    p:[43.0,34.0,37.7,27.9,48.7,53.2,73.3,79.8,75.1,76.8,58.9,53.2] },
+  'IMGW, Szczecin/Dąbie, 1991–2020': { st:'Szczecin / Dąbie', lat:53.40, lon:14.62, alt:1, wi:1, si:1, hdd:3136,
+    t:[0.6,1.5,4.2,9.2,13.6,16.8,18.9,18.5,14.3,9.5,4.9,1.9],
+    p:[40.0,32.8,38.4,31.2,55.8,59.1,76.2,60.3,47.7,43.5,39.0,43.0] },
+  'IMGW, Gorzów Wielkopolski, 1991–2020': { st:'Gorzów Wielkopolski', lat:52.74, lon:15.28, alt:71, wi:2, si:2, hdd:3194,
+    t:[-0.1,0.9,4.1,9.5,14.0,17.3,19.4,19.0,14.3,9.2,4.3,1.1],
+    p:[41.9,34.6,39.4,29.5,57.0,56.7,75.0,56.8,45.5,40.4,38.4,41.6] },
+  'IMGW, Zielona Góra, 1991–2020': { st:'Zielona Góra', lat:51.93, lon:15.52, alt:192, wi:2, si:2, hdd:3212,
+    t:[-0.3,0.7,4.0,9.6,14.0,17.3,19.3,19.1,14.4,9.3,4.2,0.8],
+    p:[44.2,35.6,45.2,30.6,52.7,55.7,90.1,65.3,48.3,41.0,40.5,39.7] },
+  'IMGW, Poznań/Ławica, 1991–2020': { st:'Poznań / Ławica', lat:52.42, lon:16.83, alt:83, wi:2, si:2, hdd:3221,
+    t:[-0.4,0.5,3.8,9.5,14.1,17.5,19.5,19.1,14.3,9.1,4.4,0.9],
+    p:[37.7,30.7,39.9,38.6,53.8,57.5,86.4,55.9,41.2,35.4,33.6,40.1] },
+  'IMGW, Toruń, 1991–2020': { st:'Toruń', lat:53.04, lon:18.60, alt:69, wi:2, si:2, hdd:3372,
+    t:[-1.1,-0.1,3.2,8.8,13.8,17.1,19.3,18.9,13.9,8.7,4.0,0.4],
+    p:[32.7,27.3,32.2,29.6,51.2,55.7,90.6,63.9,55.8,37.9,33.5,38.5] },
+  'IMGW, Olsztyn/Dajtki, 1991–2020': { st:'Olsztyn / Dajtki', lat:53.77, lon:20.42, alt:133, wi:4, si:2, hdd:3639,
+    t:[-2.0,-1.1,2.2,7.9,12.9,16.1,18.3,17.8,13.2,8.0,3.3,-0.4],
+    p:[42.1,33.1,39.4,37.5,59.8,70.1,88.0,63.8,58.5,57.7,47.0,45.4] },
+  'IMGW, Białystok, 1991–2020': { st:'Białystok', lat:53.11, lon:23.16, alt:148, wi:4, si:2, hdd:3775,
+    t:[-2.8,-1.9,1.7,7.9,13.1,16.4,18.4,17.5,12.6,7.4,2.7,-1.2],
+    p:[33.8,31.4,34.6,37.7,69.1,65.4,86.5,69.4,56.0,47.2,39.2,39.9] },
+  'IMGW, Suwałki, 1991–2020': { st:'Suwałki', lat:54.13, lon:22.95, alt:184, wi:5, si:2, hdd:3927,
+    t:[-3.3,-2.6,0.9,7.3,12.6,15.9,18.1,17.4,12.5,7.0,2.3,-1.6],
+    p:[38.1,31.5,36.8,34.8,53.8,66.9,85.6,70.9,52.3,52.4,42.8,41.0] },
+  'IMGW, Warszawa/Okęcie, 1991–2020': { st:'Warszawa / Okęcie', lat:52.17, lon:20.97, alt:110, wi:3, si:2, hdd:3366,
+    t:[-1.5,-0.4,3.2,9.2,14.3,17.7,19.7,19.1,14.0,8.7,3.8,-0.1],
+    p:[31.0,29.8,29.0,35.1,55.5,63.9,82.2,60.6,50.4,40.2,36.0,36.1] },
+  'IMGW, Łódź/Lublinek, 1991–2020': { st:'Łódź / Lublinek', lat:51.72, lon:19.39, alt:184, wi:2, si:2, hdd:3412,
+    t:[-1.5,-0.3,3.1,9.0,13.8,17.1,19.2,18.7,13.7,8.6,3.9,0.0],
+    p:[35.3,34.1,37.6,35.2,60.9,62.3,81.1,54.1,53.4,44.0,39.4,40.7] },
+  'IMGW, Lublin/Radawiec, 1991–2020': { st:'Lublin / Radawiec', lat:51.22, lon:22.39, alt:238, wi:3, si:2, hdd:3593,
+    t:[-2.5,-1.4,2.4,8.6,13.6,16.9,18.9,18.4,13.4,8.2,3.2,-1.0],
+    p:[33.6,31.5,37.9,42.3,70.7,66.8,82.2,54.9,62.8,47.4,36.5,34.5] },
+  'IMGW, Kielce/Suków, 1991–2020': { st:'Kielce / Suków', lat:50.81, lon:20.69, alt:261, wi:3, si:2, hdd:3588,
+    t:[-2.2,-1.1,2.5,8.4,13.4,16.9,18.7,18.2,13.2,8.1,3.3,-0.9],
+    p:[37.3,34.0,40.2,39.5,70.1,70.2,94.3,67.6,55.1,45.2,40.2,37.4] },
+  'IMGW, Kraków/Balice, 1991–2020': { st:'Kraków / Balice', lat:50.08, lon:19.78, alt:241, wi:3, si:2, hdd:3376,
+    t:[-1.6,-0.2,3.5,9.3,14.0,17.6,19.3,18.9,13.9,8.8,3.8,-0.5],
+    p:[37.9,32.3,38.1,46.4,79.0,77.0,98.2,72.5,65.8,51.2,41.4,33.4] },
+  'IMGW, Katowice/Muchowiec, 1991–2020': { st:'Katowice / Muchowiec', lat:50.24, lon:19.03, alt:278, wi:3, si:2, hdd:3343,
+    t:[-1.2,0.1,3.6,9.3,13.8,17.3,19.1,18.6,13.7,8.9,4.2,0.0],
+    p:[43.8,39.4,47.7,44.9,75.7,78.7,103.8,73.1,69.9,53.4,49.0,43.8] },
+  'IMGW, Opole, 1991–2020': { st:'Opole', lat:50.63, lon:17.97, alt:163, wi:3, si:2, hdd:3158,
+    t:[-0.5,0.7,4.1,9.6,14.2,17.8,19.7,19.4,14.5,9.6,5.0,0.8],
+    p:[31.5,29.0,35.2,36.9,62.6,78.2,89.4,54.2,56.7,41.5,37.8,31.9] },
+  'IMGW, Wrocław/Strachowice, 1991–2020': { st:'Wrocław / Strachowice', lat:51.11, lon:16.88, alt:123, wi:3, si:2, hdd:3118,
+    t:[0.0,1.1,4.3,9.7,14.3,17.7,19.7,19.3,14.5,9.6,4.8,1.1],
+    p:[28.3,25.6,35.0,31.2,59.6,65.4,91.4,59.5,48.4,37.6,31.4,27.9] },
+  'IMGW, Rzeszów/Jasionka, 1991–2020': { st:'Rzeszów / Jasionka', lat:50.11, lon:22.02, alt:211, wi:3, si:2, hdd:3397,
+    t:[-1.9,-0.6,3.3,9.1,14.0,17.6,19.4,18.9,13.9,8.9,4.1,-0.5],
+    p:[33.4,32.3,39.0,45.9,79.3,81.6,90.8,63.5,66.0,49.6,36.1,34.4] },
+  'IMGW, Zakopane, 1991–2020': { st:'Zakopane', lat:49.29, lon:19.96, alt:855, wi:5, si:2, hdd:4295,
+    t:[-3.3,-2.4,0.6,6.0,10.7,14.2,15.8,15.6,10.9,6.5,2.1,-2.3],
+    p:[46.6,51.3,61.4,81.2,141.5,149.4,191.6,125.3,111.0,80.8,59.7,45.1] }
 };
-/* Older labels kept working: Peniche was the Cabo Carvoeiro lighthouse station. */
-const IPMA_ALIAS = {
-  'IPMA, Peniche, 1981–2010': 'IPMA, Cabo Carvoeiro (Peniche), 1981–2010'
-};
-/* Entries with a ficha at IPMA but no values embedded here — the boxes stay
+/* Entries students may type that have no embedded values - the boxes stay
    manual and the note tells the student what to do. */
-const IPMA_NODATA = {
-  'IPMA, Coimbra, 1981–2010': 'No embedded values for Coimbra yet — nearest embedded stations are Aveiro, Viseu and Penhas Douradas; type the twelve pairs from the ficha by hand.',
-  'IPMA, Porto/Serra do Pilar, 1981–2010': 'No embedded values for Serra do Pilar yet — use Porto/Pedras Rubras, 20 km away on the coast.'
+const IMGW_NODATA = {
+  'IMGW, Gdańsk, 1991–2020': 'No embedded values for Gdańsk yet — nearest embedded stations are Łeba, Toruń and Olsztyn; type the twelve pairs from the norms table by hand.',
+  'IMGW, Bydgoszcz, 1991–2020': 'No embedded values for Bydgoszcz yet — use Toruń, 45 km away to the south-east.'
 };
+
 
 /* --- where the normals come from, for any coordinates: the setup screen and
    a plot moved on Environmental read them the same way, in the same order —
-   the embedded IPMA station within 5 km; where there is none, the nearest
-   stations blended; the web reanalysis only on request. Mainland, Madeira
-   and the Azores never mix. */
+   the embedded IMGW station within 5 km; where there is none, the nearest
+   stations blended; the web reanalysis only on request. Poland is one region:
+   every station blends with every other. */
 const havKm = (la1, lo1, la2, lo2) => {
   const r = 6371, dLa = (la2 - la1) * RAD, dLo = (lo2 - lo1) * RAD;
   const a = Math.sin(dLa / 2) * Math.sin(dLa / 2)
@@ -10838,14 +10688,15 @@ const havKm = (la1, lo1, la2, lo2) => {
 };
 const NEAR_KM = 5;
 const shortName = key => (key.split(', ')[1] || key);
-const sameIsland = (lo, v) => lo > -10.5 ? v.lon > -10.5 : lo < -20 ? v.lon < -20 : (v.lon <= -10.5 && v.lon >= -20);
-const nearestStation = (la, lo) => Object.entries(IPMA_DATA).filter(([, v]) => sameIsland(lo, v))
+/* Poland is one region (mainland only): every embedded station blends with every other. */
+const sameRegion = (lo, v) => true;
+const nearestStation = (la, lo) => Object.entries(IMGW_DATA).filter(([, v]) => sameRegion(lo, v))
   .map(([k, v]) => ({ key:k, v, d:havKm(la, lo, v.lat, v.lon) })).sort((a, b) => a.d - b.d)[0] || null;
 /** Up to three embedded stations round the point, weighted by inverse
     square distance: the same 1981–2010 normals, nothing invented; null
     beyond 300 km, where no blend is honest. */
 function blendAt(la, lo) {
-  const pool = Object.entries(IPMA_DATA).filter(([, v]) => sameIsland(lo, v))
+  const pool = Object.entries(IMGW_DATA).filter(([, v]) => sameRegion(lo, v))
     .map(([k, v]) => ({ name:shortName(k), d:havKm(la, lo, v.lat, v.lon), t:v.t, p:v.p, alt:v.alt }))
     .sort((a, b) => a.d - b.d).slice(0, 3);
   if (!pool.length || pool[0].d > 300) return null;
@@ -10895,110 +10746,82 @@ async function webNormalsAt(la, lo) {
    the site marked on them; and what the pair asks of the building in each
    season and of its surroundings, drawn. Colder winters are a deeper blue,
    hotter summers a deeper orange. */
-const SCE_WCOL = ['', '#DDEBF7', '#9CC3E6', '#4F86C0'], SCE_WINK = ['', '#1F3B57', '#16324F', '#FFFFFF'];
+const SCE_WCOL = ['', '#DDEBF7', '#9CC3E6', '#4F86C0', '#2E5F94', '#1B3A5F'], SCE_WINK = ['', '#1F3B57', '#16324F', '#FFFFFF', '#FFFFFF', '#FFFFFF'];
 const SCE_SCOL = ['', '#FCE8C8', '#F4B26B', '#D9622B'], SCE_SINK = ['', '#5A3A0E', '#4A2A05', '#FFFFFF'];
 /** 1 071 — thousands set apart by a thin space, as the Manual prints them. */
 const grpN = v => String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-const sceKey = Z => 'I' + Z.wi + ' · V' + Z.si;
-
-/** The region's ground from its lowest to its highest point, the winter
- *  zones on one bar and the summer zones on the other, the site across both. */
-function sceLadder(Z) {
-  const R = sceRuns(Z.nuts), lo = Z.lo, hi = Z.hi, W = 184, H = 150, y0 = 9, y1 = H - 16;
-  const y = z => y1 - (y1 - y0) * (clamp(z, lo, hi) - lo) / Math.max(1, hi - lo);
-  const txt = (x, yy, s, a, c, w) => '<text x="' + x + '" y="' + yy.toFixed(1) + '" font-size="9" text-anchor="' + a + '" dominant-baseline="middle" fill="'
-    + (c || '#6b7278') + '"' + (w ? ' font-weight="700"' : '') + ' font-family="' + MONO + '">' + s + '</text>';
-  let s = '';
-  const bar = (L, x, bw, col, ink, pre, labX, anchor) => {
-    const used = [y(lo), y(hi)];
-    L.forEach((r, i) => {
-      const zb = i ? r[1] : lo, zt = i < L.length - 1 ? L[i + 1][1] : hi, ya = y(zt), yb = y(zb);
-      s += '<rect x="' + x + '" y="' + ya.toFixed(1) + '" width="' + bw + '" height="' + Math.max(0.5, yb - ya).toFixed(1) + '" fill="' + col[r[0]] + '"/>';
-      if (yb - ya >= 11) s += txt(x + bw / 2, (ya + yb) / 2, pre + r[0], 'middle', ink[r[0]], true);
-      if (i < L.length - 1 && used.every(u => Math.abs(u - ya) >= 9)) { s += txt(labX, ya, grpN(zt), anchor); used.push(ya); }
-    });
-  };
-  bar(R.w, 34, 24, SCE_WCOL, SCE_WINK, 'I', 31, 'end');
-  bar(R.s, 70, 24, SCE_SCOL, SCE_SINK, 'V', 97, 'start');
-  s += txt(31, y(hi), grpN(hi), 'end') + txt(31, y(lo), grpN(lo), 'end');
-  [34, 70].forEach(x => { s += '<rect x="' + x + '" y="' + y0 + '" width="24" height="' + (y1 - y0) + '" fill="none" stroke="#c9cdc8" stroke-width="0.8"/>'; });
-  const ys = y(Z.z), out = Z.z < lo || Z.z > hi;
-  s += '<path d="M28 ' + ys.toFixed(1) + 'H100" stroke="#14171a" stroke-width="1.6"' + (out ? ' stroke-dasharray="3 2"' : '') + '/>'
-    + '<circle cx="64" cy="' + ys.toFixed(1) + '" r="2.6" fill="#14171a"/>'
-    + '<path d="M128 ' + ys.toFixed(1) + 'l6 -4v8z" fill="#14171a"/>' + txt(137, ys, grpN(Z.z) + ' m', 'start', '#14171a', true);
-  s += txt(46, H - 5, t('winter'), 'middle') + txt(82, H - 5, t('summer'), 'middle');
-  return '<svg class="sce-ladder" viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" role="img" aria-label="'
-    + t('Climate zones up the ground of the region') + '">' + s + '</svg>';
-}
+const sceKey = Z => 'Z' + ROMAN[Z.wi] + ' · L' + ROMAN[Z.si];
 
 /** One strategy drawn: the icon in its card, its name under it, the sentence in its title. */
 function sceFig(kind, family) {
   const d = SCE_ICON[kind];
   return '<figure class="sce-ic" title="' + t(d[1]).replace(/"/g, '&quot;') + '">' + SCE_SVG.svg(SCE_SVG[family][kind]()) + '<figcaption>' + t(d[0]) + '</figcaption></figure>';
 }
+/** Design zones by voivodeship: winter zone and design outdoor temperature
+    (PN-EN 12831-1), summer zone and design outdoor temperature (PN-76/B-03420,
+    withdrawn 2011). Voivodeships show majorities; the site's own pair reads
+    the nearest synoptic station and its row is highlighted. */
+function sceTable(Z) {
+  const rows = Object.keys(VOIV_ZONE).sort((a, b) => a.localeCompare(b, 'pl')).map(n => {
+    const wz = VOIV_ZONE[n], same = wz[0] === Z.wi && wz[1] === Z.si;
+    return '<tr' + (same ? ' style="background:#DDEBF7;font-weight:700"' : '') + '><td style="text-align:left;padding:2px 8px 2px 0">' + n + '</td>'
+      + '<td style="padding:2px 8px">' + ROMAN[wz[0]] + ' · ' + ZONE_TE[wz[0] - 1] + ' °C</td>'
+      + '<td style="padding:2px 8px">' + ROMAN[wz[1]] + ' · ' + ZONE_TES[wz[1] - 1] + ' °C</td></tr>';
+  }).join('');
+  return '<table style="border-collapse:collapse;font-size:12px;margin:0 auto"><thead><tr><th style="text-align:left;padding:2px 8px 2px 0">' + t('Voivodeship')
+    + '</th><th style="padding:2px 8px">' + t('Winter') + '</th><th style="padding:2px 8px">' + t('Summer') + '</th></tr></thead><tbody>' + rows + '</tbody></table>';
+}
 
 /** The whole panel, for the site as the setup screen has it. */
 function sceBlock(o) {
-  const head = '<div class="panel-head"><div class="panel-title"><h3>' + t('Climate zones of the SCE') + '</h3><p>'
-    + t('Winter and summer, as the Manual SCE reads the territory: the region of the municipality and the altitude of the site.') + '</p></div></div>';
+  const head = '<div class="panel-head"><div class="panel-title"><h3>' + t('Climate zones of Poland') + '</h3><p>'
+    + t('Winter (PN-EN 12831-1, October\u2013March) and summer (PN-76/B-03420, withdrawn 2011, April\u2013September): the voivodeship of the place and the nearest synoptic station.') + '</p></div></div>';
   const wrap = el('div', { class:'panel sce' });
-  const msg = m => { wrap.innerHTML = head + '<div class="panel-body"><div class="sce-wait"><span class="zb">I? · V?</span><p>' + t(m) + '</p></div></div>'; return wrap; };
-  if (!inPortugal(o.lat, o.lon)) return msg('The SCE zones are defined for Portugal only, and these coordinates lie outside it.');
-  if (!isFinite(o.alt)) return msg('Give the altitude of the site: the zone depends on it.');
+  const msg = m => { wrap.innerHTML = head + '<div class="panel-body"><div class="sce-wait"><span class="zb">? \u00b7 ?</span><p>' + t(m) + '</p></div></div>'; return wrap; };
+  if (!inPoland(o.lat, o.lon)) return msg('The PN-EN zones are defined for Poland only, and these coordinates lie outside it.');
+  if (!isFinite(o.alt)) return msg('Give the altitude of the site.');
   if (!o.ready) return msg('Choose the place, the altitude and the station: the zones appear here, with what they ask of the building and its surroundings.');
-  const Z = sceZone(o.nuts, o.alt);
+  const Z = sceZone(o.nuts, o.alt, o.lat, o.lon);
   if (!Z) return msg('Choose the region of the site.');
-  const S = SCE_STRAT[Z.key], dz = '(' + locNum((Z.z / 1000).toFixed(3)) + ' − ' + locNum((Z.zr / 1000).toFixed(3)) + ')';
-  const sgn = v => (v < 0 ? ' − ' : ' + ') + grpN(Math.abs(v));
-  const cmpW = '(' + (Z.wi === 1 ? 'GD ≤ ' + grpN(SCE_GD[0]) : Z.wi === 2 ? grpN(SCE_GD[0]) + ' &lt; GD ≤ ' + grpN(SCE_GD[1]) : 'GD &gt; ' + grpN(SCE_GD[1])) + ')';
-  const cmpS = '(' + (Z.si === 1 ? 'θ ≤ 20' : Z.si === 2 ? '20 &lt; θ ≤ 22' : 'θ &gt; 22') + ')';
-  /* a figure that would round onto a threshold keeps a decimal more, so that
-     22.0 is never seen to be "more than 22" */
-  const gdTxt = SCE_GD.some(g => Math.abs(Z.GD - g) < 0.5) ? locNum(Z.GD.toFixed(1)) : grpN(Z.GD);
-  const tvTxt = fmt(Z.tv, SCE_TV.some(v => Math.abs(Z.tv - v) < 0.05) ? 2 : 1);
-  const where = sceWhere(Z.key).filter(x => x[0] !== Z.nuts);
-  const others = Array.from(new Set(where.map(x => x[0])));
-  const whereTxt = !where.length ? t('On the Manual’s figures this pair holds in no other region.')
-    : t('On the Manual’s figures the same pair also holds, at some altitude, in %1:')
-        .replace('%1', others.length === 1 ? t('one other region') : others.length + ' ' + t('other regions'))
-      + ' ' + (where.length <= 5 ? where.map(x => x[0] + ' ' + grpN(x[1]) + '–' + grpN(x[2]) + ' m').join('; ') : others.join(', ')) + '.';
-  const outTxt = (Z.z < Z.lo || Z.z > Z.hi) ? '<p class="sce-warn">' + t('The altitude lies outside the ground of %1 (%2–%3 m): check it, or the region.')
-    .replace('%1', Z.nuts).replace('%2', grpN(Z.lo)).replace('%3', grpN(Z.hi)) + '</p>' : '';
+  const S = SCE_STRAT[Z.key];
   const grp = (title, aim, sys, kinds, family) => '<div class="sce-grp"><div class="sce-gh"><h4>' + t(title) + '</h4>'
     + (aim ? '<p class="aim">' + t(aim) + '</p>' : '') + '<p>' + t(sys) + '</p></div><div class="sce-ics">'
     + kinds.map(k => sceFig(k, family)).join('') + '</div></div>';
+  const where = Object.keys(VOIV_ZONE).filter(n => n !== Z.nuts && VOIV_ZONE[n][0] === Z.wi && VOIV_ZONE[n][1] === Z.si);
+  const whereTxt = !where.length ? t('No other voivodeship shares this pair.')
+    : t('The same pair also holds across most of %1.').replace('%1', where.join(', '));
   wrap.innerHTML = head + '<div class="panel-body">'
     + '<div class="sce-top"><div class="sce-id">'
-    + '<div class="sce-badges"><span class="zb" style="background:' + SCE_WCOL[Z.wi] + ';color:' + SCE_WINK[Z.wi] + '">I' + Z.wi + '</span>'
-    + '<span class="zb" style="background:' + SCE_SCOL[Z.si] + ';color:' + SCE_SINK[Z.si] + '">V' + Z.si + '</span>'
-    + '<span class="sce-at"><b>' + Z.nuts + '</b> · ' + grpN(Z.z) + ' m</span></div>'
-    + '<div class="sce-calc"><div><span class="k">' + t('Winter') + '</span>GD = ' + grpN(Z.gd0) + sgn(Z.aGd) + ' × ' + dz
-    + ' = <b>' + gdTxt + ' ' + t('°C·d') + '</b> ' + cmpW + ' → <b>I' + Z.wi + '</b></div>'
-    + '<div><span class="k">' + t('Summer') + '</span>θ<sub>ext,v</sub> = ' + fmt(Z.tv0, 1) + sgn(Z.aTv) + ' × ' + dz
-    + ' = <b>' + tvTxt + ' °C</b> ' + cmpS + ' → <b>V' + Z.si + '</b></div></div>'
-    + '<p class="sce-ch">' + t(S.ch) + '</p><p class="sce-where">' + whereTxt + '</p>' + outTxt + '</div>'
-    + '<figure class="sce-lad">' + sceLadder(Z) + '<figcaption>' + t('The zones up the ground of %1; the line is the site.').replace('%1', Z.nuts) + '</figcaption></figure></div>'
-    + grp('Winter · the building', S.w[0], S.w[1], S.w[2], 'B')
-    + grp('Summer · the building', S.s[0], S.s[1], S.s[2], 'B')
+    + '<div class="sce-badges"><span class="zb" style="background:' + SCE_WCOL[Z.wi] + ';color:' + SCE_WINK[Z.wi] + '">Z' + ROMAN[Z.wi] + '</span>'
+    + '<span class="zb" style="background:' + SCE_SCOL[Z.si] + ';color:' + SCE_SINK[Z.si] + '">L' + ROMAN[Z.si] + '</span>'
+    + '<span class="sce-at"><b>' + Z.nuts + '</b> \u00b7 ' + grpN(Z.z) + ' m</span></div>'
+    + '<div class="sce-calc"><div><span class="k">' + t('Winter') + '</span> '
+    + t('Zone %%Z%% \u00b7 design outdoor %%TE%% \u00b0C (PN-EN 12831-1) \u00b7 heating degree-days \u2248 %%HDD%% \u00b0C\u00b7d, base 18 \u00b0C, station %%ST%%').replace('%%Z%%', ROMAN[Z.wi]).replace('%%TE%%', Z.te).replace('%%HDD%%', grpN(Z.hdd)).replace('%%ST%%', Z.st)
+    + '</div>'
+    + '<div><span class="k">' + t('Summer') + '</span> '
+    + t('Zone %%Z%% \u00b7 design outdoor %%TE%% \u00b0C at %%RH%% % RH (PN-76/B-03420, withdrawn 2011)').replace('%%Z%%', ROMAN[Z.si]).replace('%%TE%%', Z.teS).replace('%%RH%%', Z.rh)
+    + '</div></div>'
+    + '<p class="sce-ch">' + t(S.ch) + '</p><p class="sce-where">' + whereTxt + '</p></div>'
+    + '<figure class="sce-lad">' + sceTable(Z) + '<figcaption>' + t('Design zones by voivodeship (majorities); the site reads the nearest synoptic station.') + '</figcaption></figure></div>'
+    + grp('Winter \u00b7 the building', S.w[0], S.w[1], S.w[2], 'B')
+    + grp('Summer \u00b7 the building', S.s[0], S.s[1], S.s[2], 'B')
     + grp('The surroundings', null, 'The same intentions at the scale of the plot: sun, wind, canopy, water and ground.', S.site, 'S')
     + '</div>';
   wrap.querySelector('.panel-body').appendChild(hint('sce-src',
-    'The zone is the Manual SCE’s (Despacho n.º 6476-H/2021, §5.3): the region from the municipality (Anexo II), its reference values '
-    + '(Tabelas 9 and 10) corrected to the altitude you gave (Eq. 2), and the thresholds of Tabelas 7 and 8. The regulation reads neither '
-    + 'the station nor the coordinates — correct the altitude to the building, and watch the ladder for how near a boundary it sits. '
-    + 'The intentions and passive systems are Gonçalves and Mariz Graça (2004), whose zone names the regulation kept while the thresholds '
-    + 'behind them changed; the surroundings carry the same intentions onto the plot. None of this is a requirement: the limits are in '
-    + 'Portaria n.º 138-I/2021, and Construction Advisor reports them.'));
+    'The winter zone and its design temperature come from PN-EN 12831-1:2017 (Table NB); the summer pair from PN-76/B-03420 (withdrawn 2011, unreplaced). '
+    + 'Both read the nearest embedded synoptic station, never the coordinates alone \u2014 and the voivodeship table gives majorities, so a site near a boundary '
+    + '(the Suwa\u0142ki corner, the Tatras) follows its station, not its voivodeship. '
+    + 'The intentions are heating-led in every pair; the surroundings carry the same intentions onto the plot. None of this is a requirement.'));
   return wrap;
 }
 
 function initSetup() {
   const dl = $('#concList'), sel = $('#selNuts');
   dl.innerHTML = ''; sel.innerHTML = '';
-  Object.keys(CONCELHOS).sort((a, b) => a.localeCompare(b, 'pt'))
+  Object.keys(CONCELHOS).sort((a, b) => a.localeCompare(b, 'pl')) // concList
     .forEach(c => dl.appendChild(el('option', { value:c })));
   NUTS_LIST.forEach(n => sel.appendChild(el('option', { value:n, text:n })));
-  sel.value = 'Grande Lisboa';
+  sel.value = 'Mazowieckie';
 
   const conc = $('#selConc'), lat = $('#inpLat'), lon = $('#inpLon'), alt = $('#inpAlt');
   const use = $('#selUse'), srcInp = $('#inpSource');
@@ -11080,7 +10903,7 @@ function initSetup() {
   }
   initSetup.redraw = () => drawClimo(readNormals());   // the one resize listener below calls the latest
 
-  /* The SCE zones follow the region, the altitude and the coordinates as
+  /* The PN-EN zones follow the region, the station and the coordinates as
      they are typed, and show once the normals are in as well. */
   const sceHost = $('#sceBlock');
   function sceNow(ready) {
@@ -11088,7 +10911,7 @@ function initSetup() {
     const o = { nuts:sel.value, alt:z, lat:la, lon:lo, ready };
     sceHost.innerHTML = '';
     sceHost.appendChild(sceBlock(o));
-    return ready && inPortugal(la, lo) ? sceZone(o.nuts, z) : null;
+    return ready && inPoland(la, lo) ? sceZone(o.nuts, z, o.lat, o.lon) : null;
   }
 
   function refresh() {
@@ -11114,13 +10937,13 @@ function initSetup() {
 
   conc.addEventListener('input', () => {
     const v = conc.value.trim();
-    const hit = Object.keys(CONCELHOS).find(c => c.toLowerCase() === v.toLowerCase());
+    const hit = Object.keys(CONCELHOS).find(c => plainName(c) === plainName(v));
     if (hit) {
       sel.value = CONCELHOS[hit][0];
       sub.textContent = hit + ' → ' + CONCELHOS[hit].join(' / ');
       seedCoords();
       refresh();
-    } else sub.textContent = t('Type a Portuguese municipality, or any name you want the exports to carry.');
+    } else sub.textContent = t('Type a Polish city, or any name you want the exports to carry.');
   });
 
   function seedCoords() {
@@ -11141,8 +10964,8 @@ function initSetup() {
      at how much they disagree is itself the lesson — a single source is never
      presented as ground truth. Open-Meteo's elevation API (Copernicus DEM)
      answers JSON; Mapzen Terrarium tiles (SRTM) are decoded in-browser at
-     zoom 12 (~30 m over Portugal): elev = R·256 + G + B/256 − 32768.
-     OpenTopoData would be the nicer source (EU-DEM 25 m covers Portugal) but
+      zoom 12 (~30 m over Poland): elev = R·256 + G + B/256 − 32768.
+      OpenTopoData would be the nicer source (EU-DEM 25 m covers Poland) but
      its public API sends no CORS headers, so no browser can call it;
      open-elevation is retired (host dead). ------------------------------- */
   const btnAltLookup = $('#btnAltLookup'), altStatus = $('#altStatus');
@@ -11209,19 +11032,19 @@ function initSetup() {
   }
   if (btnAltLookup) btnAltLookup.addEventListener('click', () => { lookupAltitude(); });
 
-  /* --- IPMA station autofill: a chosen source fills the boxes ------------- */
+  /* --- IMGW station autofill: a chosen source fills the boxes ------------- */
   const srcStatus = $('#srcStatus'), btnBlend = $('#btnSrcBlend'), btnWeb = $('#btnSrcWeb');
   function fillFromSource(showMsg) {
     const raw = srcInp.value.trim();
-    const key = IPMA_ALIAS[raw] || raw;
-    const d = IPMA_DATA[key];
+    const key = raw;
+    const d = IMGW_DATA[key];
     if (!d) {
       if (showMsg) {
-        if (IPMA_NODATA[raw]) {
-          if (srcStatus) srcStatus.textContent = t(IPMA_NODATA[raw]);
+        if (IMGW_NODATA[raw]) {
+          if (srcStatus) srcStatus.textContent = t(IMGW_NODATA[raw]);
           toast('No embedded values for that entry — see the note');
-        } else if (/^IPMA,/i.test(raw)) {
-          if (srcStatus) srcStatus.textContent = t('Not an embedded IPMA station — type the twelve pairs from the ficha by hand');
+        } else if (/^IMGW,/i.test(raw)) {
+          if (srcStatus) srcStatus.textContent = t('Not an embedded IMGW station — type the twelve pairs from the norms table by hand');
         }
       }
       return false;
@@ -11243,10 +11066,9 @@ function initSetup() {
 
   /* --- no station here: blend the embedded neighbours, or fetch the web ---
      A site is not its station: most places the student will build have no
-     IPMA ficha. Two honest fallbacks, both labelled into the export. Blend
-     takes up to three embedded stations in the same region (mainland,
-     Madeira, Azores never mix) around the entered coordinates and weights
-     them by inverse square distance — the same 1981–2010 normals, no new
+     IMGW synoptic station. Two honest fallbacks, both labelled into the export. Blend
+     takes up to three embedded stations around the entered coordinates and weights
+     them by inverse square distance — the same 1991–2020 normals, no new
      data invented. Fetch asks Open-Meteo for ERA5-style daily reanalysis,
      1991–2020, at these exact coordinates and means it into monthly normals
      (daily mean preferred, (max+min)/2 fallback) — provisional by definition.
@@ -11262,7 +11084,7 @@ function initSetup() {
   let srcMode = clim.mode || (() => {
     const s0 = clim.source || '';
     if (!climComplete(clim)) return '';
-    if (IPMA_DATA[IPMA_ALIAS[s0] || s0]) return 'station';
+    if (IMGW_DATA[s0]) return 'station';
     if (/^(Blend of|Mistura de) /.test(s0)) return 'blend';
     if (/^Open-Meteo/.test(s0)) return 'web';
     return 'manual';
@@ -11298,8 +11120,7 @@ function initSetup() {
     const la = parseFloat(lat.value), lo = parseFloat(lon.value);
     if (!isFinite(la) || !isFinite(lo)) { if (showMsg) toast('Enter the site coordinates first'); return false; }
     /* Nearby means nearby: beyond 300 km no blend is honest — every built
-       place in Portugal keeps an embedded station well inside that radius
-       (the remotest, Santa Maria, sits ~95 km from Ponta Delgada). */
+       place in Poland keeps an embedded station well inside that radius. */
     const B = blendAt(la, lo);
     if (!B) {
       if (showMsg && srcStatus) srcStatus.textContent = t('No embedded stations in this region — type the twelve pairs by hand');
@@ -11308,8 +11129,8 @@ function initSetup() {
     for (let m = 0; m < 12; m++) { inputs.t[m].value = B.t[m].toFixed(1); inputs.p[m].value = B.p[m].toFixed(1); }
     if (!altDirty) alt.value = B.alt;   // the height the blend stands at, until the building's is entered
     const who = B.who;
-    srcInp.value = t('Blend of %%STATIONS%% — IDW, IPMA 1981–2010').replace('%%STATIONS%%', who);
-    if (srcStatus) srcStatus.textContent = t('No IPMA station at these coordinates — temperature and precipitation blended from %%STATIONS%% (inverse-distance over embedded IPMA 1981–2010 normals). Correct the altitude to the building.').replace('%%STATIONS%%', who);
+    srcInp.value = t('Blend of %%STATIONS%% — IDW, IMGW 1991–2020').replace('%%STATIONS%%', who);
+    if (srcStatus) srcStatus.textContent = t('No IMGW station at these coordinates — temperature and precipitation blended from %%STATIONS%% (inverse-distance over embedded IMGW 1991–2020 normals). Correct the altitude to the building.').replace('%%STATIONS%%', who);
     refresh();
     return true;
   }
@@ -11328,7 +11149,7 @@ function initSetup() {
       srcMode = 'web'; webAt = [la, lo];
       const at = la.toFixed(2) + ', ' + lo.toFixed(2);
       srcInp.value = t('Open-Meteo 1991–2020 at %%COORDS%% (provisional, reanalysis)').replace('%%COORDS%%', at);
-      if (srcStatus) srcStatus.textContent = t('No IPMA station here — T/P are 1991–2020 reanalysis means for these exact coordinates (Open-Meteo), not IPMA observations. Treat as provisional; correct the altitude.').replace('%%COORDS%%', at);
+      if (srcStatus) srcStatus.textContent = t('No IMGW station here — T/P are 1991–2020 reanalysis means for these exact coordinates (Open-Meteo), not IMGW observations. Treat as provisional; correct the altitude.').replace('%%COORDS%%', at);
       refresh();
       toast('Web normals filled in — check the boxes');
     } catch (e) {
@@ -11416,7 +11237,7 @@ function mountApp(site, clim, keepTab, keepModel, keepScroll) {
   $('#chipMeta').innerHTML = fmt(Math.abs(site.lat), 2) + '° ' + (site.lat < 0 ? 'S' : 'N') + ' '
     + fmt(Math.abs(site.lon), 2) + '° ' + (site.lon < 0 ? 'W' : 'E') + ' · '
     + fmt(site.alt, 0) + ' m <span class="zn">' + STATE.clim.k.code + '</span>'
-    + (inPortugal(site.lat, site.lon) && sceZone(site.nuts, site.alt) ? ' <span class="zn">' + sceKey(sceZone(site.nuts, site.alt)) + '</span>' : '');
+    + (inPoland(site.lat, site.lon) && sceZone(site.nuts, site.alt, site.lat, site.lon) ? ' <span class="zn">' + sceKey(sceZone(site.nuts, site.alt, site.lat, site.lon)) + '</span>' : '');
   document.title = APP.name + ' — ' + (site.place || site.nuts);
 
   const tl = $('#tablist'); tl.innerHTML = '';
@@ -11473,11 +11294,21 @@ function mountApp(site, clim, keepTab, keepModel, keepScroll) {
    the day chosen stay as they were. */
 const plainName = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 const CONC_BY_PLAIN = (() => { const m = {}; Object.keys(CONCELHOS).forEach(k => { m[plainName(k)] = k; }); return m; })();
-const islandOf = lo => lo > -10.5 ? 'mainland' : lo < -20 ? 'azores' : 'madeira';
-/** The municipality an OpenStreetMap address names, and its region; a name
-    two regions share goes to the one whose main town is nearer. */
+/* Poland has no island groups to separate: mainland only, always. */
+const islandOf = lo => 'mainland';
+/** The voivodeship an OpenStreetMap address names, and its region entry; a city
+    two voivodeships share would go to the one whose capital is nearer (none
+    does). The voivodeship is matched first, so any village works; Polish city
+    names match second, diacritics ignored. */
 function regionFromAddress(ad, la, lo) {
   if (!ad) return null;
+  const plain = s => plainName(String(s || '').replace(/^województwo\s+/i, ''));
+  const VOIV = {};
+  Object.keys(VOIV_ZONE).forEach(n => { VOIV[plain(n)] = n; });
+  for (const key of ['state', 'county']) {
+    const v = VOIV[plain(ad[key])];
+    if (v) return { conc:ad.city || ad.town || ad.village || ad[key], nuts:v };
+  }
   for (const key of ['municipality', 'city', 'town', 'village', '_name']) {   // _name: the place the lookup landed on
     const c = CONC_BY_PLAIN[plainName(ad[key])];
     if (!c) continue;
@@ -11493,17 +11324,17 @@ const fetchSoon = (url, ms) => {
   try { if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) o.signal = AbortSignal.timeout(ms); } catch (e) {}
   return fetch(url, o).then(r => r.ok ? r.json() : Promise.reject(new Error(r.status)));
 };
-/** The municipality at a point: OpenStreetMap's Nominatim, asked in Portuguese. */
-const regionAt = (la, lo) => fetchSoon('https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=10&addressdetails=1&accept-language=pt&lat='
+/** The place at a point: OpenStreetMap's Nominatim, asked in Polish. */
+const regionAt = (la, lo) => fetchSoon('https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=10&addressdetails=1&accept-language=pl&lat='
   + la.toFixed(5) + '&lon=' + lo.toFixed(5), 8000).then(js => regionFromAddress(js && Object.assign({ _name:js.name }, js.address), la, lo));
 /** The ground's height at a point: the Copernicus DEM through Open-Meteo. */
 const elevationAt = (la, lo) => fetchSoon('https://api.open-meteo.com/v1/elevation?latitude=' + la.toFixed(5) + '&longitude=' + lo.toFixed(5), 8000)
   .then(d => { const e = d && d.elevation && d.elevation[0]; if (typeof e !== 'number' || !isFinite(e) || e < -50 || e > 3000) throw new Error('elev'); return Math.round(e); });
 const RESITE = { seq:0 };
 /**
- * Move the site to pos. say(text) reports progress where the move was made;
- * found, when the move came from an address search, carries the address's
- * municipality so no second lookup is needed.
+   * Move the site to pos. say(text) reports progress where the move was made;
+   * found, when the move came from an address search, carries the address's
+   * city so no second lookup is needed.
  */
 async function resite(pos, say, found) {
   const S0 = STATE.site, C0 = STATE.clim;
@@ -11517,13 +11348,13 @@ async function resite(pos, say, found) {
   const blend = () => {
     const B = blendAt(la, lo);
     if (!B) { notes.push(t('no embedded station within 300 km — normals kept')); return; }
-    clim = { t:B.t, p:B.p, source:t('Blend of %%STATIONS%% — IDW, IPMA 1981–2010').replace('%%STATIONS%%', B.who), mode:'blend' };
+    clim = { t:B.t, p:B.p, source:t('Blend of %%STATIONS%% — IDW, IMGW 1991–2020').replace('%%STATIONS%%', B.who), mode:'blend' };
     altSrc = B.alt; notes.push(t('normals blended from %%STATIONS%%').replace('%%STATIONS%%', B.who));
   };
   if (mode === 'manual' || mode === 'picked') notes.push(t('your own normals kept'));
   else if (ns && ns.d <= NEAR_KM) {
     clim = { t:ns.v.t.slice(), p:ns.v.p.slice(), source:ns.key, mode:'station' };
-    altSrc = ns.v.alt; notes.push(t('normals of the IPMA station %%ST%%, %%KM%% km away').replace('%%ST%%', ns.v.st).replace('%%KM%%', fmt(ns.d, 1)));
+    altSrc = ns.v.alt; notes.push(t('normals of the IMGW station %%ST%%, %%KM%% km away').replace('%%ST%%', ns.v.st).replace('%%KM%%', fmt(ns.d, 1)));
   } else if (mode === 'web') {
     const m0 = /(-?\d+\.\d+), (-?\d+\.\d+)/.exec(C0.source || '');
     if (m0 && havKm(+m0[1], +m0[2], la, lo) < 0.7) notes.push(t('the web normals kept: they were read within 700 m'));
@@ -11537,14 +11368,14 @@ async function resite(pos, say, found) {
     }
   } else blend();
   if (seq !== RESITE.seq) return;
-  /* the region: asked once the plot has gone 300 m, or to another island group */
+  /* the region: asked once the plot has gone 300 m */
   const ask = found !== undefined ? Promise.resolve(found) : moved >= 0.3 || islandOf(lo) !== islandOf(S0.lon) ? regionAt(la, lo).catch(() => null) : Promise.resolve(undefined);
   const [elev, reg] = await Promise.all([elevationAt(la, lo).catch(() => null), ask]);
   if (seq !== RESITE.seq) return;   // moved again meanwhile
   let nuts = S0.nuts, place = S0.place;
   if (reg) {
     nuts = reg.nuts;
-    if (!place || CONC_BY_PLAIN[plainName(place)]) place = reg.conc;   // a municipality's name follows the plot; a project name stays
+    if (!place || CONC_BY_PLAIN[plainName(place)]) place = reg.conc;   // a city's name follows the plot; a project name stays
   } else if (islandOf(lo) !== islandOf(S0.lon)) {
     nuts = Object.keys(NUTS_REF).filter(n => islandOf(NUTS_REF[n][1]) === islandOf(lo)).sort((a, b) => havKm(la, lo, NUTS_REF[a][0], NUTS_REF[a][1]) - havKm(la, lo, NUTS_REF[b][0], NUTS_REF[b][1]))[0] || nuts;
     if (place && CONC_BY_PLAIN[plainName(place)]) place = null;
@@ -11554,7 +11385,7 @@ async function resite(pos, say, found) {
   STATE.note = [
     t('Site moved to the plot') + ': ' + fmt(Math.abs(la), 5) + '° ' + (la < 0 ? 'S' : 'N') + ' ' + fmt(Math.abs(lo), 5) + '° ' + (lo < 0 ? 'W' : 'E'),
     fmt(site.alt, 0) + ' m ' + (elev !== null ? t('(the ground there, Copernicus DEM)') : t('(the elevation service did not answer — the stations’ height)')),
-    (place ? place + ', ' : '') + nuts + (reg === null ? ' (' + t('municipality not found — region kept') + ')' : '')
+    (place ? place + ', ' : '') + nuts + (reg === null ? ' (' + t('place not found — region kept') + ')' : '')
   ].concat(notes).join(' · ');
   saveNormals(clim);
   if (STATE.setupSync) STATE.setupSync(site, clim);
