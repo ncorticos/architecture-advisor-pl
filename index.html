@@ -908,7 +908,7 @@ details.more[open] > summary{color:var(--ink)}
 /* ------------------------------------------------------------ 0. IDENTITY -- */
 const APP = {
   name:        'Architecture Advisor PL',
-  version:     '1.107.0',
+  version:     '1.108.0',
   author:      'Nuno Dinis Cortiços',
   institution: 'Lisbon School of Architecture, Universidade de Lisboa',
   builtWith:   'Claude Opus 5 (Anthropic)',
@@ -3141,6 +3141,7 @@ function roofModel(G, RF) {
   strips.forEach(s => { zoneArea[s.zi] += (s.r[2] - s.r[0]) * (s.r[3] - s.r[1]); });
   const topZi = zoneArea.reduce((p, q, k) => q > zoneArea[p] ? k : p, 0);
   const topT = zones[topZi].t, topTh = zones[topZi].th, topN = zones[topZi].n;
+  const mixed = new Set(strips.map(s => s.n + ':' + s.th)).size > 1;
   /* a parapet: every outline wall carried up by its height — envelope too */
   let paras = [], paraArea = 0;
   if (RF.par && RF.par.on) {
@@ -12656,13 +12657,13 @@ function mountApp(site, clim, keepTab, keepModel, keepScroll) {
   OPEN = { S: faceDefault(), N: faceDefault(), E: faceDefault(), W: faceDefault() };
   OPEN.S.wwr = 0.35;   // a defensible start, not a recommendation — the badge judges it live
   OPEN.N.wwr = 0.05;   // north starts at the low end of its band
+  SUNSP = { on:false, face:'S', depth:2.2, widthFrac:0.6 };
+  RWIN = { size:'78x140', s:0, n:0, e:0, w:0, sF:0.5, nF:0.5, eF:0.35, wF:0.35, fX:0 };
   if (STUDY) {
     try { applyStudy(STUDY); }
     catch (err) { console.error(err); STATE.note = t('That study could not be fully restored — starting from the defaults.'); }
     STUDY = null;
   }
-  SUNSP = { on:false, face:'S', depth:2.2, widthFrac:0.6 };
-  RWIN = { size:'78x140', s:0, n:0, e:0, w:0, sF:0.5, nF:0.5, eF:0.35, wF:0.35, fX:0 };
   }
   const app = $('#app');
   app.innerHTML = '';
