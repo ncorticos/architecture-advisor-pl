@@ -352,6 +352,22 @@ footer{border-top:1px solid var(--line); margin-top:26px; background:var(--wash)
 .fieldstatus:empty{display:none}
 .climbox{gap:6px}
 #setupClimo{display:block; width:100%; height:150px}
+#setupMapWrap{position:relative; border-radius:8px; border:1px solid var(--line2); background:#eceee8; overflow:hidden}
+#setupMap{display:block; width:100%; height:230px; background:#eceee8}
+#setupMapGrip{position:absolute; right:6px; bottom:6px; width:26px; height:26px; display:flex; align-items:center; justify-content:center; font-size:15px; line-height:1; color:var(--ink); background:rgba(255,255,255,.92); border:1px solid var(--line); border-radius:7px; cursor:pointer; padding:0; touch-action:none; box-shadow:0 1px 4px rgba(0,0,0,.18)}
+#setupMapGrip:hover{background:#fff; border-color:#c6cbc4}
+#setupMapWrap #setupMap{cursor:zoom-in}
+#setupMapOverlay{position:fixed; inset:0; z-index:90; display:flex; align-items:center; justify-content:center; padding:18px; background:rgba(20,23,26,.55)}
+#setupMapOverlay[hidden]{display:none}
+#setupMapSheet{width:min(920px,94vw); max-height:92vh; overflow:auto; background:var(--bg); border:1px solid var(--line); border-radius:12px; padding:14px 16px; box-shadow:0 18px 60px rgba(0,0,0,.3)}
+#setupMapSheetHead{display:flex; align-items:center; gap:10px; margin-bottom:8px}
+#setupMapSheetHead h3{font-size:14px; margin:0}
+#setupMapSheetHead .btn{margin-left:auto}
+#setupMapBig{display:block; width:100%; height:min(58vh,520px); min-height:280px; border-radius:8px; border:1px solid var(--line2); background:#eceee8; cursor:crosshair; touch-action:none}
+#setupMapBigRow{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-top:10px}
+#setupMapBigRow .fld input{font-family:var(--mono); font-size:13px}
+#setupMapZoomRow{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:10px}
+@media(max-width:640px){#setupMapBigRow{grid-template-columns:minmax(0,1fr)}}
 .climkey{display:flex; flex-wrap:wrap; align-items:center; gap:4px 6px; font-size:10.5px; color:var(--muted)}
 .climkey i{display:inline-block; width:10px; height:8px; border-radius:2px}
 .climkey i.kp{background:#bcd2ea}
@@ -577,6 +593,40 @@ details.more[open] > summary{color:var(--ink)}
               <label for="selNuts" data-t="fldNuts">Region</label>
               <select id="selNuts"></select>
                <span class="sub" data-t="fldNutsSub">Seeds the coordinates with the voivodeship capital and labels the site. With the place it sets the PN-EN 12831 winter zone and the PN-76 summer zone.</span>
+            </div>
+          </div>
+          <div class="gh" data-t="ghSiteMap">Site map</div>
+          <div class="sbox">
+            <div id="setupMapWrap">
+              <canvas id="setupMap" role="img" aria-label="Satellite view of the site"></canvas>
+              <button type="button" id="setupMapGrip" title="Enlarge the map" aria-label="Enlarge the map">⤢</button>
+            </div>
+            <span class="sub" data-t="fldMapSub">Satellite view centred on the coordinates above — 900 m across. Click the map to enlarge it: drag to explore, click to place the site — the altitude reads itself — then return.</span>
+          </div>
+          <div id="setupMapOverlay" hidden>
+            <div id="setupMapSheet" role="dialog" aria-modal="true" aria-labelledby="setupMapSheetTitle">
+              <div id="setupMapSheetHead">
+                <h3 id="setupMapSheetTitle" data-t="mapSheetTitle">Choose the site position</h3>
+                <button type="button" class="btn" id="setupMapClose" data-t="mapSheetBack">Back to regular size</button>
+              </div>
+              <canvas id="setupMapBig" role="img" aria-label="Enlarged satellite view"></canvas>
+              <p class="hint" id="setupMapPos"></p>
+              <div id="setupMapBigRow">
+                <div class="fld"><label for="setupMapBigLat" data-t="fldLat">Latitude</label><input type="number" id="setupMapBigLat" step="0.0001" inputmode="decimal"></div>
+                <div class="fld"><label for="setupMapBigLon" data-t="fldLon">Longitude</label><input type="number" id="setupMapBigLon" step="0.0001" inputmode="decimal"></div>
+                <div class="fld"><label for="setupMapBigAlt" data-t="fldAlt">Altitude of the site</label><input type="number" id="setupMapBigAlt" step="1" min="0" inputmode="decimal"></div>
+              </div>
+              <div id="setupMapZoomRow">
+                <div class="seg" id="setupMapZoom" role="group" aria-label="Map width">
+                  <button type="button" data-across="300">300 m</button>
+                  <button type="button" data-across="900" aria-pressed="true">900 m</button>
+                  <button type="button" data-across="2000">2 km</button>
+                </div>
+                <button type="button" class="btn" id="setupMapRecentre" title="Centre on site">⌖</button>
+                <button type="button" class="btn" id="setupMapBigAltBtn" data-t="altLookup">Look up</button>
+                <button type="button" class="btn solid" id="setupMapDone" data-t="mapSheetDone">Use this position</button>
+              </div>
+              <p class="hint" data-t="mapSheetHint">Drag to explore, click to place the site — the coordinates follow and the altitude reads itself. Then use this position to return.</p>
             </div>
           </div>
           <div class="gh" data-t="ghCoords">Coordinates</div>
@@ -810,6 +860,12 @@ const STATIC_PT = {
   "setupTitle": "Gdzie budujesz i w jakim klimacie?",
   "setupBody": "Ta aplikacja nie stosuje żadnych limitów z przepisów. Pracuje od położenia budynku i od klimatu, w którym to położenie leży, sklasyfikowanego według <b>Köppena–Geigera</b>, bo przeciw tej klasyfikacji pisana jest literatura projektowa — a w Polsce umieszczonego w zimowych strefach <b>PN-EN 12831</b> i letnich strefach <b>PN-76/B-03420</b>. Nazwij miejsce, podaj jego współrzędne i wysokość, potem wpisz miesięczne normy najbliższej stacji. Dalej jest orientacja, zwartość, dach, szklenie, zacienianie, organizacja planu i ruch powietrza — decyzje podejmowane, zanim da się do nich przyłożyć jakikolwiek limit.",
   "ghSite": "Działka",
+  "ghSiteMap": "Mapa działki",
+  "fldMapSub": "Widok satelitarny wyśrodkowany na powyższych współrzędnych — 900 m w bok. Kliknij mapę, aby ją powiększyć: ciągnij, aby zwiedzać, kliknij, aby postawić działkę — wysokość odczyta się sama — potem wróć.",
+  "mapSheetTitle": "Wybierz położenie działki",
+  "mapSheetBack": "Wróć do zwykłego rozmiaru",
+  "mapSheetDone": "Użyj tego położenia",
+  "mapSheetHint": "Ciągnij, aby zwiedzać, kliknij, aby postawić działkę — współrzędne podążą, a wysokość odczyta się sama. Potem wróć przez Użyj tego położenia.",
   "fldConc": "Miejsce",
   "fldConcSub": "Wpisz polskie miasto lub dowolną nazwę, którą mają nieść eksporty.",
   "fldNuts": "Region",
@@ -10809,6 +10865,306 @@ function initSetup() {
   }
   initSetup.redraw = () => drawClimo(readNormals());   // the one resize listener below calls the latest
 
+  /* --- Site map: the neighbourhood window, moved to the setup ----------------
+     The same 900 m satellite window Environmental draws as its locator inset
+     (north up, site at the centre, red ring round the model disc), but here it
+     sits above the coordinates and follows them as they are typed, so the
+     student reads roofs, streets, trees and slopes before any climate is
+     named. Tiles are the same Esri World Imagery Environmental uses, loaded
+     by the browser from Esri (which sees the map area asked for, as the
+     privacy note says); a tile still loading redraws on arrival. */
+  const setupMap = $('#setupMap');
+  const SETUP_ACROSS = 900;   // metres across the square, as the locator inset
+  function drawSetupMap() {
+    if (!setupMap || !setupMap.isConnected) return;
+    const la = parseFloat(lat.value), lo = parseFloat(lon.value);
+    paintSiteMap(setupMap, la, lo, la, lo, SETUP_ACROSS, drawSetupMap);
+  }
+  let setupMapTimer = 0;
+  const kickSetupMap = () => { clearTimeout(setupMapTimer); setupMapTimer = setTimeout(drawSetupMap, 250); };
+  /* --- enlarge: click the map to pick the exact position ---------------------
+     The small window stays compact, but a click on it (or its arrow) opens an
+     enlarged sheet: the same Esri satellite, wider zoom steps, a click-to-place
+     marker, and only the coordinates and the altitude beside it. The student
+     picks the position, sets the altitude, then returns — every keystroke and
+     click writes straight into the setup's own latitude, longitude and
+     altitude boxes (by dispatching their input events, so the normals order,
+     the SCE zones and the small map all follow as usual). */
+  const setupMapGrip = $('#setupMapGrip');
+  const setupMapOverlay = $('#setupMapOverlay');
+  const setupMapBig = $('#setupMapBig');
+  const bigLat = $('#setupMapBigLat'), bigLon = $('#setupMapBigLon'), bigAlt = $('#setupMapBigAlt');
+  const bigAltBtn = $('#setupMapBigAltBtn'), bigDone = $('#setupMapDone'), bigClose = $('#setupMapClose');
+  const bigPos = $('#setupMapPos');
+  const zoomBtns = $$('#setupMapZoom button');
+  let bigAcross = 900, bigOpen = false, echoGuard = false;
+  const fireInput = node => { try { node.dispatchEvent(new Event('input', { bubbles:true })); } catch (e) {} };
+
+  /** Paint a satellite window into any canvas: north up on the view centre
+      (cLa, cLo), the site marker at (mLa, mLo) — the locator inset's marks
+      (red ring, N arrow, width tag, Esri credit). The marker is drawn only
+      where the site is known; drag the enlarged view and it slides along. */
+  function paintSiteMap(cv, cLa, cLo, mLa, mLo, across, onTile) {
+    const W = cv.clientWidth, H = cv.clientHeight;
+    if (!W || !H) return false;
+    const dpr = window.devicePixelRatio || 1;
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    const ctx = cv.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = '#eceee8'; ctx.fillRect(0, 0, W, H);
+    if (!isFinite(cLa) || !isFinite(cLo) || Math.abs(cLa) > 84) {
+      ctx.fillStyle = CH.muted; ctx.font = F(11); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(t('Enter the latitude and longitude to see the site'), W / 2, H / 2);
+      return true;
+    }
+    const src = TILE_SRC.sat, cosl = Math.cos(cLa * RAD);
+    const S = Math.min(W, H);
+    const zl = clamp(Math.floor(Math.log2(40075016.686 * cosl * S / (across * 256))) + 1, 10, 17);
+    const mpp = 40075016.686 * cosl / Math.pow(2, zl) / 256;
+    const k = S / across;   // CSS px per metre
+    const n2 = Math.pow(2, zl);
+    const xt = (cLo + 180) / 360 * n2;
+    const lr = cLa * RAD;
+    const yt = (1 - Math.log(Math.tan(lr) + 1 / Math.cos(lr)) / Math.PI) / 2 * n2;
+    const span = across / 2 / (256 * mpp);
+    const cx = W / 2, cy = H / 2;
+    let shown = 0;
+    for (let tx = Math.floor(xt - span); tx <= Math.floor(xt + span); tx++) {
+      for (let ty = Math.floor(yt - span); ty <= Math.floor(yt + span); ty++) {
+        const tile = tileImg(src.url(zl, tx, ty), onTile);
+        if (!tile.ok || tile.blank) continue;
+        const side = 256 * mpp * k;
+        ctx.drawImage(tile.img, cx + (tx - xt) * side, cy + (ty - yt) * side, side + 0.8, side + 0.8);
+        shown++;
+      }
+    }
+    if (!shown) {
+      ctx.fillStyle = CH.muted; ctx.font = F(11); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(t('Loading the map…'), W / 2, H / 2);
+    }
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.strokeRect(0, 0, W, H);
+    ctx.strokeStyle = CH.ink; ctx.lineWidth = 1; ctx.strokeRect(0, 0, W, H);
+    // the site marker, in metres from the view centre: east right, north up
+    const mx = isFinite(mLa) && isFinite(mLo) ? cx + (mLo - cLo) * 111320 * Math.cos(cLa * RAD) * k : null;
+    const my = isFinite(mLa) && isFinite(mLo) ? cy - (mLa - cLa) * 111320 * k : null;
+    if (mx !== null && mx > -40 && mx < W + 40 && my > -40 && my < H + 40) {
+      const rr = Math.max(10, 60 * k);
+      ctx.beginPath(); ctx.arc(mx, my, rr, 0, 6.284);
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.stroke();
+      ctx.strokeStyle = '#DC2626'; ctx.lineWidth = 1.8; ctx.stroke();
+      ctx.fillStyle = '#DC2626'; ctx.beginPath(); ctx.arc(mx, my, 2.2, 0, 6.284); ctx.fill();
+    }
+    ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.fillRect(cx - 8, 3, 16, 13);
+    label(ctx, 'N', cx, 9.5, CH.ink, F(9, '700'), 'center', 'middle');
+    const tag = across >= 1000 ? fmt(across / 1000, 1) + ' km' : fmt(across, 0) + ' m';
+    ctx.font = FM(8); const tw = ctx.measureText(tag).width;
+    ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.fillRect(4, H - 16, tw + 12, 12);
+    label(ctx, tag, 7, H - 7.5, CH.ink, FM(8), 'left', 'middle');
+    const cred = src.attr;
+    ctx.font = F(7.5); const cw = Math.min(W - 16, ctx.measureText(cred).width);
+    if (cw > 60) {
+      ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.fillRect(W - cw - 14, 4, cw + 10, 12);
+      ctx.fillStyle = CH.muted; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+      ctx.fillText(cred, W - 9, 10, cw);
+    }
+    return true;
+  }
+  const bigPosText = () => {
+    if (!bigPos) return;
+    const la = parseFloat(lat.value), lo = parseFloat(lon.value), z = alt.value.trim() === '' ? null : +alt.value;
+    bigPos.textContent = isFinite(la) && isFinite(lo)
+      ? fmt(Math.abs(la), 4) + '° ' + (la < 0 ? 'S' : 'N') + ' · ' + fmt(Math.abs(lo), 4) + '° ' + (lo < 0 ? 'W' : 'E')
+        + (z !== null && isFinite(z) ? ' · ' + fmt(z, 0) + ' m' : '') + ' · ' + (bigAcross >= 1000 ? fmt(bigAcross / 1000, 1) + ' km' : fmt(bigAcross, 0) + ' m') + ' ' + t('across')
+        + (autoNote ? ' · ' + autoNote : '')
+      : t('Enter the latitude and longitude to see the site');
+  };
+  /* the enlarged view can wander: `view` is where it looks, the marker is
+     where the site is. Dragging pans the view; placing, typing or recentring
+     brings the view back onto the site. */
+  let view = { lat:52.23, lon:21.01 };
+  const siteOf = () => ({ lat:parseFloat(lat.value), lon:parseFloat(lon.value) });
+  function drawBigMap() {
+    if (!bigOpen || !setupMapBig || !setupMapBig.isConnected) return;
+    const s = siteOf();
+    paintSiteMap(setupMapBig, view.lat, view.lon, s.lat, s.lon, bigAcross, drawBigMap);
+    bigPosText();
+  }
+  let bigTimer = 0;
+  const kickBigMap = () => { clearTimeout(bigTimer); bigTimer = setTimeout(drawBigMap, 250); };
+  const syncMirrorsFromMain = () => {
+    if (!bigOpen || echoGuard) return;
+    if (document.activeElement !== bigLat) bigLat.value = lat.value;
+    if (document.activeElement !== bigLon) bigLon.value = lon.value;
+    if (document.activeElement !== bigAlt) bigAlt.value = alt.value;
+    bigPosText();
+  };
+  /* --- the altitude reads itself -------------------------------------------
+     Arriving on a site — opening the sheet or placing it — triggers an
+     elevation lookup with no button: the same two DEMs the Look up button
+     reads (Open-Meteo/Copernicus and Terrarium/SRTM). A hand-typed altitude
+     is never overwritten: where the box holds the student's own value the
+     looked-up mean is shown beside it instead. */
+  let lastFetchedKey = null, lastAutoAlt = null, autoNote = '', autoTimer = 0, autoSeq = 0;
+  const scheduleAutoAlt = () => { clearTimeout(autoTimer); autoTimer = setTimeout(runAutoAlt, 700); };
+  async function runAutoAlt() {
+    const la = parseFloat(lat.value), lo = parseFloat(lon.value);
+    if (!isFinite(la) || !isFinite(lo) || Math.abs(la) > 84) return;
+    const key = la.toFixed(4) + ',' + lo.toFixed(4);
+    if (key === lastFetchedKey) return;
+    const seq = ++autoSeq;
+    lastFetchedKey = key;
+    autoNote = t('Looking up elevation…');
+    bigPosText();
+    const sig = {};
+    try { if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) sig.signal = AbortSignal.timeout(25000); } catch (e) {}
+    const meteo = fetch('https://api.open-meteo.com/v1/elevation?latitude=' + la + '&longitude=' + lo, sig)
+      .then(r => r.json()).then(d => d.elevation[0]);
+    const results = await Promise.allSettled([meteo, tileElev(la, lo, sig.signal)]);
+    if (seq !== autoSeq) return;   // a newer position has taken over
+    const vals = results.filter(r => r.status === 'fulfilled' && isFinite(r.value)).map(r => r.value);
+    if (!vals.length) {
+      autoNote = t('Both elevation services failed — enter the altitude by hand');
+      bigPosText();
+      return;
+    }
+    const mean = Math.round(vals.reduce((s, v) => s + v, 0) / vals.length);
+    const cur = alt.value.trim() === '' ? null : +alt.value;
+    const ours = !altDirty || cur === null || cur === lastAutoAlt;
+    if (ours) {
+      autoNote = '';
+      lastAutoAlt = mean;
+      echoGuard = true;
+      alt.value = mean; altDirty = false;
+      fireInput(alt);
+      echoGuard = false;
+      syncMirrorsFromMain();
+    } else {
+      autoNote = t('Automatic altitude') + ': ' + fmt(mean, 0) + ' m';
+      bigPosText();
+    }
+  }
+  function openBigMap() {
+    if (bigOpen) return;
+    bigOpen = true;
+    bigLat.value = lat.value; bigLon.value = lon.value; bigAlt.value = alt.value;
+    const s = siteOf();
+    if (isFinite(s.lat) && isFinite(s.lon)) view = { lat:s.lat, lon:s.lon };
+    zoomBtns.forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.across === bigAcross)));
+    setupMapOverlay.hidden = false;
+    requestAnimationFrame(drawBigMap);
+    scheduleAutoAlt();
+    try { bigLat.focus({ preventScroll:true }); } catch (e) {}
+  }
+  function closeBigMap() {
+    if (!bigOpen) return;
+    bigOpen = false;
+    setupMapOverlay.hidden = true;
+    drawSetupMap();
+    try { setupMap.focus({ preventScroll:true }); } catch (e) {}
+  }
+  if (setupMapGrip) {
+    setupMapGrip.textContent = '⤢';
+    setupMapGrip.title = t('Enlarge the map');
+    setupMapGrip.setAttribute('aria-label', t('Enlarge the map'));
+    setupMapGrip.addEventListener('click', openBigMap);
+  }
+  if (setupMap) {
+    setupMap.addEventListener('click', openBigMap);
+    setupMap.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); openBigMap(); } });
+    if (!setupMap.hasAttribute('tabindex')) setupMap.setAttribute('tabindex', '0');
+  }
+  // mirrors write into the setup's own boxes, so everything downstream follows
+  [[bigLat, lat], [bigLon, lon], [bigAlt, alt]].forEach(([mirror, main]) => {
+    mirror.addEventListener('input', () => {
+      echoGuard = true;
+      main.value = mirror.value;
+      fireInput(main);
+      echoGuard = false;
+      if (mirror === bigAlt) { bigPosText(); return; }
+      const s = siteOf();
+      if (isFinite(s.lat) && isFinite(s.lon)) view = { lat:s.lat, lon:s.lon };
+      kickBigMap();
+      scheduleAutoAlt();
+    });
+  });
+  [lat, lon, alt].forEach(f => f.addEventListener('input', () => { syncMirrorsFromMain(); if (bigOpen && f !== alt) kickBigMap(); }));
+  zoomBtns.forEach(b => b.addEventListener('click', () => {
+    bigAcross = +b.dataset.across || 900;
+    zoomBtns.forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    drawBigMap();
+  }));
+  if (bigAltBtn) bigAltBtn.addEventListener('click', () => {
+    lastFetchedKey = null;   // a manual retry re-reads the same spot
+    runAutoAlt();
+  });
+  const recBtn = $('#setupMapRecentre');
+  if (recBtn) {
+    recBtn.title = t('Centre on site');
+    recBtn.setAttribute('aria-label', t('Centre on site'));
+    recBtn.addEventListener('click', () => {
+      const s = siteOf();
+      if (isFinite(s.lat) && isFinite(s.lon)) view = { lat:s.lat, lon:s.lon };
+      drawBigMap();
+    });
+  }
+  /* drag to look around, click to arrive: a press that travels pans the
+     view up, down, left and right; a press that stays drops the site where
+     it lands and brings the view onto it — and the altitude reads itself. */
+  if (setupMapBig) {
+    let pd = null, panRaf = 0;
+    const mPerPxOf = () => {
+      const r = setupMapBig.getBoundingClientRect();
+      return bigAcross / Math.min(r.width, r.height);
+    };
+    setupMapBig.addEventListener('pointerdown', ev => {
+      pd = { x:ev.clientX, y:ev.clientY, vLat:view.lat, vLon:view.lon, panning:false };
+      try { setupMapBig.setPointerCapture(ev.pointerId); } catch (e) {}
+    });
+    setupMapBig.addEventListener('pointermove', ev => {
+      if (!pd) return;
+      const dx = ev.clientX - pd.x, dy = ev.clientY - pd.y;
+      if (!pd.panning && Math.hypot(dx, dy) > 6) { pd.panning = true; setupMapBig.style.cursor = 'grabbing'; }
+      if (!pd.panning) return;
+      const mPerPx = mPerPxOf();
+      view = {
+        lat: pd.vLat + dy * mPerPx / 111320,
+        lon: pd.vLon - dx * mPerPx / (111320 * Math.cos(pd.vLat * RAD))
+      };
+      cancelAnimationFrame(panRaf);
+      panRaf = requestAnimationFrame(drawBigMap);
+    });
+    const endPointer = ev => {
+      if (!pd) return;
+      const wasPan = pd.panning;
+      pd = null;
+      setupMapBig.style.cursor = '';
+      if (wasPan) { drawBigMap(); return; }
+      // a click: arrive on the site under the cursor
+      const r = setupMapBig.getBoundingClientRect();
+      const dx = (ev.clientX - r.left) - r.width / 2, dy = (ev.clientY - r.top) - r.height / 2;
+      if (!isFinite(view.lat) || !isFinite(view.lon)) return;
+      const mPerPx = bigAcross / Math.min(r.width, r.height);
+      const la1 = view.lat - dy * mPerPx / 111320;
+      const lo1 = view.lon + dx * mPerPx / (111320 * Math.cos(view.lat * RAD));
+      view = { lat:la1, lon:lo1 };
+      echoGuard = true;
+      lat.value = +la1.toFixed(5); lon.value = +lo1.toFixed(5);
+      fireInput(lat); fireInput(lon);
+      echoGuard = false;
+      syncMirrorsFromMain();
+      kickBigMap();
+      scheduleAutoAlt();
+    };
+    setupMapBig.addEventListener('pointerup', endPointer);
+    setupMapBig.addEventListener('pointercancel', () => { pd = null; setupMapBig.style.cursor = ''; });
+  }
+  if (bigDone) bigDone.addEventListener('click', closeBigMap);
+  if (bigClose) bigClose.addEventListener('click', closeBigMap);
+  if (setupMapOverlay) setupMapOverlay.addEventListener('pointerdown', ev => { if (ev.target === setupMapOverlay) closeBigMap(); });
+  document.addEventListener('keydown', ev => { if (ev.key === 'Escape' && bigOpen) closeBigMap(); });
+  window.addEventListener('resize', () => { if (bigOpen) drawBigMap(); });
+  initSetup.redraw = () => { drawClimo(readNormals()); drawSetupMap(); };
+
   /* The PN-EN zones follow the region, the station and the coordinates as
      they are typed, and show once the normals are in as well. */
   const sceHost = $('#sceBlock');
@@ -10823,6 +11179,7 @@ function initSetup() {
   function refresh() {
     const c = readNormals();
     drawClimo(c);
+    kickSetupMap();
     inputs.t.forEach((inp, i) => inp.classList.toggle('miss', c.t[i] === null));
     inputs.p.forEach((inp, i) => inp.classList.toggle('miss', c.p[i] === null || c.p[i] < 0));
     if (!climComplete(c)) {
@@ -11102,6 +11459,7 @@ function initSetup() {
 
   seedCoords();
   refresh();
+  requestAnimationFrame(drawSetupMap);
 }
 
 /* --- the application ------------------------------------------------------- */
@@ -11861,6 +12219,15 @@ Object.assign(PT, {
   "the sun is below the horizon": "słońce jest poniżej horyzontu",
   "Map tiles unavailable — the plot is drawn without them": "Kafelki mapy niedostępne — działka rysowana bez nich",
   "Loading the map…": "Ładowanie mapy…",
+  "Enter the latitude and longitude to see the site": "Wpisz szerokość i długość geograficzną, aby zobaczyć działkę",
+  "Drag to enlarge the map": "Przeciągnij, aby powiększyć mapę",
+  "Enlarge the map": "Powiększ mapę",
+  "across": "wszerz",
+  "Centre on site": "Wyśrodkuj na działce",
+  "Automatic altitude": "Automatyczna wysokość",
+  "Looking up elevation…": "Wyszukiwanie wysokości…",
+  "Both elevation services failed — enter the altitude by hand": "Oba serwisy wysokości zawiodły — wpisz wysokość ręcznie",
+  "Enter latitude and longitude first": "Najpierw wpisz szerokość i długość geograficzną",
   "Imagery: Esri World Imagery — Esri, Maxar, Earthstar Geographics and the GIS User Community":
     "Zdjęcia: Esri World Imagery — Esri, Maxar, Earthstar Geographics and the GIS User Community",
   "Map © OpenStreetMap contributors": "Mapa © współtwórcy OpenStreetMap",
