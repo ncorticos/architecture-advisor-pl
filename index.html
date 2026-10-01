@@ -790,7 +790,7 @@ details.more[open] > summary{color:var(--ink)}
 /* ------------------------------------------------------------ 0. IDENTITY -- */
 const APP = {
   name:        'Architecture Advisor PL',
-  version:     '1.104.0',
+  version:     '1.105.0',
   author:      'Nuno Dinis Cortiços',
   institution: 'Lisbon School of Architecture, Universidade de Lisboa',
   builtWith:   'Claude Opus 5 (Anthropic)',
@@ -6543,7 +6543,7 @@ function buildOpenings(host) {
   host.appendChild(section('Window sizing — WWR', 'Glazing area as a fraction of each wall’s own area'));
   { const [wwrLo0, wwrHi0] = wwrRange(curFace);
   host.appendChild(hint('open-wwr',
-    'WWR bands follow Ching &amp; Shapiro’s classification (low &lt;10%, moderate 10–20%, high 20–30%, very high &gt;30%; p.242) read against Lechner’s orientation guidance — south takes the most glass, north the least of the sunlit faces, and east/west are minimised where the climate leans hot (pp.130–132, 416). The band shown for %1 in this climate is <b>%2–%3%</b>. North is held to 5–10 % and starts at 5 %: it takes almost no winter sun and loses heat all year. That is this app’s bioclimatic choice, not a rule of the SCE — the regulation sets no maximum for north glass; it exempts north-quadrant glazing, and any space whose glazing is at most 5 % of its <i>floor</i> area, from the solar-factor requirement (Portaria n.º 138-I/2021). The RGEU sets the floor instead: every room needs openings of at least 1/10 of its floor area, 1.08 m² at the least (art. 71.º), and the reading for the north side says how many rooms its glass can serve. It is this app’s own synthesis across sources, not a single citable number — treat it as a target to aim for, not a pass/fail test. Each side is judged by the way it really faces once the plan is turned on Site, and its WWR applies to every wall of the plan on that side — a wing’s, a recess’s, a patio’s. On two or three storeys that glass is shared equally between the floors: each wall takes one window per floor, all of one width, the sill and head measured from each floor, the head stopping 0.10 m under the floor above. The WWR fit badge averages this test across the four sides.',
+    'WWR bands follow Ching &amp; Shapiro’s classification (low &lt;10%, moderate 10–20%, high 20–30%, very high &gt;30%; p.242) read against Lechner’s orientation guidance — south takes the most glass, north the least of the sunlit faces, and east/west are minimised where the climate leans hot (pp.130–132, 416). The band shown for %1 in this climate is <b>%2–%3%</b>. North is held to 5–10 % and starts at 5 %: it takes almost no winter sun and loses heat all year. That is this app’s bioclimatic choice, not a rule of any code — the code sets no maximum, only a floor: rooms for people need window area of at least 1:8 of the floor (WT §57), and the reading for the north side says how much room area its glass can serve. It is this app’s own synthesis across sources, not a single citable number — treat it as a target to aim for, not a pass/fail test. Each side is judged by the way it really faces once the plan is turned on Site, and its WWR applies to every wall of the plan on that side — a wing’s, a recess’s, a patio’s. On two or three storeys that glass is shared equally between the floors: each wall takes one window per floor, all of one width, the sill and head measured from each floor, the head stopping 0.10 m under the floor above. The WWR fit badge averages this test across the four sides.',
     [t(faceName[curFace]), fmt(wwrLo0 * 100, 0), fmt(wwrHi0 * 100, 0)])); }
 
   const cFace = segCtl(null, FACES.map(f => ({ value:f, label:faceName[f] })), curFace,
@@ -6841,11 +6841,11 @@ function buildOpenings(host) {
     if (o.wwr < lo) { pillWWR.className = 'pill empty'; pillWWR.textContent = side + t('Below the recommended range'); }
     else if (o.wwr > hi) { pillWWR.className = 'pill bad'; pillWWR.textContent = side + t('Above the recommended range'); }
     else { pillWWR.className = 'pill ok'; pillWWR.textContent = side + t('Within the recommended range'); }
-    /* the RGEU floor under a small north glass: every room lit through
-       openings of at least 1/10 of its floor, 1.08 m² at the least */
+    /* the WT daylight rule under a small north glass: rooms for people need
+       window area of at least 1:8 of the floor (WT §57) */
     if (bandKey(curFace) === 'N') {
       const gl = winsOf(curFace).reduce((a, x) => a + x.w.area, 0);
-      pillWWR.textContent += ' · ' + t(fmt(gl, 1) + ' m² of glass lights at most ' + fmt(10 * gl, 0) + ' m² of rooms on this side, ' + Math.floor(gl / 1.08 + 1e-9) + ' at most (RGEU art. 71.º)');
+      pillWWR.textContent += ' · ' + t(fmt(gl, 1) + ' m² of glass lights at most ' + fmt(8 * gl, 0) + ' m² of rooms on this side (WT §57: windows ≥ 1:8 of the floor)');
     }
     const sc = shadingScore(curFace);
     if (sc === null) { pillShade.className = 'pill empty'; pillShade.textContent = t('No shading device on this facade'); }
