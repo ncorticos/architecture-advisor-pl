@@ -790,7 +790,7 @@ details.more[open] > summary{color:var(--ink)}
 /* ------------------------------------------------------------ 0. IDENTITY -- */
 const APP = {
   name:        'Architecture Advisor PL',
-  version:     '1.105.0',
+  version:     '1.106.0',
   author:      'Nuno Dinis Cortiços',
   institution: 'Lisbon School of Architecture, Universidade de Lisboa',
   builtWith:   'Claude Opus 5 (Anthropic)',
@@ -2039,153 +2039,67 @@ const SCE_SVG = (() => {
   return { B, S, svg };
 })();
 
-/**
- * The regional forest programme that governs each region's forest land —
- * the PROF, one per region, all of 11 February 2019 and amended by Portaria
- * n.º 18/2022. The islands have their own instruments; the Azores list below
- * names its regional source directly.
- */
-const PROF_REF = {
-  EDM:  'PROF Entre Douro e Minho (Portaria n.º 58/2019)',
-  TMAD: 'PROF Trás-os-Montes e Alto Douro (Portaria n.º 57/2019)',
-  CL:   'PROF Centro Litoral (Portaria n.º 56/2019)',
-  CI:   'PROF Centro Interior (Portaria n.º 55/2019)',
-  LVT:  'PROF Lisboa e Vale do Tejo (Portaria n.º 52/2019)',
-  ALT:  'PROF Alentejo (Portaria n.º 54/2019)',
-  ALG:  'PROF Algarve (Portaria n.º 53/2019)',
-  RAM:  'PROF-RAM (Resolução n.º 600/2015 do Conselho do Governo Regional)'
-};
+/* Polish native flora lives per voivodeship in PLANTING below, sourced
+   from the national parks and State Forest districts named in each entry. */
+
 
 /**
- * What grows there: the native planting offered on Ventilation, per NUTS III.
- * Each region cites only sources about that region — its PROF and the
- * protected areas and Natura 2000 sites that lie inside it, named with the
- * municipalities they cover — and every species listed was found in the
- * flora those sources describe for that place. Nothing is borrowed from a
- * neighbouring region to fill a gap, so some palettes are short. Keys point
- * into the species table in buildVentilation.
+ * What grows there: the native planting offered on Ventilation, per
+ * voivodeship. Each region cites only sources about that region — the
+ * national parks and State Forest districts inside it — and every species
+ * listed grows natively there. Nothing is borrowed from a neighbouring
+ * region to fill a gap, so mountain and coastal palettes stay short. Keys
+ * point into the species table in buildVentilation.
  */
 const PLANTING = {
-  'Minho-Lima': { prof:'EDM',
-    src:'Parque Nacional da Peneda-Gerês — Arcos de Valdevez, Melgaço, Ponte da Barca (ICNF)',
-    trees:['oak', 'negral', 'vidoeiro', 'castanheiro', 'azevinho', 'teixo', 'bravo'],
-    bushes:['tojo', 'urze', 'carqueja', 'esteva'] },
-  'Cávado': { prof:'EDM',
-    src:'Parque Natural do Litoral Norte — Esposende (ICNF) · Parque Nacional da Peneda-Gerês — Terras de Bouro (ICNF)',
-    trees:['bravo', 'pine', 'oak', 'cork', 'loureiro', 'amieiro', 'azevinho', 'teixo'],
-    bushes:['pilriteiro', 'tojo', 'urze', 'carqueja'] },
-  'Ave': { prof:'EDM',
-    src:'Parque Natural do Alvão and Sítio Alvão/Marão PTCON0003 — Mondim de Basto (ICNF)',
-    trees:['oak', 'negral', 'castanheiro', 'vidoeiro', 'cork', 'azevinho'],
-    bushes:['urze', 'giesta', 'tojo', 'carqueja'] },
-  'Grande Porto': { prof:'EDM',
-    src:'Parque das Serras do Porto, Paisagem Protegida Regional — Valongo, Gondomar, Paredes',
-    trees:['oak', 'cork', 'amieiro', 'freixo', 'medronheiro'],
-    bushes:['tojo', 'urze', 'giesta', 'murta', 'pilriteiro'] },
-  'Tâmega': { prof:'EDM',
-    src:'Sítio Alvão/Marão PTCON0003 — Amarante, Baião (ICNF) · Serra da Aboboreira',
-    trees:['bravo', 'oak', 'castanheiro', 'negral', 'vidoeiro', 'cork'],
-    bushes:['tojo', 'urze', 'giesta'] },
-  'Entre Douro e Vouga': { prof:'EDM',
-    src:'Sítio Serras da Freita e Arada PTCON0047 — Arouca, Vale de Cambra (ICNF)',
-    trees:['bravo', 'oak', 'negral', 'medronheiro', 'azevinho'],
-    bushes:['urze', 'giesta'] },
-  'Alto Trás-os-Montes': { prof:'TMAD',
-    src:'Parque Natural de Montesinho — Bragança, Vinhais (ICNF) · Parque Natural do Douro Internacional — Miranda do Douro, Mogadouro (ICNF)',
-    trees:['negral', 'azinheira', 'castanheiro', 'cork', 'zimbro', 'lodao', 'freixo'],
-    bushes:['giesta', 'urze', 'esteva', 'cornalheira'] },
-  'Douro': { prof:'TMAD',
-    src:'Parque Natural do Alvão — Vila Real (ICNF) · Parque Natural do Douro Internacional — Freixo de Espada à Cinta (ICNF)',
-    trees:['negral', 'oak', 'vidoeiro', 'cork', 'azinheira', 'zimbro', 'lodao'],
-    bushes:['urze', 'giesta', 'tojo', 'carqueja', 'cornalheira'] },
-  'Baixo Vouga': { prof:'CL',
-    src:'Reserva Natural das Dunas de São Jacinto — Aveiro (ICNF) · Sítio Dunas de Mira, Gândara e Gafanhas PTCON0055 — Ílhavo, Vagos (ICNF)',
-    trees:['bravo', 'poplar', 'amieiro', 'faia', 'medronheiro', 'loureiro'],
-    bushes:['camarinha', 'tojo', 'urze', 'esteva', 'pilriteiro'] },
-  'Baixo Mondego': { prof:'CL',
-    src:'Mata Nacional do Buçaco — Mealhada · Reserva Natural do Paul de Arzila — Coimbra, Condeixa-a-Nova, Montemor-o-Velho (ICNF) · Sítio Dunas de Mira PTCON0055 — Mira (ICNF)',
-    trees:['bucaco', 'oak', 'cerquinho', 'cork', 'loureiro', 'medronheiro', 'aderno', 'azereiro', 'bravo'],
-    bushes:['camarinha', 'tojo', 'urze', 'esteva'] },
-  'Pinhal Litoral': { prof:'CL',
-    src:'Mata Nacional de Leiria — Marinha Grande (ICNF) · Parque Natural das Serras de Aire e Candeeiros — Porto de Mós (ICNF)',
-    trees:['bravo', 'pine', 'poplar', 'cork', 'cerquinho', 'azinheira', 'olive'],
-    bushes:['kermes', 'alecrim', 'buxo'] },
-  'Pinhal Interior Norte': { prof:'CL',
-    src:'Sítio Serra da Lousã PTCON0060 — Lousã, Góis, Castanheira de Pera (ICNF) · Paisagem Protegida da Serra do Açor, Mata da Margaraça — Arganil (ICNF)',
-    trees:['azereiro', 'azevinho', 'oak', 'negral', 'castanheiro', 'medronheiro', 'loureiro'],
-    bushes:['urze', 'tojo'] },
-  'Dão-Lafões': { prof:'CL',
-    src:'Sítio Serra de Montemuro PTCON0025 — Castro Daire (ICNF) · Sítio Serras da Freita e Arada PTCON0047 — São Pedro do Sul (ICNF)',
-    trees:['bravo', 'oak', 'castanheiro', 'amieiro', 'freixo', 'medronheiro', 'azevinho'],
-    bushes:['tojo', 'urze', 'giesta'] },
-  'Serra da Estrela': { prof:'CI',
-    src:'Parque Natural da Serra da Estrela — Seia, Gouveia (ICNF) · Sítio Serra da Estrela PTCON0014 (ICNF)',
-    trees:['negral', 'vidoeiro', 'teixo', 'azevinho', 'silvestre'],
-    bushes:['zimbrorast', 'piorno', 'caldoneira'] },
-  'Beira Interior Norte': { prof:'CI',
-    src:'Reserva Natural da Serra da Malcata — Sabugal (ICNF) · Parque Natural da Serra da Estrela — Guarda, Manteigas (ICNF)',
-    trees:['negral', 'azinheira', 'medronheiro', 'cork', 'freixo', 'amieiro', 'vidoeiro'],
-    bushes:['giesta', 'esteva', 'urze'] },
-  'Beira Interior Sul': { prof:'CI',
-    src:'Parque Natural do Tejo Internacional — Castelo Branco, Idanha-a-Nova, Vila Velha de Ródão (ICNF)',
-    trees:['azinheira', 'cork', 'medronheiro', 'olive', 'freixo', 'amieiro'],
-    bushes:['esteva', 'kermes', 'retama', 'urze'] },
-  'Cova da Beira': { prof:'CI',
-    src:'Sítio Serra da Gardunha — Fundão (ICNF) · Parque Natural da Serra da Estrela — Covilhã (ICNF)',
-    trees:['castanheiro', 'oak', 'negral', 'medronheiro', 'vidoeiro', 'teixo'],
-    bushes:['urze', 'esteva', 'piorno'] },
-  'Pinhal Interior Sul': { prof:'CI',
-    src:'Serra do Muradal — Município de Oleiros · Património natural — Sertã',
-    trees:['bravo', 'azereiro', 'cork', 'cerquinho', 'medronheiro', 'azinheira'],
-    bushes:['esteva', 'urze', 'folhado', 'pilriteiro'] },
-  'Oeste': { prof:'LVT',
-    src:'Paisagem Protegida da Serra de Montejunto — Cadaval, Alenquer (ICNF) · Parque Natural das Serras de Aire e Candeeiros — Alcobaça (ICNF)',
-    trees:['cerquinho', 'cork', 'castanheiro', 'loureiro', 'medronheiro', 'azinheira', 'pine', 'bravo'],
-    bushes:['kermes', 'alecrim', 'buxo'] },
-  'Grande Lisboa': { prof:'LVT',
-    src:'Parque Natural de Sintra-Cascais (ICNF) · Tapada Nacional de Mafra · Reserva Natural do Estuário do Tejo — Vila Franca de Xira (ICNF)',
-    trees:['pine', 'bravo', 'cork', 'cerquinho', 'medronheiro', 'olive', 'negral', 'zimbro'],
-    bushes:['mastic', 'folhado', 'kermes', 'murta', 'urze', 'pilriteiro', 'sabina'] },
-  'Península de Setúbal': { prof:'LVT',
-    src:'Parque Natural da Arrábida — Setúbal, Palmela, Sesimbra (ICNF) · Reserva Natural do Estuário do Tejo — Alcochete (ICNF) · Zonas protegidas de Palmela',
-    trees:['pine', 'bravo', 'cork', 'cerquinho', 'medronheiro', 'olive', 'aderno', 'azinheira'],
-    bushes:['kermes', 'mastic', 'murta', 'folhado'] },
-  'Médio Tejo': { prof:'LVT',
-    src:'Parque Natural das Serras de Aire e Candeeiros — Alcanena, Ourém, Torres Novas (ICNF) · Reserva Natural do Paul do Boquilobo — Torres Novas (ICNF)',
-    trees:['cerquinho', 'azinheira', 'olive', 'freixo', 'poplar'],
-    bushes:['kermes', 'alecrim', 'buxo'] },
-  'Lezíria do Tejo': { prof:'LVT',
-    src:'Reserva Natural do Estuário do Tejo — Benavente (ICNF) · Reserva Natural do Paul do Boquilobo — Golegã (ICNF) · Parque Natural das Serras de Aire e Candeeiros — Santarém, Rio Maior (ICNF)',
-    trees:['cork', 'bravo', 'freixo', 'poplar', 'cerquinho', 'azinheira'],
-    bushes:['kermes', 'alecrim'] },
-  'Alto Alentejo': { prof:'ALT',
-    src:'Parque Natural da Serra de São Mamede — Portalegre, Marvão, Castelo de Vide, Arronches (ICNF)',
-    trees:['negral', 'castanheiro', 'cork', 'azinheira', 'freixo', 'amieiro', 'olive', 'medronheiro'],
-    bushes:['giesta', 'esteva', 'carqueja', 'urze', 'rosmaninho'] },
-  'Alentejo Central': { prof:'ALT',
-    src:'Sítio Monfurado PTCON0031 — Montemor-o-Novo, Évora (ICNF) · Sítio Cabrela PTCON0033 — Montemor-o-Novo (ICNF) · Viveiro Municipal de Espécies Autóctones — Montemor-o-Novo',
-    trees:['cork', 'azinheira', 'cerquinho', 'negral', 'freixo', 'medronheiro'],
-    bushes:['esteva', 'rosmaninho', 'alfazema', 'giesta', 'pilriteiro'] },
-  'Baixo Alentejo': { prof:'ALT',
-    src:'Parque Natural do Vale do Guadiana — Mértola, Serpa (ICNF) · Sítio Moura/Barrancos PTCON0053 (ICNF)',
-    trees:['azinheira', 'freixo', 'poplar', 'medronheiro'],
-    bushes:['esteva', 'rosmaninho', 'murta', 'loendro'] },
-  'Alentejo Litoral': { prof:'ALT',
-    src:'Parque Natural do Sudoeste Alentejano e Costa Vicentina — Sines, Odemira (ICNF) · Reserva Natural das Lagoas de Santo André e da Sancha — Sines, Santiago do Cacém (ICNF)',
-    trees:['cork', 'cerquinho', 'medronheiro'],
-    bushes:['urze', 'folhado', 'sabina', 'camarinha'] },
-  'Algarve': { prof:'ALG',
-    src:'Flora e Vegetação do Barrocal Algarvio (CCDR Algarve) · Sítio Monchique PTCON0037 (ICNF) · Serra do Caldeirão, PRGP (DGT) · Parque Natural do Sudoeste Alentejano e Costa Vicentina — Aljezur (ICNF)',
-    trees:['carob', 'azinheira', 'cork', 'olive', 'cerquinho', 'medronheiro', 'castanheiro', 'alepo', 'pine'],
-    bushes:['alecrim', 'kermes', 'murta', 'palmito', 'adelfeira', 'sabina'] },
-  'RA da Madeira': { prof:'RAM',
-    src:'Laurissilva da Madeira and Parque Natural da Madeira (IFCN) · Núcleo dos Dragoeiros das Neves (IFCN)',
-    trees:['til', 'vinhatico', 'louroM', 'barbusano', 'paubrancoM', 'faia', 'folhadoM', 'dragoeiro'],
-    bushes:['urzeM', 'uveira', 'piornoM', 'massaroco'] },
-  'RA dos Açores': { prof:null,
-    src:'Espécies endémicas — Governo dos Açores (azores.gov.pt)',
-    trees:['cedromato', 'louroA', 'faia', 'paubrancoA', 'azevinhoA', 'sanguinhoA'],
-    bushes:['urzeA', 'uvaserra', 'folhadoA'] }
+  'Dolnośląskie': { src:'Karkonoski Park Narodowy · Park Narodowy Gór Stołowych',
+    trees:['buk', 'swierk', 'jodla', 'dab', 'lipa', 'klon', 'grab', 'brzoza'],
+    bushes:['leszczyna', 'bez', 'kalina', 'deren'] },
+  'Kujawsko-pomorskie': { src:'Bory Tucholskie · Lasy Państwowe (RDLP Toruń)',
+    trees:['dab', 'sosna', 'brzoza', 'lipa', 'klon', 'grab', 'olsza', 'topola'],
+    bushes:['leszczyna', 'glog', 'bez', 'tarnina'] },
+  'Lubelskie': { src:'Roztoczański Park Narodowy · Poleski Park Narodowy',
+    trees:['dab', 'sosna', 'brzoza', 'lipa', 'grab', 'klon', 'olsza', 'topola', 'wiaz'],
+    bushes:['leszczyna', 'glog', 'tarnina', 'deren'] },
+  'Lubuskie': { src:'Park Narodowy Ujście Warty · Drawieński Park Narodowy',
+    trees:['dab', 'sosna', 'brzoza', 'buk', 'lipa', 'klon', 'olsza', 'topola'],
+    bushes:['leszczyna', 'glog', 'bez', 'tarnina'] },
+  'Łódzkie': { src:'Lasy Państwowe (RDLP Łódź)',
+    trees:['dab', 'sosna', 'brzoza', 'lipa', 'klon', 'grab', 'topola', 'modrzew'],
+    bushes:['leszczyna', 'glog', 'bez', 'deren'] },
+  'Małopolskie': { src:'Tatrzański Park Narodowy · Babiogórski Park Narodowy · Pieniński Park Narodowy · Gorczański Park Narodowy · Magurski Park Narodowy · Ojcowski Park Narodowy',
+    trees:['buk', 'jodla', 'swierk', 'dab', 'lipa', 'klon', 'grab', 'jarzab', 'cis'],
+    bushes:['leszczyna', 'bez', 'kalina', 'glog'] },
+  'Mazowieckie': { src:'Kampinoski Park Narodowy',
+    trees:['dab', 'sosna', 'brzoza', 'lipa', 'klon', 'grab', 'olsza', 'topola'],
+    bushes:['leszczyna', 'glog', 'bez', 'tarnina'] },
+  'Opolskie': { src:'Lasy Państwowe (RDLP Katowice) · Park Krajobrazowy Gór Opawskich',
+    trees:['dab', 'buk', 'sosna', 'lipa', 'klon', 'grab', 'olsza', 'brzoza'],
+    bushes:['leszczyna', 'bez', 'kalina', 'deren'] },
+  'Podkarpackie': { src:'Bieszczadzki Park Narodowy · Magurski Park Narodowy',
+    trees:['buk', 'jodla', 'dab', 'lipa', 'grab', 'klon', 'olsza', 'jarzab'],
+    bushes:['leszczyna', 'bez', 'kalina', 'glog'] },
+  'Podlaskie': { src:'Białowieski Park Narodowy · Biebrzański Park Narodowy · Narwiański Park Narodowy · Wigierski Park Narodowy',
+    trees:['sosna', 'swierk', 'dab', 'brzoza', 'olsza', 'lipa', 'grab', 'jalowiec', 'jesion'],
+    bushes:['leszczyna', 'bez', 'tarnina', 'kalina'] },
+  'Pomorskie': { src:'Słowiński Park Narodowy · Bory Tucholskie',
+    trees:['buk', 'dab', 'sosna', 'brzoza', 'olsza', 'lipa', 'klon', 'jarzab', 'ostrokrzew'],
+    bushes:['leszczyna', 'bez', 'kalina', 'glog'] },
+  'Śląskie': { src:'Lasy Państwowe (RDLP Katowice)',
+    trees:['buk', 'dab', 'sosna', 'brzoza', 'lipa', 'klon', 'olsza', 'grab'],
+    bushes:['leszczyna', 'bez', 'glog', 'deren'] },
+  'Świętokrzyskie': { src:'Świętokrzyski Park Narodowy',
+    trees:['buk', 'jodla', 'dab', 'sosna', 'lipa', 'grab', 'brzoza', 'modrzew'],
+    bushes:['leszczyna', 'bez', 'kalina', 'glog'] },
+  'Warmińsko-mazurskie': { src:'Mazurski Park Krajobrazowy · Lasy Państwowe (RDLP Olsztyn)',
+    trees:['sosna', 'swierk', 'dab', 'brzoza', 'olsza', 'lipa', 'grab', 'jalowiec'],
+    bushes:['leszczyna', 'bez', 'kalina', 'tarnina'] },
+  'Wielkopolskie': { src:'Wielkopolski Park Narodowy · Drawieński Park Narodowy',
+    trees:['dab', 'sosna', 'brzoza', 'lipa', 'klon', 'grab', 'olsza', 'topola'],
+    bushes:['leszczyna', 'glog', 'tarnina', 'bez'] },
+  'Zachodniopomorskie': { src:'Woliński Park Narodowy · Drawieński Park Narodowy',
+    trees:['buk', 'dab', 'sosna', 'brzoza', 'olsza', 'lipa', 'klon', 'jarzab'],
+    bushes:['leszczyna', 'bez', 'kalina', 'deren'] }
 };
 
 /**
@@ -7287,85 +7201,40 @@ function buildVentilation(host) {
     const i = arr.indexOf(selected.ref);
     return i < 0 ? null : { kind:selected.kind, index:i, obj:arr[i] };
   };
-  /* Native species, drawn from the region's own flora (PLANTING, keyed by
-     the site's NUTS III): trees for summer shade, maquis, heath and garrigue
-     bushes to shelter the wall base against the wind. Heights are mature
-     values a student can then tune per plant. Each entry carries its habit
-     (form), foliage and bark colours, and the bloom or fruit it wears; `like`
-     borrows the drawing of a close relative and overrides what differs. */
+/* Native Polish species, drawn from each voivodeship's own flora (PLANTING,
+     keyed by site region): lowland oak-lime-hornbeam and pine woods, Baltic
+     beech, north-eastern spruce, Carpathian beech-fir-spruce and the Tatra
+     treeline, all at garden-mature heights a student then tunes per plant.
+     `pt` carries the Polish common name (shown beside the scientific name);
+     `p` profiles a cone crown; density d drives the wind model. */
   const SPECIES = {
-    /* trees */
-    pine:{ pt:'pinheiro-manso', en:'stone pine', sci:'Pinus pinea', kind:'tree', form:'umbrella', h:15, d:0.7, tr:8, spr:0.64, tw:1.3, lean:0.05, c:'#3F6B3B', bark:'#7B4A2E' },
-    bravo:{ pt:'pinheiro-bravo', en:'maritime pine', sci:'Pinus pinaster', kind:'tree', form:'tiered', h:20, d:0.55, tr:10, spr:0.36, tw:1.2, lean:0.02, c:'#2F5A35', bark:'#6E3B24' },
-    silvestre:{ pt:'pinheiro-silvestre', en:'Scots pine', sci:'Pinus sylvestris', kind:'tree', form:'tiered', flat:1, h:18, d:0.55, tr:9, spr:0.42, tw:1.1, c:'#4B6F5C', bark:'#6B4A3A', barkTop:'#C9773F' },
-    alepo:{ pt:'pinheiro-de-alepo', en:'Aleppo pine', sci:'Pinus halepensis', kind:'tree', form:'tiered', airy:1, h:14, d:0.45, tr:6, spr:0.5, tw:1.1, lean:0.1, c:'#6E9658', bark:'#8A8177' },
-    bucaco:{ pt:'cedro-do-buçaco', en:'Bussaco cedar', sci:'Cupressus lusitanica', kind:'tree', form:'cone', p:1, h:20, d:0.7, tr:2, spr:0.26, tw:1.2, c:'#46705E', bark:'#6A4B3A' },
-    oak:{ pt:'carvalho-alvarinho', en:'pedunculate oak', sci:'Quercus robur', kind:'tree', form:'pyramid', h:11, d:0.6, tr:3, spr:0.45, tw:1.2, c:'#3E8E41', bark:'#5E5048' },
-    negral:{ pt:'carvalho-negral', en:'Pyrenean oak', sci:'Quercus pyrenaica', kind:'tree', form:'oval', h:14, d:0.55, tr:4, spr:0.42, tw:1.1, c:'#6D8A55', bark:'#5C544C', silver:'#C3CFB2' },
-    cerquinho:{ pt:'carvalho-cerquinho', en:'Portuguese oak', sci:'Quercus faginea', kind:'tree', form:'ball', h:12, d:0.6, tr:3, spr:0.5, tw:1.2, c:'#6A8A5C', bark:'#6B635A', silver:'#BCCAAE' },
-    azinheira:{ pt:'azinheira', en:'holm oak', sci:'Quercus rotundifolia', kind:'tree', form:'dome', h:10, d:0.75, tr:2.5, spr:0.72, tw:1.4, c:'#4A664A', bark:'#4E4944', silver:'#B4BFAC' },
-    cork:{ pt:'sobreiro', en:'cork oak', sci:'Quercus suber', kind:'tree', form:'dome', h:12, d:0.6, tr:5, spr:0.55, tw:1.4, c:'#2C5A36', bark:'#A4532C', barkTop:'#6E655B' },
-    castanheiro:{ pt:'castanheiro', en:'sweet chestnut', sci:'Castanea sativa', kind:'tree', form:'dome', h:18, d:0.65, tr:4, spr:0.55, tw:1.7, c:'#4E8A3A', bark:'#5A4A3C', fl:'#E6DB8A', flN:12, flR:1.8 },
-    vidoeiro:{ pt:'vidoeiro', en:'birch', sci:'Betula celtiberica', kind:'tree', form:'oval', airy:1, birch:1, h:14, d:0.35, tr:4, spr:0.3, tw:0.8, c:'#8BB257', bark:'#ECE8DF' },
-    amieiro:{ pt:'amieiro', en:'alder', sci:'Alnus glutinosa', kind:'tree', form:'oval', h:16, d:0.6, tr:3, spr:0.3, tw:1, c:'#2F5E3A', bark:'#5A534C' },
-    freixo:{ pt:'freixo', en:'narrow-leaved ash', sci:'Fraxinus angustifolia', kind:'tree', form:'oval', airy:1, h:16, d:0.45, tr:5, spr:0.42, tw:1, c:'#7FA650', bark:'#8C877E' },
-    poplar:{ pt:'choupo-negro', en:'black poplar', sci:'Populus nigra', kind:'tree', form:'column', h:18, d:0.5, tr:9, spr:0.29, tw:1, c:'#6E9E3A', bark:'#8F8A80' },
-    azevinho:{ pt:'azevinho', en:'holly', sci:'Ilex aquifolium', kind:'tree', form:'cone', p:0.85, glossy:1, h:8, d:0.8, tr:1, spr:0.36, tw:1, c:'#1F4A2B', bark:'#8E8A80', fl:'#C8202A', flN:12, flR:1.8 },
-    loureiro:{ pt:'loureiro', en:'bay laurel', sci:'Laurus nobilis', kind:'tree', form:'oval', glossy:1, limbs:3, fork:0.1, h:9, d:0.75, tr:1.5, spr:0.36, tw:0.9, c:'#355E36', bark:'#5C5A50' },
-    azereiro:{ pt:'azereiro', en:'Portugal laurel', sci:'Prunus lusitanica', kind:'tree', form:'ball', glossy:1, h:8, d:0.75, tr:1.5, spr:0.55, tw:1, c:'#1E4A2A', bark:'#4E4A44', fl:'#F4F1E4', flN:8, flR:2 },
-    medronheiro:{ pt:'medronheiro', en:'strawberry tree', sci:'Arbutus unedo', kind:'tree', form:'ball', limbs:3, h:5, d:0.6, tr:1.5, spr:0.6, tw:1, c:'#2E7D46', bark:'#8A3E28', fl:'#C03028', flN:6, fl2:'#F2EFE4', fl2N:5 },
-    murta:{ pt:'murta', en:'myrtle', sci:'Myrtus communis', kind:'tree', form:'ball', limbs:5, fork:0.2, h:3.5, d:0.7, tr:1.2, spr:0.7, tw:1, c:'#2E8B46', bark:'#6A5A48', fl:'#2B2B45', flN:9, flR:2.4, fl2:'#F2EFE4', fl2N:3 },
-    olive:{ pt:'zambujeiro', en:'wild olive', sci:'Olea europaea var. sylvestris', kind:'tree', form:'vase', limbs:5, fork:0.15, h:8, d:0.55, tr:2, spr:0.55, tw:1.2, lean:0.04, c:'#8FA08A', bark:'#8A847A', silver:'#DDE4D8' },
-    carob:{ pt:'alfarrobeira', en:'carob', sci:'Ceratonia siliqua', kind:'tree', form:'dome', glossy:1, h:10, d:0.65, tr:3, spr:0.62, tw:1.3, c:'#1F5530', bark:'#6A5E54', fl:'#5A3A22', flN:7, flR:1.6 },
-    lodao:{ pt:'lódão-bastardo', en:'nettle tree', sci:'Celtis australis', kind:'tree', form:'ball', h:15, d:0.55, tr:3.5, spr:0.5, tw:1.2, c:'#6E9B4E', bark:'#8E8C86' },
-    teixo:{ pt:'teixo', en:'yew', sci:'Taxus baccata', kind:'tree', form:'cone', p:0.75, h:10, d:0.8, tr:1.5, spr:0.42, tw:1.3, c:'#24452E', bark:'#8A4A36', fl:'#D0302A', flN:7, flR:1.6 },
-    zimbro:{ pt:'zimbro', en:'prickly juniper', sci:'Juniperus oxycedrus', kind:'tree', form:'cone', p:0.9, rough:1, h:5, d:0.6, tr:0.6, spr:0.4, tw:0.9, c:'#6B8062', bark:'#6A5A4C', fl:'#9A4A2A', flN:7, flR:1.5 },
-    aderno:{ pt:'aderno', en:'mock privet', sci:'Phillyrea latifolia', kind:'tree', form:'ball', h:7, d:0.75, tr:1.2, spr:0.55, tw:1, c:'#2E4E34', bark:'#5E5A52' },
-    faia:{ pt:'faia-da-terra', en:'firetree', sci:'Morella faya', kind:'tree', form:'ball', h:7, d:0.7, tr:1.2, spr:0.55, tw:1, c:'#3F5F3A', bark:'#6A625A', fl:'#3A2E2A', flN:7, flR:1.6 },
-    til:{ pt:'til', en:'til', sci:'Ocotea foetens', kind:'tree', form:'dome', glossy:1, h:20, d:0.8, tr:4, spr:0.5, tw:1.6, c:'#274F30', bark:'#4E4A44' },
-    vinhatico:{ pt:'vinhático', en:'vinhático', sci:'Persea indica', kind:'tree', form:'ball', h:18, d:0.7, tr:5, spr:0.45, tw:1.3, c:'#3F7A3A', bark:'#5E5048', fl:'#B0412E', flN:9, flR:2 },
-    louroM:{ like:'loureiro', en:'Madeira laurel', sci:'Laurus novocanariensis', h:12, tr:2 },
-    barbusano:{ pt:'barbusano', en:'barbusano', sci:'Apollonias barbujana', kind:'tree', form:'ball', glossy:1, h:14, d:0.8, tr:2.5, spr:0.5, tw:1.2, c:'#2B5634', bark:'#54504A' },
-    paubrancoM:{ pt:'pau-branco', en:'Madeira white-wood', sci:'Picconia excelsa', kind:'tree', form:'ball', glossy:1, h:12, d:0.75, tr:2.5, spr:0.45, tw:1.1, c:'#355F3A', bark:'#A9A398' },
-    folhadoM:{ pt:'folhado', en:'lily-of-the-valley tree', sci:'Clethra arborea', kind:'tree', form:'oval', h:8, d:0.65, tr:1.5, spr:0.4, tw:1, c:'#3E7040', bark:'#6A5E54', fl:'#F4F1E4', flN:12, flR:2 },
-    dragoeiro:{ pt:'dragoeiro', en:'dragon tree', sci:'Dracaena draco', kind:'tree', form:'dragon', h:10, d:0.75, tr:3.5, spr:0.75, tw:2, c:'#5E7F5A', bark:'#9A9488' },
-    cedromato:{ pt:'cedro-do-mato', en:'Azores juniper', sci:'Juniperus brevifolia', kind:'tree', form:'cone', p:0.8, rough:1, h:6, d:0.8, tr:0.8, spr:0.38, tw:1, c:'#3F6650', bark:'#6A4B3A' },
-    louroA:{ like:'loureiro', pt:'louro', en:'Azores laurel', sci:'Laurus azorica', h:10 },
-    paubrancoA:{ like:'paubrancoM', en:'Azores white-wood', sci:'Picconia azorica', h:8, tr:1.5 },
-    azevinhoA:{ like:'azevinho', en:'Azores holly', sci:'Ilex perado subsp. azorica', form:'ball', h:6, spr:0.45 },
-    sanguinhoA:{ pt:'sanguinho', en:'Azores buckthorn', sci:'Frangula azorica', kind:'tree', form:'oval', airy:1, h:6, d:0.5, tr:1.2, spr:0.45, tw:0.9, c:'#5E8A45', bark:'#6A5E54', fl:'#2A2230', flN:6, flR:1.6 },
+    dab:{ pt:'dąb szypułkowy', en:'pedunculate oak', sci:'Quercus robur', kind:'tree', form:'dome', h:16, d:0.6, tr:4, spr:0.5, tw:1.5, c:'#4E7A3A', bark:'#5A4A3C' },
+    buk:{ pt:'buk zwyczajny', en:'European beech', sci:'Fagus sylvatica', kind:'tree', form:'dome', h:16, d:0.65, tr:4, spr:0.5, tw:1.5, c:'#4A7A3A', bark:'#8A8A86' },
+    sosna:{ pt:'sosna zwyczajna', en:'Scots pine', sci:'Pinus sylvestris', kind:'tree', form:'tiered', h:18, d:0.55, tr:9, spr:0.42, tw:1.1, c:'#4B6F5C', bark:'#6B4A3A', barkTop:'#C9773F' },
+    swierk:{ pt:'świerk pospolity', en:'Norway spruce', sci:'Picea abies', kind:'tree', form:'cone', p:1, h:20, d:0.8, tr:5, spr:0.35, tw:1.3, c:'#2E5A3A', bark:'#5A4A3C' },
+    jodla:{ pt:'jodła pospolita', en:'silver fir', sci:'Abies alba', kind:'tree', form:'cone', p:1, h:20, d:0.8, tr:6, spr:0.35, tw:1.3, c:'#2A5232', bark:'#7A756E' },
+    modrzew:{ pt:'modrzew europejski', en:'European larch', sci:'Larix decidua', kind:'tree', form:'cone', h:18, d:0.5, tr:6, spr:0.35, tw:1.1, c:'#5E8A45', bark:'#6B5A48' },
+    brzoza:{ pt:'brzoza brodawkowata', en:'silver birch', sci:'Betula pendula', kind:'tree', form:'oval', airy:1, birch:1, h:14, d:0.35, tr:4, spr:0.3, tw:0.8, c:'#8BB257', bark:'#ECE8DF' },
+    lipa:{ pt:'lipa drobnolistna', en:'small-leaved lime', sci:'Tilia cordata', kind:'tree', form:'dome', h:16, d:0.65, tr:4, spr:0.5, tw:1.5, c:'#4A7A3A', bark:'#5E5A50', fl:'#E8E4A0', flN:8, flR:1.6 },
+    grab:{ pt:'grab pospolity', en:'European hornbeam', sci:'Carpinus betulus', kind:'tree', form:'oval', h:12, d:0.7, tr:3, spr:0.45, tw:1.2, c:'#3E7A38', bark:'#7A7A76' },
+    klon:{ pt:'klon zwyczajny', en:'Norway maple', sci:'Acer platanoides', kind:'tree', form:'oval', h:15, d:0.6, tr:4, spr:0.5, tw:1.3, c:'#4E8A3A', bark:'#5E5A54' },
+    jesion:{ pt:'jesion wyniosły', en:'European ash', sci:'Fraxinus excelsior', kind:'tree', form:'oval', airy:1, h:16, d:0.45, tr:5, spr:0.42, tw:1, c:'#7FA650', bark:'#8C877E' },
+    olsza:{ pt:'olsza czarna', en:'black alder', sci:'Alnus glutinosa', kind:'tree', form:'oval', h:16, d:0.6, tr:3, spr:0.3, tw:1, c:'#2F5E3A', bark:'#5A534C' },
+    wiaz:{ pt:'wiąz górski', en:'Wych elm', sci:'Ulmus glabra', kind:'tree', form:'oval', h:15, d:0.55, tr:4, spr:0.45, tw:1.2, c:'#4E7A3E', bark:'#6A625A' },
+    topola:{ pt:'topola osika', en:'European aspen', sci:'Populus tremula', kind:'tree', form:'column', h:14, d:0.45, tr:5, spr:0.35, tw:1, c:'#6E9E3A', bark:'#8F8A80' },
+    jarzab:{ pt:'jarząb pospolity', en:'rowan', sci:'Sorbus aucuparia', kind:'tree', form:'oval', h:8, d:0.5, tr:2.5, spr:0.45, tw:1, c:'#5E8A45', bark:'#6A5E54', fl:'#C03028', flN:8, flR:1.5 },
+    cis:{ pt:'cis pospolity', en:'European yew', sci:'Taxus baccata', kind:'tree', form:'cone', p:0.75, h:10, d:0.8, tr:1.5, spr:0.42, tw:1.3, c:'#24452E', bark:'#8A4A36', fl:'#D0302A', flN:7, flR:1.6 },
+    ostrokrzew:{ pt:'ostrokrzew kolczasty', en:'holly', sci:'Ilex aquifolium', kind:'tree', form:'cone', p:0.85, glossy:1, h:8, d:0.8, tr:1, spr:0.36, tw:1, c:'#1F4A2B', bark:'#8E8A80', fl:'#C8202A', flN:12, flR:1.8 },
+    jalowiec:{ pt:'jałowiec pospolity', en:'common juniper', sci:'Juniperus communis', kind:'tree', form:'cone', p:0.9, rough:1, h:4, d:0.7, tr:0.5, spr:0.4, tw:0.9, c:'#4E6A55', bark:'#6A5A4C', fl:'#2E3A5A', flN:7, flR:1.4 },
     /* bushes */
-    mastic:{ pt:'aroeira', en:'mastic', sci:'Pistacia lentiscus', kind:'bush', form:'globe', h:3, d:0.7, tr:0, spr:0.6, c:'#0F5C30', fl:'#A02828', flN:8, flR:1.8, flIn:1 },
-    kermes:{ pt:'carrasco', en:'kermes oak', sci:'Quercus coccifera', kind:'bush', form:'mound', wide:1.25, rough:1, h:1.2, d:0.7, tr:0, spr:0.67, c:'#1E6B38', fl:'#C8A24A', flN:5 },
-    esteva:{ pt:'esteva', en:'gum rockrose', sci:'Cistus ladanifer', kind:'bush', form:'mound', h:1.5, d:0.7, tr:0, spr:0.8, c:'#2A7A3D', fl:'#FAFAF5', flN:7, flR:2.6, blotch:'#6A1E2A' },
-    giesta:{ pt:'giesta', en:'broom', sci:'Cytisus spp.', kind:'bush', form:'fountain', h:2, d:0.6, tr:0, spr:0.6, c:'#3E7A2C', fl:'#F5C518' },
-    alecrim:{ pt:'alecrim', en:'rosemary', sci:'Salvia rosmarinus', kind:'bush', form:'mound', tuft:1, heath:1, h:1.0, d:0.75, tr:0, spr:0.7, c:'#3E7A4C', fl:'#A9BEE8', flN:8 },
-    alfazema:{ pt:'alfazema', en:'lavender', sci:'Lavandula spp.', kind:'bush', form:'mound', spikes:'lav', h:0.6, d:0.75, tr:0, spr:0.83, c:'#7A8B6F' },
-    rosmaninho:{ pt:'rosmaninho', en:'French lavender', sci:'Lavandula pedunculata', kind:'bush', form:'mound', spikes:'ear', h:0.6, d:0.75, tr:0, spr:0.8, c:'#6F8466' },
-    tojo:{ pt:'tojo', en:'gorse', sci:'Ulex spp.', kind:'bush', form:'mound', spiny:1, h:1.5, d:0.8, tr:0, spr:0.7, c:'#2E4F2A', fl:'#F2C21B', flN:16, flR:1.7 },
-    urze:{ pt:'urze', en:'heath', sci:'Erica arborea, E. australis', kind:'bush', form:'mound', heath:1, tuft:1, h:1.8, d:0.75, tr:0, spr:0.5, c:'#4E6B3E', fl:'#D48BB5', flN:18, flR:1.3, fl2:'#F2EEE8', fl2N:8 },
-    carqueja:{ pt:'carqueja', en:'carqueja', sci:'Pterospartum tridentatum', kind:'bush', form:'mound', mat:1, h:0.5, d:0.75, tr:0, spr:1, c:'#5E7F3A', fl:'#F2C21B', flN:14, flR:1.5 },
-    camarinha:{ pt:'camarinha', en:'Portuguese crowberry', sci:'Corema album', kind:'bush', form:'mound', heath:1, h:0.8, d:0.8, tr:0, spr:0.9, c:'#4F6E3E', fl:'#F4F2EA', flN:12, flR:2 },
-    sabina:{ pt:'sabina-das-praias', en:'Phoenician juniper', sci:'Juniperus turbinata', kind:'bush', form:'mound', rough:1, wide:1.1, h:2.5, d:0.85, tr:0, spr:0.6, c:'#3E5E42', fl:'#8A3A22', flN:7, flR:1.6 },
-    folhado:{ pt:'folhado', en:'laurustinus', sci:'Viburnum tinus', kind:'bush', form:'mound', glossy:1, stems:4, h:3, d:0.8, tr:0, spr:0.5, c:'#2A5234', fl:'#F6EEF0', flN:9, flR:2.8, fl2:'#E2B7C4', fl2N:5 },
-    palmito:{ pt:'palmeira-anã', en:'dwarf fan palm', sci:'Chamaerops humilis', kind:'bush', form:'fan', h:1.5, d:0.8, tr:0, spr:0.6, c:'#5B7F52' },
-    pilriteiro:{ pt:'pilriteiro', en:'hawthorn', sci:'Crataegus monogyna', kind:'bush', form:'mound', stems:4, h:4, d:0.6, tr:0, spr:0.5, c:'#4C7A3A', fl:'#B5222A', flN:12, flR:1.6, fl2:'#F4F1E6', fl2N:6 },
-    zimbrorast:{ pt:'zimbro-rasteiro', en:'dwarf juniper', sci:'Juniperus communis subsp. alpina', kind:'bush', form:'mound', mat:1, rough:1, h:0.5, d:0.85, tr:0, spr:1.3, c:'#4E6A55', fl:'#2E3A5A', flN:7, flR:1.4 },
-    piorno:{ pt:'piorno-serrano', en:'mountain broom', sci:'Cytisus oromediterraneus', kind:'bush', form:'fountain', h:1.5, d:0.7, tr:0, spr:0.6, c:'#4E7A36', fl:'#F5C518' },
-    caldoneira:{ pt:'caldoneira', en:'caldoneira', sci:'Echinospartum ibericum', kind:'bush', form:'mound', mat:1, spiny:1, h:0.5, d:0.85, tr:0, spr:1.1, c:'#6E8A4A', fl:'#F2C21B', flN:14, flR:1.6 },
-    adelfeira:{ pt:'adelfeira', en:'rhododendron', sci:'Rhododendron ponticum subsp. baeticum', kind:'bush', form:'mound', glossy:1, stems:4, h:3.5, d:0.8, tr:0, spr:0.55, c:'#2A5234', fl:'#B77AC2', flN:11, flR:3 },
-    retama:{ pt:'piorno-amarelo', en:'retama', sci:'Retama sphaerocarpa', kind:'bush', form:'fountain', h:2.5, d:0.5, tr:0, spr:0.6, c:'#8C9C78', fl:'#F2D43A' },
-    cornalheira:{ pt:'cornalheira', en:'terebinth', sci:'Pistacia terebinthus', kind:'bush', form:'mound', stems:4, h:4, d:0.6, tr:0, spr:0.55, c:'#4E7A3E', fl:'#B8454A', flN:11, flR:1.6 },
-    buxo:{ pt:'buxo', en:'box', sci:'Buxus sempervirens', kind:'bush', form:'mound', heath:1, h:2, d:0.9, tr:0, spr:0.5, c:'#2E5A32' },
-    loendro:{ pt:'loendro', en:'oleander', sci:'Nerium oleander', kind:'bush', form:'mound', stems:5, h:3, d:0.75, tr:0, spr:0.55, c:'#4E7550', fl:'#E27AA0', flN:12, flR:2.6 },
-    urzeM:{ like:'urze', en:'Madeira heath', sci:'Erica platycodon subsp. maderincola', h:3, fl:'#F2EEE8', fl2:null },
-    uveira:{ pt:'uveira-da-serra', en:'Madeira blueberry', sci:'Vaccinium padifolium', kind:'bush', form:'mound', stems:3, h:2, d:0.75, tr:0, spr:0.55, c:'#4E7A3E', fl:'#2E2A4A', flN:9, flR:1.8, fl2:'#B8454A', fl2N:5 },
-    piornoM:{ like:'piorno', pt:'piorno', en:'Madeira broom', sci:'Genista tenera', h:1.8 },
-    massaroco:{ pt:'massaroco', en:'pride of Madeira', sci:'Echium candicans', kind:'bush', form:'mound', spikes:'echium', h:1.5, d:0.7, tr:0, spr:0.7, c:'#8A9C84' },
-    urzeA:{ like:'urze', en:'Azores heath', sci:'Erica azorica', h:2.5, fl:'#EBD3DC', fl2:null },
-    uvaserra:{ like:'uveira', pt:'uva-da-serra', en:'Azores blueberry', sci:'Vaccinium cylindraceum' },
-    folhadoA:{ like:'folhado', en:'Azores laurustinus', sci:'Viburnum treleasei' }
+    leszczyna:{ pt:'leszczyna pospolita', en:'hazel', sci:'Corylus avellana', kind:'bush', form:'globe', h:3, d:0.6, tr:0, spr:0.7, c:'#4E7A3E' },
+    glog:{ pt:'głóg jednoszyjkowy', en:'hawthorn', sci:'Crataegus monogyna', kind:'bush', form:'mound', stems:4, h:3, d:0.6, tr:0, spr:0.55, c:'#4C7A3A', fl:'#B5222A', flN:10, flR:1.5, fl2:'#C03028', fl2N:6 },
+    bez:{ pt:'bez czarny', en:'elder', sci:'Sambucus nigra', kind:'bush', form:'globe', h:3, d:0.55, tr:0, spr:0.65, c:'#4E7A45', fl:'#F4F1E4', flN:8, flR:2 },
+    kalina:{ pt:'kalina koralowa', en:'guelder rose', sci:'Viburnum opulus', kind:'bush', form:'mound', glossy:1, h:2.5, d:0.6, tr:0, spr:0.6, c:'#3E7A40', fl:'#C03028', flN:9, flR:1.8 },
+    tarnina:{ pt:'tarnina', en:'blackthorn', sci:'Prunus spinosa', kind:'bush', form:'mound', spiny:1, h:2.5, d:0.65, tr:0, spr:0.7, c:'#3E6E38', fl:'#F4F1E4', flN:8, flR:1.6 },
+    deren:{ pt:'dereń świdwa', en:'dogwood', sci:'Cornus sanguinea', kind:'bush', form:'mound', stems:4, h:2.5, d:0.55, tr:0, spr:0.6, c:'#4E7A45', fl:'#2E2A4A', flN:7, flR:1.6 }
   };
+
   const SPEC_FALLBACK = { pt:'?', en:'?', sci:'', kind:'tree', form:'ball', h:6, d:0.6, tr:3.6, spr:0.5, tw:1, c:'#a855f6' };
   const SPEC_MERGED = {};
   const specOf = sp => {
@@ -7380,9 +7249,9 @@ function buildVentilation(host) {
   const spreadOf = v => { const s = specOf(v.type).spr; return s != null ? s : 0.5; };
   const crownFormOf = v => specOf(v.type).form || (specOf(v.type).kind === 'bush' ? 'mound' : 'ball');
   const FORM_NAME = { ball:'round crown', oval:'oval crown', column:'columnar crown', cone:'conical crown', mound:'mound', umbrella:'umbrella crown', tiered:'tiered pine crown', fountain:'flowering fountain', dome:'broad dome', vase:'open vase', globe:'fruiting globe', pyramid:'tiered pyramid', fan:'fan-palm clump', dragon:'dragon-tree umbrella' };
-  /* The site's own palette: its NUTS III flora, or Grande Lisboa's when the
+  /* The site's own palette: its voivodeship flora, or Mazowieckie's when the
      region is unknown (a place typed by hand outside the table). */
-  const floraKey = PLANTING[S.nuts] ? S.nuts : 'Grande Lisboa';
+  const floraKey = PLANTING[S.nuts] ? S.nuts : 'Mazowieckie';
   const FLORA = PLANTING[floraKey];
   /** Scale a hex colour toward white (>1) or black (<1) for crown shading. */
   const shade = (hex, f) => {
@@ -8696,11 +8565,11 @@ function buildVentilation(host) {
   host.appendChild(section('Trees and bushes against the wind and sun',
     'Arm a species, then click open ground around the building — not on it. Click a placed plant to tune its height and density, drag to move it, double-click to remove it. Tall trees shade summer glass; low native bushes shelter the wall base against the wind.'));
   /* The palette is the site region's own flora, and says where it was read:
-     the region's PROF and the protected areas inside it. Choose another
+     the national parks and State Forest districts inside it. Choose another
      region on the setup page and the palette changes with it. */
-  const floraSrc = [FLORA.prof ? PROF_REF[FLORA.prof] : null, FLORA.src].filter(Boolean).join(' · ');
+  const floraSrc = FLORA.src;
   benchNote.innerHTML = '<b>' + t('Native planting for') + ' ' + floraKey + '</b>'
-    + (floraKey !== S.nuts ? ' (' + t('region not found — showing Grande Lisboa') + ')' : '')
+    + (floraKey !== S.nuts ? ' (' + t('region not found — showing Mazowieckie') + ')' : '')
     + ' — ' + t('sources for this region only') + ': ' + floraSrc;
   let plantArmed = null;
   let ghost = null;
@@ -10129,8 +9998,8 @@ const REFS = [
    'The observed monthly means and totals embedded for 19 synoptic stations — homogeneous series after WMO-No. 1203.', 'https://klimat.imgw.pl/en/climate-normals/'],
   ['Despacho n.º 15793-K/2013, de 3 de dezembro. Parâmetros térmicos do REH. Diário da República, 2.ª série. (Colour classes as in RCCTE, Decreto-Lei n.º 80/2006, Quadro V.5.)',
    'The three colour classes of solar absorptance — light 0.4, medium 0.5, dark 0.8 — the wall colour on Site reads its albedo from.', null],
-  ['Portarias n.º 52/2019 a 58/2019, de 11 de fevereiro, alteradas pela Portaria n.º 18/2022. <i>Programas Regionais de Ordenamento Florestal</i> (PROF LVT, ALG, ALT, CI, CL, TMAD, EDM). Diário da República, 1.ª série.',
-   'The regional forest programme each site region answers to. The Ventilation palette names the region\u2019s PROF and the protected areas inside it (ICNF, IFCN, Governo dos Açores) whose flora its species were read from — nothing from outside the region.', 'https://www.icnf.pt/florestas/prof/profemvigor']
+  ['Polish national parks and the State Forests (Lasy Państwowe).',
+   'The native flora behind the Ventilation palette, read region by region from protected areas and forest districts — nothing from outside the region.', null]
 ];
 function buildRefs() {
   const ul = $('#refList');
