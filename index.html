@@ -384,6 +384,7 @@ footer{border-top:1px solid var(--line); margin-top:26px; background:var(--wash)
 .climkey i{display:inline-block; width:10px; height:8px; border-radius:2px}
 .climkey i.kp{background:#bcd2ea}
 .climkey i.kt{height:2px; background:#D97706; margin-left:6px}
+.climkey .snk{color:#4A90C8; margin-left:6px}
 .setup .cta{display:flex; flex-direction:column; align-items:stretch; gap:8px; margin:0 0 6px}
 .s-go{grid-column:1/-1; display:flex; flex-direction:column; align-items:center; gap:10px; margin-top:14px; flex:1 1 100%}
 .s-go .zonechip{flex:0 0 auto}
@@ -781,7 +782,7 @@ details.more[open] > summary{color:var(--ink)}
           <div class="sbox climbox" id="setupClimoWrap">
             <canvas id="setupClimo" role="img" aria-label="Climograph of the normals"></canvas>
             <button type="button" id="setupClimoExpand" title="Enlarge the chart" aria-label="Enlarge the chart">⤢</button>
-            <span class="climkey"><i class="kp"></i><span data-t="climoP">Precipitation, mm</span><i class="kt"></i><span data-t="climoT">Mean temperature, °C</span></span>
+            <span class="climkey"><i class="kp"></i><span data-t="climoP">Precipitation, mm</span><i class="kt"></i><span data-t="climoT">Mean temperature, °C</span><span class="snk">❄</span><span data-t="climoS">Snow days</span></span>
           </div>
           <div id="setupClimoOverlay" hidden>
             <div id="setupClimoSheet" role="dialog" aria-modal="true" aria-labelledby="setupClimoSheetTitle">
@@ -908,7 +909,7 @@ details.more[open] > summary{color:var(--ink)}
 /* ------------------------------------------------------------ 0. IDENTITY -- */
 const APP = {
   name:        'Architecture Advisor PL',
-  version:     '1.108.0',
+  version:     '1.108.1',
   author:      'Nuno Dinis Cortiços',
   institution: 'Lisbon School of Architecture, Universidade de Lisboa',
   builtWith:   'Claude Opus 5 (Anthropic)',
@@ -975,6 +976,7 @@ const STATIC_PT = {
   "climoSheetTitle": "Klimat, który tworzą",
   "climoSheetHint": "Te same dwanaście miesięcy, większe: słupki czytają opad na lewej skali, linia czyta średnią temperaturę na prawej. Podąża za polami — pisz w nich, a ten podąża.",
   "climoT": "Średnia temperatura, °C",
+  "climoS": "Dni śniegu",
   "btnGo": "Przejdź przez projekt",
   "ex1h": "Ugruntowane w literaturze projektowej",
   "ex1p": "Olgyay, Lechner, DeKay i Brown, Hyde, Ching i Shapiro, Brophy i Lewis. Każda wytyczna nazywa książkę, z której pochodzi, a gdzie książki się nie zgadzają, aplikacja tak mówi, zamiast uśredniać je w jedną liczbę.",
@@ -2304,17 +2306,30 @@ Object.assign(SCE_ICON, {
   bieszczadzki: ['Komin bieszczadzki', 'Ciemny kamienny trzon z bielonym pasem — komin Bieszczadów.'],
   wielkopolski: ['Komin wielkopolski', 'Bielony trzon z ażurową koroną, dwa wkłady — komin Wielkopolski.']
 });
+/** A flat colour shaded by the face's own normal, south-west light — so a
+    chimney reads round instead of one flat sheet. */
+const shadeFill = (hex, n) => {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex || '');
+  if (!m) return hex;
+  const nl = Math.hypot(n[0], n[1], n[2]) || 1;
+  const d = Math.max(0, (n[0] * -0.55 + n[1] * -0.55 + n[2] * 0.62) / nl);
+  const f = 0.72 + 0.28 * d, v = parseInt(m[1], 16);
+  const c = [v >> 16 & 255, v >> 8 & 255, v & 255].map(x => Math.round(clamp(x * f, 0, 255)));
+  return 'rgb(' + c[0] + ',' + c[1] + ',' + c[2] + ')';
+};
+/** Crown height above the roof surface, one rule for geometry and handles. */
+const chimTopH = F => F.h + (F.cap || 0.15) + (F.pots > 0 ? 0.5 : 0.02);
 /** Triangles [{pts:[3], fill, n}] for a chimney of the region's family,
-    standing on the roof surface at (x, y, z0): shaft, cap, pots or open
-    flues, the Algarve's openwork crown. Small enough to paint anywhere. */
+    standing on the roof surface at (x, y, z0): plinth, shaft, cap, pots or
+    open flues, the openwork crown. Small enough to paint anywhere. */
 function chimneyFaces(famKey, x, y, z0) {
   const F = CHIMNEY_FAM[famKey] || CHIMNEY_FAM.mazowiecki;
   const out = [];
   const tri = (a, b, c, fill) => {
     const ux = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], vx = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
     const n = [ux[1] * vx[2] - ux[2] * vx[1], ux[2] * vx[0] - ux[0] * vx[2], ux[0] * vx[1] - ux[1] * vx[0]];
-    const L = Math.hypot(n[0], n[1], n[2]) || 1;
-    out.push({ pts:[a, b, c], fill, n:[n[0] / L, n[1] / L, n[2] / L] });
+    const L = Math.hypot(n[0], n[1], n[2]) || 1, nn = [n[0] / L, n[1] / L, n[2] / L];
+    out.push({ pts:[a, b, c], fill:shadeFill(fill, nn), n:nn });
   };
   const quad = (a, b, c, d, fill) => { tri(a, b, c, fill); tri(a, c, d, fill); };
   const box = (x0, y0, z1, x1, y1, z2, fill) => {
@@ -2335,7 +2350,8 @@ function chimneyFaces(famKey, x, y, z0) {
     for (let k = 1; k < n - 1; k++) tri([P(0)[0], P(0)[1], z2], [P(k)[0], P(k)[1], z2], [P(k + 1)[0], P(k + 1)[1], z2], fill);
   };
   const shaftC = F.colours[0], capC = (famKey === 'podhalanski') ? F.colours[0] : '#EFE9DC', potC = '#C98A5E';
-  const w = F.shaft, h = F.h, skirt = F.skirt ? 0.6 : 0;
+  const w = F.shaft, h = F.h, skirt = F.skirt ? 0.6 : 0, capT = Math.max(0.15, F.cap || 0.15);
+  box(x - w / 2 - 0.12, y - w / 2 - 0.12, z0 - 0.1, x + w / 2 + 0.12, y + w / 2 + 0.12, z0 + 0.3, shaftC);
   box(x - w / 2, y - w / 2, z0 - 0.35, x + w / 2, y + w / 2, z0 + h - skirt, shaftC);
   if (F.band) box(x - w / 2 - 0.015, y - w / 2 - 0.015, z0 + h * 0.35, x + w / 2 + 0.015, y + w / 2 + 0.015, z0 + h * 0.65, '#F4F1EA');
   if (F.skirt) {
@@ -2345,8 +2361,8 @@ function chimneyFaces(famKey, x, y, z0) {
       box(x + sx * (w / 2 - pw) - pw / 2, y + sy * (w / 2 - pw) - pw / 2, z1 + 0.06, x + sx * (w / 2 - pw) + pw / 2, y + sy * (w / 2 - pw) + pw / 2, z0 + h, shaftC));
   }
   if (F.brick) box(x - w / 2 - 0.06, y - w / 2 - 0.06, z0 + h - 0.14, x + w / 2 + 0.06, y + w / 2 + 0.06, z0 + h - 0.07, '#8A4A2E');
-  box(x - w / 2 - 0.08, y - w / 2 - 0.08, z0 + h, x + w / 2 + 0.08, y + w / 2 + 0.08, z0 + h + (F.cap || 0.1), capC);
-  const zt = z0 + h + (F.cap || 0.1);
+  box(x - w / 2 - 0.08, y - w / 2 - 0.08, z0 + h, x + w / 2 + 0.08, y + w / 2 + 0.08, z0 + h + capT, capC);
+  const zt = z0 + h + capT;
   if (F.pots > 0) {
     for (let k = 0; k < F.pots; k++) {
       const px = F.pots === 1 ? x : x - w / 4 + k * (w / 2) / Math.max(1, F.pots - 1);
@@ -2370,7 +2386,7 @@ function parapetFaces(M, h) {
     for (let k = 1; k < pr.length; k++) {
       const a = P(pr[k - 1][0], pr[k - 1][1]), b = P(pr[k][0], pr[k][1]);
       const a2 = [a[0], a[1], a[2] + h], b2 = [b[0], b[1], b[2] + h];
-      out.push({ pts:[a, b, b2], fill:'#E9E5DD', n }, { pts:[a, b2, a2], fill:'#E9E5DD', n });
+      out.push({ pts:[a, b, b2], fill:shadeFill('#E9E5DD', n), n }, { pts:[a, b2, a2], fill:shadeFill('#E9E5DD', n), n });
     }
   });
   return out;
@@ -2580,6 +2596,42 @@ function radiationFor(site, onReady) {
       });
       if (acc.some(a => a[1] < 100)) throw new Error('radiation');
       rec.H = acc.map(a => a[0] / a[1]);
+      rec.src = 'ERA5 1991–2020 (Open-Meteo)';
+    })
+    .catch(() => { rec.failed = true; })
+    .then(() => { rec.pending = false; if (onReady) onReady(); });
+  return rec;
+}
+/** Snow days, month by month: days with ≥1 cm of fresh snow 1991–2020
+ *  from the ERA5 reanalysis via Open-Meteo, fetched once per site — only the
+ *  coordinates leave the browser. Like the web normals, provisional by
+ *  definition: reanalysis, not a station observation. Until it arrives (or
+ *  when it cannot) there is simply no snow reading. */
+const SNOW = {};
+function snowFor(site, onReady) {
+  const key = site.lat.toFixed(2) + ',' + site.lon.toFixed(2);
+  if (SNOW[key]) return SNOW[key];
+  const rec = SNOW[key] = { pending:true, days:null };
+  const ctrl = {};
+  try { if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) ctrl.signal = AbortSignal.timeout(60000); } catch (e) {}
+  fetch('https://archive-api.open-meteo.com/v1/archive?latitude=' + site.lat.toFixed(3) + '&longitude=' + site.lon.toFixed(3)
+    + '&start_date=1991-01-01&end_date=2020-12-31&daily=snowfall_sum&timezone=auto', ctrl)
+    .then(r => r.json())
+    .then(j => {
+      const tt = j && j.daily && j.daily.time, v = j && j.daily && j.daily.snowfall_sum;
+      if (!Array.isArray(tt) || !Array.isArray(v) || tt.length < 3000) throw new Error('snow');
+      const ym = {};
+      tt.forEach((ds, i) => {
+        const m = +String(ds).slice(5, 7) - 1, y = +String(ds).slice(0, 4), x = v[i];
+        if (!(m >= 0 && m < 12) || !isFinite(y) || typeof x !== 'number' || !isFinite(x)) return;
+        const k = y * 12 + m;
+        (ym[k] = ym[k] || [0, 0])[1]++;
+        if (x >= 1) ym[k][0]++;
+      });
+      const acc = Array.from({ length:12 }, () => []);
+      Object.keys(ym).forEach(k => { if (ym[k][1] >= 20) acc[k % 12].push(ym[k][0]); });
+      if (acc.some(a => a.length < 10)) throw new Error('snow');
+      rec.days = acc.map(a => a.reduce((s, x) => s + x, 0) / a.length);
       rec.src = 'ERA5 1991–2020 (Open-Meteo)';
     })
     .catch(() => { rec.failed = true; })
@@ -4128,6 +4180,32 @@ function buildEnvironment(host) {
     fact('Latitude', fmt(Math.abs(lat), 2) + '° ' + (lat < 0 ? 'S' : 'N')),
     fact('Altitude', fmt(S.alt || 0, 0) + ' m')
   ]));
+  /* snow, in words — the chart draws no snowflake that a student could
+     miss: days with ≥1 cm of fresh snow, ERA5 1991–2020 read at the site's
+     own coordinates, provisional like the web normals. Refreshed when the
+     reanalysis arrives. */
+  const snowYear = el('div', { class:'facts' }, [fact('Snow days a year', t('loading…'))]);
+  const snowWhen = el('div', { class:'facts' }, [fact('Months with snow', t('loading…'))]);
+  rail.appendChild(snowYear); rail.appendChild(snowWhen);
+  const snowMonths = days => {
+    const ms = [];
+    days.forEach((d, i) => { if (d >= 0.5) ms.push(MON3[i]); });
+    return ms.length ? ms.join(' · ') : '—';
+  };
+  function paintSnow() {
+    const rec = snowFor(S, () => { if (host.isConnected) paintSnow(); });
+    const yv = snowYear.querySelector('b'), mv = snowWhen.querySelector('b');
+    if (!rec.days) {
+      yv.textContent = t(rec.failed ? 'unavailable' : 'loading…');
+      mv.textContent = t(rec.failed ? 'unavailable' : 'loading…');
+      return;
+    }
+    yv.textContent = fmt(rec.days.reduce((a, d) => a + d, 0), 1);
+    mv.textContent = snowMonths(rec.days);
+  }
+  paintSnow();
+  host.appendChild(hint('env-snow',
+    'Like a winter tree where the winter is very strong: where it snows, say so in words — this page draws no snow the eye could miss. Snow days here count ERA5 days with at least 1 cm of fresh snow, 1991–2020, read at these exact coordinates: provisional reanalysis, like the web normals on the setup page, not a station observation — and reanalysis smooths the mountains, so a high site reads fewer snow days than its station. In Suwałki and the Tatras that is several dozen days a year, November to April; in Szczecin, a handful. Where the count is not zero, carry it into the design: snow loads the roof, drifts against the parapet, buries the eaves and can close the road — a cold-climate site earns pitch, cleared access and detailing that survives the thaw.'));
   const pMax = Math.max(10, Math.ceil(Math.max.apply(null, C.p) / 10) * 10);
   const tLo = Math.min(0, Math.floor(Math.min.apply(null, C.t) / 5) * 5);
   const tHi = Math.ceil(Math.max.apply(null, C.t) / 5) * 5;
@@ -4729,11 +4807,14 @@ function buildEnvironment(host) {
     csv: () => {
       const rows = [['Parameter', 'Value']], sp = sunPos(ENV.doy, ENV.h, lat, lon, tz), pp = plotPos(), ss = sunriseSunset(ENV.doy, lat, lon, tz), M = roofModel(G, RF);
       const wx = weatherOf(ENV.doy);
+      const snowRec = SNOW[lat.toFixed(2) + ',' + lon.toFixed(2)];
+      const snowTot = snowRec && snowRec.days ? +snowRec.days.reduce((a, d) => a + d, 0).toFixed(1) : '';
       rows.push(['Plot latitude (°)', +pp.lat.toFixed(6)], ['Plot longitude (°)', +pp.lon.toFixed(6)], ['Day', doyLabel(ENV.doy)], ['Solar time (h)', +ENV.h.toFixed(2)],
         ['Month', MONTHS_EN[wx.m]], ['Mean temperature of the month (°C)', C.t[wx.m]], ['Precipitation of the month (mm)', C.p[wx.m]],
         ['Mean temperature at the day, interpolated (°C)', +wx.T.toFixed(1)], ['Precipitation at the day, interpolated (mm/month)', +wx.P.toFixed(0)],
         ['Sun drawn: warmth 0–1 (0 to 28 °C)', +wx.warm.toFixed(2)], ['Cloud drawn: 0–1 (0 to 150 mm)', +wx.cloud.toFixed(2)], ['Rain drawn: 0–1 (10 to 150 mm)', +wx.rain.toFixed(2)],
         ['Sun altitude (°)', +sp.alt.toFixed(1)], ['Sun azimuth (°)', +sp.azi.toFixed(1)],
+        ['Snow days a year (days ≥1 cm, ERA5 1991–2020)', snowTot], ['Snow source', 'ERA5 1991–2020 via Open-Meteo (provisional reanalysis)'],
         ['Sunrise (solar time)', ss ? hm(ss.rise) : ''], ['Sunset (solar time)', ss ? hm(ss.set) : ''], ['Day length (h)', ss ? +(ss.set - ss.rise).toFixed(2) : ''],
         ['Ridge height (m)', +M.ridge.toFixed(2)], ['Ridge shadow length (m)', sp.alt > 0.5 ? +(M.ridge / Math.tan(sp.alt * RAD)).toFixed(2) : ''],
         ['Base map', ENV.map === 'none' ? 'none' : TILE_SRC[ENV.map].attr]);
@@ -6547,12 +6628,22 @@ function buildRoof(host) {
    * roof, which has no pitch to judge.
    */
   const pitchNow = () => {
-    if (RF.n === 0) return null;
+    const M = roofModel(G, RF);
+    const cp = collectPlane(M);
+    let th = RF.th;
+    if (cp) th = cp.pieces.reduce((p, q) => q.area > p.area ? q : p, cp.pieces[0]).f.th;
+    else {
+      let best = null;
+      M.pieces.forEach(pc => { if (pc.f.th > 0 && (!best || pc.area > best.area)) best = pc; });
+      if (!best) return null;   // nowhere a pitch to judge
+      th = best.f.th;
+    }
+    if (!(th > 0)) return null;
     const own = RF.sol && RF.sol.tech !== 'none', tech = own ? RF.sol.tech : 'pv';
     const opt = solarOptimum(S, tech, slopeAz(), C.t);
-    const hm = horizontalMonths(S), tp = tiltedYear(hm.H, lat, RF.th, slopeAz());
+    const hm = horizontalMonths(S), tp = tiltedYear(hm.H, lat, th, slopeAz());
     const y = solarYield(tech, tp.mon, lat, C.t);
-    return { pct:Math.round(100 * (opt.y > 0 ? y / opt.y : 0)), opt, plane:tp.year, tech, own, measured:hm.measured };
+    return { pct:Math.round(100 * (opt.y > 0 ? y / opt.y : 0)), opt, plane:tp.year, tech, own, measured:hm.measured, th };
   };
   /** Everything the page says about the field: what fits, its area, the sun
       on its plane and the year's output. */
@@ -6561,7 +6652,8 @@ function buildRoof(host) {
     if (!sol || sol.tech === 'none') return null;
     const opt = solarOptimum(S, sol.tech, slopeAz(), C.t);
     const fld = solarField(G, RF, lat, opt.tilt);
-    const tilt = RF.n === 0 ? opt.tilt : RF.th;
+    const cpl = collectPlane(roofModel(G, RF));
+    const tilt = cpl ? cpl.pieces.reduce((p, q) => q.area > p.area ? q : p, cpl.pieces[0]).f.th : (RF.n === 0 ? opt.tilt : RF.th);
     const hm = horizontalMonths(S), tp = tiltedYear(hm.H, lat, tilt, slopeAz());
     const perM2 = solarYield(sol.tech, tp.mon, lat, C.t);
     const md = SOLAR_TECH[sol.tech], n = fld && fld.fits ? fld.c * fld.r : 0, area = n * md.w * md.h;
@@ -6764,10 +6856,10 @@ function buildRoof(host) {
     refreshSolar();
     const pn = pitchNow();
     if (!pn) { pillRoof.className = 'pill empty'; pillRoof.textContent = t('Flat — no pitch to judge; racked collectors take the best pitch'); return; }
-    const ni = nearestIdeal(RF.th), facing = COMPASS8[Math.round(slopeAz() / 45) % 8];
+    const ni = nearestIdeal(pn.th), facing = COMPASS8[Math.round(slopeAz() / 45) % 8];
     const none = !collectPlane(roofModel(G, RF)) ? ' — ' + t('no slope faces the main facade: the ridges run front to back') : '';
     pillRoof.className = 'pill ' + (pn.pct >= 97 ? 'ok' : pn.pct >= 90 ? 'empty' : 'bad');
-    pillRoof.textContent = t('Slope facing') + ' ' + facing + ', ' + fmt(RF.th, 0) + '° — ' + t('nearest the ' + ni.k + ' ideal') + ' (' + fmt(ni.a, 0) + '°) · '
+    pillRoof.textContent = t('Slope facing') + ' ' + facing + ', ' + fmt(pn.th, 0) + '° — ' + t('nearest the ' + ni.k + ' ideal') + ' (' + fmt(ni.a, 0) + '°) · '
       + t('best pitch here') + ' ' + pn.opt.tilt + '°' + none;
   }
   /* The shared orbit camera (see camAxes), in the plan's own frame: it
@@ -6785,9 +6877,11 @@ function buildRoof(host) {
     let pcs = cp ? cp.pieces : null;
     if (!pcs) {
       const byKey = {};
-      M.pieces.forEach(pc => (byKey[pc.key] = byKey[pc.key] || []).push(pc));
+      M.pieces.forEach(pc => { if (pc.f.th > 0) (byKey[pc.key] = byKey[pc.key] || []).push(pc); });
+      const keys = Object.keys(byKey);
+      if (!keys.length) return null;   // pitched parts but no plane to stand the gauge on
       const area = k => byKey[k].reduce((a, pc) => a + pc.area, 0);
-      pcs = byKey[Object.keys(byKey).reduce((p, q) => !p || area(q) > area(p) ? q : p, null)];
+      pcs = byKey[keys.reduce((p, q) => !p || area(q) > area(p) ? q : p, null)];
     }
     const f = pcs[0].f;
     let top = null;
@@ -6895,7 +6989,7 @@ function buildRoof(host) {
           const z = M.zAt(+ch.x, +ch.y);
           if (z !== null) {
             const F = CHIMNEY_FAM[ch.fam] || CHIMNEY_FAM.mazowiecki;
-            const q = proj(+ch.x, +ch.y, z + F.h + (F.cap || 0.1) + (F.pots > 0 ? 0.5 : 0.02));
+            const q = proj(+ch.x, +ch.y, z + chimTopH(F));
             ctx.beginPath(); ctx.arc(q[0], q[1] - 8, 5, 0, 6.284); ctx.fillStyle = '#14171a'; ctx.fill();
             stroke(ctx, '#fff', 1.6); ctx.stroke();
           }
@@ -6958,7 +7052,7 @@ function buildRoof(host) {
         const O = proj(gg.ex, gg.ey, H0);
         [{ a:idealW, tag:'winter' }, { a:idealS, tag:'summer' }, { a:idealB, tag:'year' }].forEach(gd => {
           const p1 = proj(gg.x, gg.y, H0 + gg.run * Math.tan(gd.a * RAD));
-          const hit = Math.abs(RF.th - gd.a) < 0.6;
+          const hit = Math.abs((gg.th || RF.th) - gd.a) < 0.6;
           if (hit) hitTag = gd.tag;
           if (hit) stroke(ctx, '#16A34A', 2.6); else stroke(ctx, '#16A34A', 1.4, [5, 4]);
           seg(ctx, O[0], O[1], p1[0], p1[1]); desk.line(O[0], O[1], p1[0], p1[1]);
@@ -6976,7 +7070,8 @@ function buildRoof(host) {
       // the readout: the roof's geometry, and the field's size
       const ff = formFactor(G, RF), ca = collectArea(M);
       const rf = FM(narrow ? 9 : 11), ry = narrow ? 112 : 12;
-      const readoutOf = full => 'θ ' + fmt(RF.n === 0 ? 0 : RF.th, 0) + '° · ' + t('roof') + ' ' + fmt(M.roofArea, 0) + ' m²'
+      const pnR = pitchNow();
+      const readoutOf = full => (pnR ? 'θ ' + fmt(pnR.th, 0) + '° · ' : t('Flat') + ' · ') + t('roof') + ' ' + fmt(M.roofArea, 0) + ' m²'
         + (ca > 0 && full ? ' · ' + t('slope facing the main facade') + ' ' + fmt(ca, 0) + ' m²' : '')
         + ' · ' + t('ridge') + ' ' + fmt(M.ridge, 1) + ' m · FF ' + fmt(ff.ff, 2) + (hitTag && full ? ' · = ' + t(hitTag) + ' ' + t('ideal') : '');
       // the long form while it clears the badges on the right, the short one where the model is narrower
@@ -7307,7 +7402,7 @@ function buildRoof(host) {
     const z = M.zAt(+ch.x, +ch.y);
     if (z === null) return null;
     const F = CHIMNEY_FAM[ch.fam] || CHIMNEY_FAM.mazowiecki;
-    return { x:+ch.x, y:+ch.y, z0:z, z1:z + F.h + (F.cap || 0.1) + (F.pots > 0 ? 0.5 : 0.02) };
+    return { x:+ch.x, y:+ch.y, z0:z, z1:z + chimTopH(F) };
   };
   const chimHandleAt = (clientX, clientY) => {
     if (!roofPanel.W) return false;
@@ -7418,8 +7513,22 @@ function buildOpenings(host) {
     return 100;
   }
   const overallScore = () => FACES.reduce((s, f) => s + facadeScore(f), 0) / FACES.length;
+  /** Window shape, 0–100: tall glass for deep light, wide glass for even
+      light and room for heating below. Depth from the head — daylight
+      reaches roughly twice the head height (Lechner) — against the room
+      depth this side faces; spread from the mean width against a generous
+      2.4 m bay. A teaching score, like the WWR fit. */
+  function shapeScore(f) {
+    const ws = winsOf(f);
+    if (!ws.length) return null;
+    const w = ws.reduce((a, x) => a + x.w.w, 0) / ws.length;
+    const H = ws[0].w.rows[0].head;
+    const depth = (f === 'S' || f === 'N') ? G.D : G.L;
+    return 100 * (clamp(2 * H / Math.max(1, depth), 0, 1) + clamp(w / 2.4, 0, 1)) / 2;
+  }
   SCORES.openings = () => ({ 'WWR fit /100':Math.round(overallScore()),
     'Shading fit /100 by facade':Object.fromEntries(FACES.map(f => [f, shadingScore(f) === null ? null : Math.round(shadingScore(f))])),
+    'Shape fit /100 by facade':Object.fromEntries(FACES.map(f => [f, shapeScore(f) === null ? null : Math.round(shapeScore(f))])),
     'Windows by facade':Object.fromEntries(FACES.map(f => [f + ' (faces ' + COMPASS8_EN[Math.round(faceAz(f) / 45) % 8] + ')', winCount(f)])) });
 
   /* --- the workbench: where the glass goes on the left — the side under
@@ -7436,6 +7545,8 @@ function buildOpenings(host) {
     'WWR bands follow Ching &amp; Shapiro’s classification (low &lt;10%, moderate 10–20%, high 20–30%, very high &gt;30%; p.242) read against Lechner’s orientation guidance — south takes the most glass, north the least of the sunlit faces, and east/west are minimised where the climate leans hot (pp.130–132, 416). The band shown for %1 in this climate is <b>%2–%3%</b>. North is held to 5–10 % and starts at 5 %: it takes almost no winter sun and loses heat all year. That is this app’s bioclimatic choice, not a rule of any code — the code sets no maximum, only a floor: rooms for people need window area of at least 1:8 of the floor (WT §57), and the reading for the north side says how much room area its glass can serve. It is this app’s own synthesis across sources, not a single citable number — treat it as a target to aim for, not a pass/fail test. Each side is judged by the way it really faces once the plan is turned on Site, and its WWR applies to every wall of the plan on that side — a wing’s, a recess’s, a patio’s. On two or three storeys that glass is shared equally between the floors: each wall takes one window per floor, all of one width, the sill and head measured from each floor, the head stopping 0.10 m under the floor above. The WWR fit badge averages this test across the four sides.',
     [t(faceName[curFace]), fmt(wwrLo0 * 100, 0), fmt(wwrHi0 * 100, 0)])); }
 
+  host.appendChild(hint('open-shape',
+    'Tall glass, deep light; wide glass, even light. Daylight reaches roughly twice the window’s head height into the room (Lechner, <i>Heating, Cooling, Lighting</i>), so a higher head lights deeper floor — a 2.1 m head reaches about 4 m in — while a wider window spreads that light sideways and leaves wall below for heating, the radiator’s usual place under the glass. Strip windows that run long and low light a room evenly from end to end (Ching &amp; Shapiro, on window size, placement and daylight uniformity). The Shape fit badge averages the two: depth from the head against the room depth this side faces, spread from the mean window width against a generous 2.4 m bay. Like the WWR fit, it is this application’s own synthesis across sources, not a number from any book — compare sides with it; a tall narrow south window and a long low one can both score well, for different reasons.'));
   const cFace = segCtl(null, FACES.map(f => ({ value:f, label:faceName[f] })), curFace,
     v => { curFace = v; turnTo(v); syncFaceCtls(); refreshOpenings(); });
   /** Turn the camera to the side under study: square to it in an
@@ -7918,12 +8029,13 @@ function buildOpenings(host) {
       };
       fitBadge(0, overallScore(), 'WWR fit /100');
       fitBadge(1, shadingScore(curFace), 'Shading fit /100');
+      fitBadge(2, shapeScore(curFace), 'Shape fit /100');
     },
     csv: () => {
-      const rows = [['Facade side', 'Faces', 'Windows', 'Glass (m²)', 'WWR', 'Sill (m)', 'Head (m)', 'Overhang depth (m)', 'Overhang count', 'Fin depth (m)', 'Fin count', 'Fin side', 'WWR fit (0–100)', 'Shading fit (0–100)']];
-      FACES.forEach(f => { const o = OPEN[f], ws = winsOf(f), sc = shadingScore(f);
+      const rows = [['Facade side', 'Faces', 'Windows', 'Glass (m²)', 'WWR', 'Sill (m)', 'Head (m)', 'Overhang depth (m)', 'Overhang count', 'Fin depth (m)', 'Fin count', 'Fin side', 'WWR fit (0–100)', 'Shading fit (0–100)', 'Shape fit (0–100)']];
+      FACES.forEach(f => { const o = OPEN[f], ws = winsOf(f), sc = shadingScore(f), sh = shapeScore(f);
         rows.push([faceName[f], COMPASS8_EN[Math.round(faceAz(f) / 45) % 8], winCount(f), +ws.reduce((a, x) => a + x.w.area, 0).toFixed(2), fmt(o.wwr, 2), fmt(o.sillZ, 2), fmt(o.headZ, 2),
-          fmt(o.ovD, 2), o.ovN, fmt(o.finD, 2), o.finN, o.finSide, Math.round(facadeScore(f)), sc === null ? '' : Math.round(sc)]); });
+          fmt(o.ovD, 2), o.ovN, fmt(o.finD, 2), o.finN, o.finSide, Math.round(facadeScore(f)), sc === null ? '' : Math.round(sc), sh === null ? '' : Math.round(sh)]); });
       rows.push(['Sunspace', SUNSP.on ? SUNSP.face : 'off', '', '', '', '', '', fmt(SUNSP.depth, 2), '', '', '', '', '', fmt(SUNSP.widthFrac, 2)]);
       rows.push(['Roof window size', RW_SIZES[RWIN.size].label]);
       if (RF.n === 0) rows.push(['Skylights', RWIN.s]);
@@ -11833,14 +11945,15 @@ function initSetup() {
   /* The same climograph at any size: bars on the left (precipitation)
      scale, the line on the right (temperature) scale, both drawn full height
      so the upper scale reads at every size. k scales type and strokes up. */
-  function paintClimoInto(cv, c, k) {
+  function paintClimoInto(cv, c, k, snow) {
     const W = cv.clientWidth, H = cv.clientHeight;
     if (!W || !H) return;
+    const snowy = Array.isArray(snow) && snow.some(d => d >= 0.5);
     const dpr = window.devicePixelRatio || 1;
     cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
     const g = cv.getContext('2d');
     g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
-    const x0 = 30 * k, x1 = W - 26 * k, y0 = 8 * k, y1 = H - 19 * k, bw = (x1 - x0) / 12;
+    const x0 = 30 * k, x1 = W - 26 * k, y0 = 8 * k, y1 = H - (snowy ? 28 : 19) * k, bw = (x1 - x0) / 12;
     const ps = c.p.filter(v => v !== null && v >= 0), ts = c.t.filter(v => v !== null);
     const pMax = Math.max(50, Math.ceil(Math.max(0, ...ps) / 50) * 50);
     const tLo = Math.min(0, Math.floor(Math.min(0, ...ts) / 10) * 10), tHi = Math.max(30, Math.ceil(Math.max(0, ...ts) / 10) * 10);
@@ -11858,9 +11971,27 @@ function initSetup() {
     c.t.forEach((v, i) => { if (v === null) { on = false; return; } const x = x0 + (i + 0.5) * bw; if (on) g.lineTo(x, ty(v)); else g.moveTo(x, ty(v)); on = true; });
     g.stroke();
     g.fillStyle = '#8a9095'; g.textAlign = 'center';
-    MON3.forEach((m, i) => g.fillText(m.slice(0, 1), x0 + (i + 0.5) * bw, H - 7 * k));
+    MON3.forEach((m, i) => g.fillText(m.slice(0, 1), x0 + (i + 0.5) * bw, H - (snowy ? 17 : 7) * k));
+    if (snowy) {
+      g.font = (8.5 * k) + 'px ' + MONO; g.fillStyle = '#4A90C8';
+      snow.forEach((d, i) => { if (d >= 0.5) g.fillText('❄' + Math.round(d), x0 + (i + 0.5) * bw, H - 6 * k); });
+    }
   }
-  function drawClimo(c) { paintClimoInto(climo, c, 1); }
+  function drawClimo(c) { paintClimoInto(climo, c, 1, snowNow()); }
+  /* snow follows the coordinates as they are typed, fetched once they
+     settle — ERA5 days with ≥1 cm of fresh snow, provisional reanalysis */
+  let snowTimer = 0, snowKey = '';
+  function snowNow() {
+    const la = parseFloat(lat.value), lo = parseFloat(lon.value);
+    if (!isFinite(la) || !isFinite(lo)) return null;
+    const key = la.toFixed(2) + ',' + lo.toFixed(2);
+    if (key !== snowKey) {
+      snowKey = key; clearTimeout(snowTimer);
+      snowTimer = setTimeout(() => snowFor({ lat:la, lon:lo }, () => { drawClimo(readNormals()); drawClimoBig(); }), 800);
+    }
+    const rec = SNOW[key];
+    return rec && rec.days ? rec.days : null;
+  }
   /* --- the chart enlarges like the map: press it and the same twelve
      months come back larger, following the boxes as they are typed. */
   const climoBig = $('#setupClimoBig'), climoOverlay = $('#setupClimoOverlay');
@@ -11869,7 +12000,7 @@ function initSetup() {
   function drawClimoBig() {
     if (!climoOpen || !climoBig || !climoBig.isConnected) return;
     const k = Math.min(1.8, Math.max(1.2, climoBig.clientWidth / 560));
-    paintClimoInto(climoBig, readNormals(), k);
+    paintClimoInto(climoBig, readNormals(), k, snowNow());
   }
   function openClimo() {
     if (climoOpen) return;
@@ -13201,6 +13332,9 @@ Object.assign(PT, {
   "Mean annual precipitation": "Średnie roczne opady",
   "Months above 10 °C": "Miesiące powyżej 10 °C",
   "Coldest month": "Najzimniejszy miesiąc",
+  "Snow days a year": "Dni śniegu w roku",
+  "Months with snow": "Miesiące ze śniegiem",
+  "Snow days": "Dni śniegu",
   "warmest": "najcieplejszy",
   "in the summer half-year": "w półroczu letnim",
   "The year, month by month": "Rok, miesiąc po miesiącu",
@@ -13653,6 +13787,7 @@ Object.assign(PT, {
   "Blocks winter sun almost as much as summer — too deep for this climate": "Blokuje zimowe słońce prawie tak jak letnie — za głębokie na ten klimat",
   "WWR fit /100": "Dopasowanie WWR /100",
   "Shading fit /100": "Dopasowanie zacieniania /100",
+  "Shape fit /100": "Dopasowanie kształtu /100",
   "Winter shelter /100": "Abrigo de inverno /100",
   "The two {}–{} scores sit in the corner of the model — winter shelter, summer tunnel — with the Olgyay verdict on the pair below.": "Dwie oceny {}–{} siadają w rogu modelu — osłona zimowa, tunel letni — z werdyktem Olgyaya o parze poniżej.",
   "Summer tunnel /100": "Tunel letni /100",
@@ -14007,6 +14142,10 @@ Object.assign(PT, {
 
 /* --- the long captions, keyed by identifier ----------------------------- */
 Object.assign(PT_HINT, {
+  'env-snow':
+    'Jak drzewo zimą tam, gdzie zima bardzo mocna: gdzie pada śnieg, powiedz to słowami — ta strona nie rysuje śniegu, który oko mogłoby przeoczyć. Dni śniegu liczą tu dni ERA5 z co najmniej 1 cm świeżego śniegu, 1991–2020, czytane w tych dokładnych współrzędnych: prowizoryczna reanaliza, jak normy sieciowe na stronie startowej, nie obserwacja stacji — a reanaliza wygładza góry, więc wysokie miejsce czyta mniej dni śniegu niż jego stacja. W Suwałkach i w Tatrach to kilkadziesiąt dni w roku, od listopada do kwietnia; w Szczecinie — kilka. Gdzie liczba nie jest zerem, zanieś ją do projektu: śnieg obciąża dach, nawiewa na attykę, zasypuje okapy i potrafi zamknąć drogę — zimne miejsce zarabia nachylenie, odśnieżony dojazd i detal, który przeżyje odwilż.', 
+  'open-shape':
+    'Wysokie szkło, głębokie światło; szerokie szkło, równe światło. Światło dzienne sięga około dwukrotności wysokości nadproża w głąb pokoju (Lechner, <i>Heating, Cooling, Lighting</i>), więc wyższe nadproże oświetla głębszą podłogę — nadproże 2,1 m sięga około 4 m w głąb — a szersze okno rozprasza to światło na boki i zostawia ścianę poniżej na ogrzewanie, zwykłe miejsce grzejnika pod szkłem. Okna wstęgowe, długie i niskie, oświetlają pokój równo od końca do końca (Ching &amp; Shapiro o rozmiarze, rozmieszczeniu i równomierności światła dziennego). Odznaka kształtu uśrednia te dwa: głębokość z nadproża przeciw głębokości pokoju, ku której ta strona patrzy, rozpiętość ze średniej szerokości okien przeciw hojnym 2,4 m wnęki. Jak dopasowanie WWR, to własna synteza tej aplikacji przez źródła, nie liczba z żadnej książki — porównuj nią strony; wysokie wąskie okno południowe i długie niskie potrafią punktować dobrze, z różnych powodów.', 
   'roof-divide':
     'Jeden budynek, kilka dachów — płaski stropodach obok stromego dachu: podziel dłuższy bok (do trzech części), daj każdej części własne połacie i nachylenie i przeciągnij podział na modelu albo powyżej. Odznaki czytają największą część.',
 
