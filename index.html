@@ -384,6 +384,9 @@ footer{border-top:1px solid var(--line); margin-top:26px; background:var(--wash)
 .climkey i.kp{background:#bcd2ea}
 .climkey i.kt{height:2px; background:#D97706; margin-left:6px}
 .setup .cta{display:flex; flex-direction:column; align-items:stretch; gap:8px; margin:0 0 6px}
+.s-go{grid-column:1/-1; display:flex; align-items:stretch; gap:12px; flex-wrap:wrap; margin-top:12px; flex:1 1 100%}
+.s-go .zonechip{flex:0 0 auto; align-self:center}
+.s-go .btn{flex:1 1 280px; padding:13px 14px; font-size:14.5px}
 .setup .cta .zonechip{justify-content:center}
 .setup .cta .btn{padding:10px 14px; font-size:13.5px}
 /* a tablet: the site and the normals side by side, the climate and the notes
@@ -527,6 +530,8 @@ footer{border-top:1px solid var(--line); margin-top:26px; background:var(--wash)
 .bench .readings .pill{white-space:normal; line-height:1.5}
 .bench.env{grid-template-columns:262px minmax(0,1fr) 300px}
 .bench .viewbar{display:flex; flex-wrap:wrap; gap:4px; align-items:center; margin:0 0 6px}
+.zoomctl{display:inline-flex; gap:2px; align-items:center; margin-left:8px}
+.zoomctl .btn{min-width:26px}
 .bench .viewbar .btn{min-width:34px}
 .bench .viewbar .hint{margin-left:6px; font-size:11.5px}
 .bench .rgroup.palette{display:grid; grid-template-columns:1fr 1fr; gap:4px}
@@ -686,41 +691,8 @@ details.more[open] > summary{color:var(--ink)}
               </div>
               <span class="sub" data-t="fldOpSub">A new building can still choose its orientation and its form; a renovation has to take both as found.</span>
             </div>
-          <div class="gh" data-t="ghImport">Imported model</div>
-          <div class="sbox">
-            <div class="fld">
-              <label for="inpModelFile" data-t="fldImportFile">Model file</label>
-              <input type="file" id="inpModelFile" accept=".obj,.dxf,.ifc">
-              <span class="sub" data-t="fldImportSub">A model drawn in another app, in a format this application also exports: .obj, .dxf or .ifc. The file is read in this browser and never uploaded. Its overall size reshapes the plan below, and its surfaces show as a ghost in the 3D views; the plan itself stays rectangular.</span>
-            </div>
-            <div class="fld">
-              <label data-t="fldImportUnit">File units</label>
-              <div class="seg" id="segImportUnit" role="group" aria-label="File units">
-                <button type="button" data-u="1" aria-pressed="true">m</button>
-                <button type="button" data-u="0.01" aria-pressed="false">cm</button>
-                <button type="button" data-u="0.001" aria-pressed="false">mm</button>
-              </div>
-            </div>
-            <div class="fld">
-              <label data-t="fldImportUp">Up axis in the file</label>
-              <div class="seg" id="segImportUp" role="group" aria-label="Up axis in the file">
-                <button type="button" data-up="Y" aria-pressed="true">Y</button>
-                <button type="button" data-up="Z" aria-pressed="false">Z</button>
-              </div>
-            </div>
-            <span class="fieldstatus" id="importStatus"></span>
-            <div class="srcrow">
-              <button type="button" class="btn solid" id="btnImportAdopt" data-t="btnImportAdopt" disabled>Adopt as the massing</button>
-              <button type="button" class="btn" id="btnImportRemove" data-t="btnImportRemove" disabled>Remove</button>
-            </div>
-            <div class="fld">
-              <label for="inpStudyFile" data-t="fldStudyFile">Study file</label>
-              <input type="file" id="inpStudyFile" accept=".json,application/json">
-              <span class="sub" data-t="fldStudySub">A study saved from this app — restores the site, the normals and every decision, and opens the design where it stopped.</span>
-            </div>
           </div>
         </div>
-
 
         <div class="s-norm panel normals" id="normalsBlock">
           <div class="panel-head"><div class="panel-title">
@@ -770,6 +742,39 @@ details.more[open] > summary{color:var(--ink)}
         <div class="s-sce" id="sceBlock"></div>
 
         <div class="s-side">
+          <div class="gh" data-t="ghImport">Imported model</div>
+          <div class="sbox">
+            <div class="fld">
+              <label for="inpModelFile" data-t="fldImportFile">Model file</label>
+              <input type="file" id="inpModelFile" accept=".obj,.dxf,.ifc">
+              <span class="sub" data-t="fldImportSub">A model drawn in another app, in a format this application also exports: .obj, .dxf or .ifc. The file is read in this browser and never uploaded. Its overall size reshapes the plan below, and its surfaces show as a ghost in the 3D views; the plan itself stays rectangular.</span>
+            </div>
+            <div class="fld">
+              <label data-t="fldImportUnit">File units</label>
+              <div class="seg" id="segImportUnit" role="group" aria-label="File units">
+                <button type="button" data-u="1" aria-pressed="true">m</button>
+                <button type="button" data-u="0.01" aria-pressed="false">cm</button>
+                <button type="button" data-u="0.001" aria-pressed="false">mm</button>
+              </div>
+            </div>
+            <div class="fld">
+              <label data-t="fldImportUp">Up axis in the file</label>
+              <div class="seg" id="segImportUp" role="group" aria-label="Up axis in the file">
+                <button type="button" data-up="Y" aria-pressed="true">Y</button>
+                <button type="button" data-up="Z" aria-pressed="false">Z</button>
+              </div>
+            </div>
+            <span class="fieldstatus" id="importStatus"></span>
+            <div class="srcrow">
+              <button type="button" class="btn solid" id="btnImportAdopt" data-t="btnImportAdopt" disabled>Adopt as the massing</button>
+              <button type="button" class="btn" id="btnImportRemove" data-t="btnImportRemove" disabled>Remove</button>
+            </div>
+            <div class="fld">
+              <label for="inpStudyFile" data-t="fldStudyFile">Study file</label>
+              <input type="file" id="inpStudyFile" accept=".json,application/json">
+              <span class="sub" data-t="fldStudySub">A study saved from this app — restores the site, the normals and every decision, and opens the design where it stopped.</span>
+            </div>
+          </div>
         <div class="s-clim">
           <div class="gh" data-t="ghClimate">The climate they make</div>
           <div class="sbox climbox" id="setupClimoWrap">
@@ -788,10 +793,6 @@ details.more[open] > summary{color:var(--ink)}
               <p class="hint" data-t="climoSheetHint">The same twelve months, larger: bars read precipitation on the left scale, the line reads mean temperature on the right. It follows the boxes — type there and this follows.</p>
             </div>
           </div>
-        </div>
-        <div class="s-cta cta">
-          <span class="zonechip" id="zonePreview">—</span>
-          <button class="btn solid" id="btnGo" data-t="btnGo">Work through the design</button>
         </div>
         <div class="s-about">
           <div class="explain">
@@ -816,8 +817,13 @@ details.more[open] > summary{color:var(--ink)}
           </div>
           <p class="note" data-t="privacyNote">Nothing is uploaded; your work stays in this browser. What leaves it, only to fill something in: the coordinates, to two elevation services when you press Look up and to Open-Meteo when you press Fetch web normals; the map area, to Esri and OpenStreetMap for the tiles; the plot’s position, to OpenStreetMap’s Overpass servers for the neighbouring buildings and, once you move the plot, to Open-Meteo for the ground’s height and to Nominatim for its municipality; an address you search for, to OpenStreetMap’s Nominatim.</p>
         </div>
+        <div class="s-go">
+          <span class="zonechip" id="zonePreview">—</span>
+          <button class="btn solid" id="btnGo" data-t="btnGo">Work through the design</button>
+        </div>
         </div>
       </div>
+    </div>
     </div>
   </div>
 
@@ -3625,7 +3631,7 @@ function orbitDrag(cam, set) {
 }
 /** The bar over a model: turn, tilt, look straight down, the page's own
     views, and the line saying where the camera stands. */
-function camBar(stage, cam, rotFn, redraw, views, elMin) {
+function camBar(stage, cam, rotFn, redraw, zoomKey, views, elMin) {
   const bar = el('div', { class:'viewbar' }), line = el('span', { class:'hint' });
   const sync = () => { line.textContent = camWhere(cam, rotFn()); };
   const set = (az, e) => { cam.az = ((az % 360) + 360) % 360; cam.el = clamp(e, elMin, 89.5); sync(); redraw(); };
@@ -3633,11 +3639,59 @@ function camBar(stage, cam, rotFn, redraw, views, elMin) {
    ['▲', 'Look from higher', () => set(cam.az, cam.el + 15)], ['▼', 'Look from lower', () => set(cam.az, cam.el - 15)],
    ['Top', 'Straight down, as a plan', () => set(cam.az, 89.5)]].concat(views(set))
     .forEach(([txt, tip, fn]) => bar.appendChild(el('button', { class:'btn small', text:txt, title:t(tip), 'aria-label':t(tip), onclick:fn })));
+  if (zoomKey) bar.appendChild(zoomCtl(zoomKey, redraw));
   bar.appendChild(line);
   stage.insertBefore(bar, stage.firstChild);
   sync();
   return { set, sync };
 }
+/** Model zoom, per tab: the model grows, the page does not. Each tab keeps
+    its own factor (kept in this browser), ×1.25 a press, 50–250 %, the
+    percentage itself resets. Frames multiply their fitted scale by it, so
+    every projection — and every drag handle solved through one — follows. */
+const MODEL_ZOOM = Object.assign({ site:1, roof:1, openings:1, vent:1 }, (() => {
+  try {
+    const o = JSON.parse(localStorage.getItem('arca-model-zoom') || '{}'), out = {};
+    for (const k of ['site', 'roof', 'openings', 'vent']) if (isFinite(o[k]) && o[k] >= 0.5 && o[k] <= 2.5) out[k] = +o[k];
+    return out;
+  } catch (e) { return {}; }
+})());
+const zoomOf = k => MODEL_ZOOM[k] || 1;
+function zoomCtl(key, redraw) {
+  const lab = () => Math.round(zoomOf(key) * 100) + '%';
+  const wrap = el('span', { class:'zoomctl' });
+  const show = el('button', { class:'btn small', text:lab(), title:'Reset the model size', 'aria-label':'Reset the model size',
+    onclick:() => { MODEL_ZOOM[key] = 1; zoomSave(); show.textContent = lab(); redraw(); } });
+  ZOOMERS[key] = { show, redraw };
+  const step = f => { modelZoom(key, f); };
+  wrap.appendChild(el('button', { class:'btn small', text:'−', title:'Smaller model', 'aria-label':'Smaller model', onclick:() => step(1 / 1.25) }));
+  wrap.appendChild(show);
+  wrap.appendChild(el('button', { class:'btn small', text:'+', title:'Larger model', 'aria-label':'Larger model', onclick:() => step(1.25) }));
+  return wrap;
+}
+const zoomSave = () => { try { localStorage.setItem('arca-model-zoom', JSON.stringify(MODEL_ZOOM)); } catch (e) {} };
+const ZOOMERS = {};
+function modelZoom(key, f) {
+  MODEL_ZOOM[key] = Math.round(clamp(zoomOf(key) * f, 0.5, 2.5) * 100) / 100;
+  zoomSave();
+  const z = ZOOMERS[key];
+  if (z) {
+    if (z.show) z.show.textContent = Math.round(zoomOf(key) * 100) + '%';
+    if (z.redraw) z.redraw();
+  }
+  return MODEL_ZOOM[key];
+}
+/** Pinch on a trackpad, or Ctrl/Cmd + scroll with a mouse: the model grows
+    under the pointer while the page stays put. A plain wheel keeps scrolling
+    the page, as everywhere else. */
+function zoomGesture(canvas, key) {
+  canvas.addEventListener('wheel', ev => {
+    if (!ev.ctrlKey && !ev.metaKey) return;
+    ev.preventDefault();
+    modelZoom(key, Math.exp(-ev.deltaY * (ev.deltaMode === 1 ? 0.03 : 0.008)));
+  }, { passive:false });
+}
+/** An oblique view keeps its height;
 /** An oblique view keeps its height; a plan or an elevation goes back to
     the corner view's when a turn to a side is asked for. */
 const camMidEl = cam => cam.el >= 5 && cam.el <= 80 ? cam.el : ISO_EL;
@@ -5171,7 +5225,7 @@ function buildSite(host) {
     const availV = Math.max(40, bottom - top);
     const sByW = (W / 2 - 16) / (need * ISO_C * Math.SQRT2);
     const sByH = availV / (need * ISO_S * Math.SQRT2 * 2 + Hgt);
-    const s = Math.max(4, Math.min(sByW, sByH));
+    const s = Math.max(4, Math.min(sByW, sByH)) * zoomOf('site');
     // when the width sets the scale, centre the drawing in the height left over
     const ringV = need * ISO_S * Math.SQRT2 * s, slack = Math.max(0, availV - (2 * ringV + Hgt * s));
     const cy = bottom - slack / 2 - ringV;
@@ -5872,7 +5926,7 @@ function buildSite(host) {
     fixBtn.setAttribute('aria-pressed', PL.fixed ? 'true' : 'false');
     fixBtn.classList.toggle('solid', PL.fixed);
   }
-  plateBtns.concat([fixBtn, plateLine]).forEach(k => plateBar.appendChild(k));
+  plateBtns.concat([fixBtn, zoomCtl('site', () => labDraw()), plateLine]).forEach(k => plateBar.appendChild(k));
   stage.insertBefore(plateBar, stage.firstChild);
   syncPlate();
 
@@ -6262,6 +6316,7 @@ function buildSite(host) {
   cv.addEventListener('pointercancel', endDrag);
   cv.addEventListener('pointerup', endDrag);
   cv.addEventListener('pointercancel', endDrag);
+  zoomGesture(cv, 'site');
   refreshLab();
   setDay(355);   // bounds the hour slider to the December day and starts at its noon
 }
@@ -6475,7 +6530,7 @@ function buildRoof(host) {
       plane (or, without one, of the largest pitched plane) — the west end of
       a level ridge — and the eave point straight down its fall. */
   const gaugeOf = M => {
-    if (RF.n === 0 || !M.pieces.length) return null;
+    if ((!M.zones.some(z => z.n !== 0)) || !M.pieces.length) return null;
     const cp = collectPlane(M);
     let pcs = cp ? cp.pieces : null;
     if (!pcs) {
@@ -6506,7 +6561,7 @@ function buildRoof(host) {
     const R = Math.max(...[[bb[0] - gm, bb[1] - gm], [bb[2] + gm, bb[1] - gm], [bb[2] + gm, bb[3] + gm], [bb[0] - gm, bb[3] + gm]].map(q => Math.hypot(q[0], q[1])));
     const uMin = -CAM_K * R, uMax = CAM_K * R, vMin = -CAM_K * R * A.se, vMax = CAM_K * (R * A.se + zTop * A.ce);
     const availW = right - left, availV = Math.max(40, bottom - top);
-    const s = Math.max(3, Math.min(availW / (uMax - uMin), availV / Math.max(1e-6, vMax - vMin)));
+    const s = Math.max(3, Math.min(availW / (uMax - uMin), availV / Math.max(1e-6, vMax - vMin))) * zoomOf('roof');
     return { cx:left + (availW - (uMax - uMin) * s) / 2 - uMin * s, cy:bottom - (availV - (vMax - vMin) * s) / 2 + vMin * s,
       s, H0:M.H0, M, gg, A };
   };
@@ -6758,7 +6813,7 @@ function buildRoof(host) {
   /* --- the bar over the model: turn, tilt, the plan, the main facade's
      elevation, the end elevation (the roof's true pitch), and the building
      seen from true south or north ------------------------------------------- */
-  const roofCam = camBar(stage, RCAM, () => G.rot, () => { if (roofPanel) roofPanel.draw(); }, set => [
+  const roofCam = camBar(stage, RCAM, () => G.rot, () => { if (roofPanel) roofPanel.draw(); }, 'roof', set => [
     ['Front', 'Square to the main facade, level: its elevation', () => set(270, 0)],
     ['Side', 'Square to the end wall, level: the roof’s true pitch', () => set(Math.cos(RCAM.az * RAD) >= 0 ? 0 : 180, 0)],
     ['From S', 'Stand to the true south of the building', () => set(camAzFrom(G.rot, 180), camMidEl(RCAM))],
@@ -6970,6 +7025,7 @@ function buildRoof(host) {
   const endDrag = () => { orbit.end(); rdrag = fdrag = false; if (ddiv >= 0) { ddiv = -1; buildRoofUI(); roofDraw(); } rcv.style.cursor = 'default'; };
   rcv.addEventListener('pointerup', endDrag);
   rcv.addEventListener('pointercancel', endDrag);
+  zoomGesture(rcv, 'roof');
 }
 
 function buildOpenings(host) {
@@ -7399,7 +7455,7 @@ function buildOpenings(host) {
     const Rf = Math.max(R + 0.6, ...[[bb[0] - ext, bb[1] - ext], [bb[2] + ext, bb[1] - ext], [bb[2] + ext, bb[3] + ext], [bb[0] - ext, bb[3] + ext]].map(q => Math.hypot(q[0], q[1])));
     const uMin = -CAM_K * Rf, uMax = CAM_K * Rf, vMin = -CAM_K * Rf * A.se, vMax = CAM_K * (Rf * A.se + Mm.ridge * A.ce);
     const availW = right - left, availV = Math.max(40, bottom - top);
-    const s = Math.max(3, Math.min(availW / (uMax - uMin), availV / Math.max(1e-6, vMax - vMin)));
+    const s = Math.max(3, Math.min(availW / (uMax - uMin), availV / Math.max(1e-6, vMax - vMin))) * zoomOf('openings');
     return { cx:left + (availW - (uMax - uMin) * s) / 2 - uMin * s, cy:bottom - (availV - (vMax - vMin) * s) / 2 + vMin * s, s, R, A };
   };
 
@@ -7561,7 +7617,7 @@ function buildOpenings(host) {
   stage.appendChild(el('div', { class:'limitrow readings' }, [pillWWR, pillShade, rwLine]));
   /* the bar over the model: turn, tilt, the plan, the elevation of the side
      under study, the building from true south or north, back to its corner */
-  openCam = camBar(stage, OCAM, () => G.rot, () => { if (openPanel) openPanel.draw(); }, set => [
+  openCam = camBar(stage, OCAM, () => G.rot, () => { if (openPanel) openPanel.draw(); }, 'openings', set => [
     ['Elevation', 'Square to the side under study, level: its elevation', () => set(SQ[curFace], 0)],
     ['From S', 'Stand to the true south of the building', () => set(camAzFrom(G.rot, 180), camMidEl(OCAM))],
     ['From N', 'Stand to the true north of the building', () => set(camAzFrom(G.rot, 0), camMidEl(OCAM))],
@@ -7704,6 +7760,7 @@ function buildOpenings(host) {
   const endDrag = () => { orbit.end(); drag = null; ocv.style.cursor = 'default'; };
   ocv.addEventListener('pointerup', endDrag);
   ocv.addEventListener('pointercancel', endDrag);
+  zoomGesture(ocv, 'openings');
 }
 
  /* --------------------------------------------------------------- 9. VENTILATION -- */
@@ -8873,7 +8930,7 @@ function buildVentilation(host) {
     const availV = Math.max(40, bottom - top);
     const sByW = (W / 2 - 16) / (CAM_K * uMax);
     const sByH = availV / (CAM_K * ((vMax - vMin) + maxH * ax.ce));
-    const s = Math.max(3, Math.min(sByW, sByH));
+    const s = Math.max(3, Math.min(sByW, sByH)) * zoomOf('vent');
     const cy = bottom + CAM_K * s * vMin;
     return { cx, cy, s, H0, ridge, garden, M, ax };
   };
@@ -9068,6 +9125,7 @@ function buildVentilation(host) {
    ['Across the wind', 'Side on to the wind: see it rise over the roof', () => windCam(90, 10)],
    ['Reset', 'Back to the south-west corner', () => setCam(225, ISO_EL)]]
     .forEach(([txt, tip, fn]) => viewBar.appendChild(el('button', { class:'btn small', text:txt, title:t(tip), 'aria-label':t(tip), onclick:fn })));
+  viewBar.appendChild(zoomCtl('vent', () => draw()));
   viewBar.appendChild(camLine);
   camLine.textContent = camText();
   host.appendChild(section('Turn the model',
@@ -10461,6 +10519,7 @@ function buildVentilation(host) {
   };
   cv.addEventListener('pointerup', endDragV);
   cv.addEventListener('pointercancel', endDragV);
+  zoomGesture(cv, 'vent');
   cv.addEventListener('mouseleave', () => { hideTip(); if (ghost) { ghost = null; draw(); } });
   /* Keys, as in CAD: Esc drops the armed tool (or the selection), Delete
      removes the selected item — never while typing in a field. */
@@ -13169,6 +13228,9 @@ Object.assign(PT, {
   "Judge the wind exposure — yours to decide": "Oceń ekspozycję na wiatr — twoja decyzja",
   "Exposure judged": "Ekspozycja oceniona",
   "Pitch": "Nachylenie",
+  "Reset the model size": "Zresetuj rozmiar modelu",
+  "Smaller model": "Mniejszy model",
+  "Larger model": "Większy model",
   "Winter ideal": "Zimowy ideał",
   "Roof parts": "Części dachu",
   "Type": "Typ",
