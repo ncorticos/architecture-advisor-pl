@@ -790,7 +790,7 @@ details.more[open] > summary{color:var(--ink)}
 /* ------------------------------------------------------------ 0. IDENTITY -- */
 const APP = {
   name:        'Architecture Advisor PL',
-  version:     '1.103.0',
+  version:     '1.104.0',
   author:      'Nuno Dinis Cortiços',
   institution: 'Lisbon School of Architecture, Universidade de Lisboa',
   builtWith:   'Claude Opus 5 (Anthropic)',
@@ -5972,7 +5972,7 @@ function buildRoof(host) {
   host.appendChild(section('Pitched roof — catch the low sun',
     'South slope as a solar collector; the same geometry explains deep winter glass'));
   host.appendChild(hint('ori-roof',
-    'A south surface collects most when the noon ray meets it near-perpendicularly: <b>winter = latitude + 15°, summer = latitude − 15°, year-round = latitude</b> (Galloway; Lechner) — here <b>%1° / %2° / %3°</b>. %4. Traditional Portuguese tile roofs sit far shallower, so collectors usually need their own frame — the tension is the lesson.',
+    'A south surface collects most when the noon ray meets it near-perpendicularly: <b>winter = latitude + 15°, summer = latitude − 15°, year-round = latitude</b> (Galloway; Lechner) — here <b>%1° / %2° / %3°</b>. %4. Traditional Polish steep roofs (snow country, often 35–45°) sit near the summer ideal but far below the winter one, so winter collectors usually need their own steeper frame — the tension is the lesson.',
     [fmt(idealW, 0), fmt(idealS, 0), fmt(idealB, 0), t(lean)]));
 
   const cN = segCtl('Roof slopes', [{ value:0, label:'Flat' }, { value:1, label:'Shed' }, { value:2, label:'Gable' }, { value:3, label:'Hip' }], RF.n,
@@ -5991,7 +5991,7 @@ function buildRoof(host) {
     'One score reads the pitch. <b>Pitch · % of best</b> is the year’s sun on the slope facing the main facade at your pitch, as a share of the sun at the best pitch for that direction on this site — found by trying every degree, from the site’s own irradiation (see the collectors below): the yield of the collectors you chose, or, with none, the sun on the plane, which is what PV reads. It changes slowly near the best pitch — 10° off costs about 1 to 2 % — so any pitch a roof can carry scores high; it drops fast only far off. The green gauge beside the slope draws the Galloway–Lechner rules of thumb for a south slope’s noon sun — winter %1°, summer %2°, year-round %3° — on this site’s balance of %4 heating months (mean below 18 °C) to %5 cooling months (above 22 °C); drag the slope parallel to a ray to stand on it. The best pitch for the whole year sits near the year-round figure, lower where summer sun is strong. The 97/90 colour bands are this application’s teaching cuts. A flat roof has no pitch to judge: its collectors take their own frame.',
     [fmt(idealW, 0), fmt(idealS, 0), fmt(idealB, 0), Hm, Cm]));
   host.appendChild(hint('roof-albedo',
-    'The roof colour decides how much of the sun the roof absorbs. It takes the same three colour classes as the walls on Site — light α 0.4, medium 0.5, dark 0.8 (RCCTE Quadro V.5, carried into the REH by Despacho n.º 15793-K/2013) — and the albedo shown is the part reflected, 1 − α. Of the whole envelope the roof meets the high summer sun most squarely, so its colour weighs on the cooling season at least as much as the walls’ do; light surfaces are the standard warm-climate advice (Lechner; Gonçalves &amp; Graça). <b>Albedo fit</b> reads it exactly as the walls are read, against this site’s summer — June to September averages <b>%1 °C</b> here, a <b>%2</b> summer — with no weight at 17 °C or below and full weight at 23 °C or above; the box beneath it gives the albedo itself. This application reads a ceramic tile by its tone: a pale or weathered tile as light red, a deep one as dark red. The roof takes the colour on every slope, in every 3D view.',
+    'The roof colour decides how much of the sun the roof absorbs. It takes the same three colour classes as the walls on Site — light α 0.4, medium 0.5, dark 0.8 (classes after RCCTE Quadro V.5, used here as pure physics) — and the albedo shown is the part reflected, 1 − α. Of the whole envelope the roof meets the high summer sun most squarely, so its colour weighs on the cooling season at least as much as the walls’ do; light surfaces are the standard advice against overheating (Lechner). <b>Albedo fit</b> reads it exactly as the walls are read, against this site’s summer — June to September averages <b>%1 °C</b> here, a <b>%2</b> summer — with no weight at 17 °C or below and full weight at 23 °C or above; the box beneath it gives the albedo itself. This application reads a ceramic tile by its tone: a pale or weathered tile as light red, a deep one as dark red. The roof takes the colour on every slope, in every 3D view.',
     [fmt(sumT, 1), t(sumBand)]));
   function refreshRoofCol() {
     const f = finishOf(RF.col), sc = roofAlbFit();
