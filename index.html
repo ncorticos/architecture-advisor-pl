@@ -790,7 +790,7 @@ details.more[open] > summary{color:var(--ink)}
 /* ------------------------------------------------------------ 0. IDENTITY -- */
 const APP = {
   name:        'Architecture Advisor PL',
-  version:     '1.106.0',
+  version:     '1.106.1',
   author:      'Nuno Dinis Cortiços',
   institution: 'Lisbon School of Architecture, Universidade de Lisboa',
   builtWith:   'Claude Opus 5 (Anthropic)',
@@ -4171,8 +4171,8 @@ function buildEnvironment(host) {
   const settle = found => resite(plotPos(), txt => { if (host.isConnected) findMsg.textContent = txt; }, found || undefined);
   const place = (pos, name, found) => {
     let note = '';
-    if (!inPoland(pos.lat, pos.lon) && inPoland(pos.lat, -Math.abs(pos.lon))) { pos = { lat:pos.lat, lon:-Math.abs(pos.lon) }; note = t('Longitude read as west.') + ' '; }
-    if (!inPoland(pos.lat, pos.lon)) { findMsg.textContent = t('That point lies outside Portugal and its islands.'); return; }
+    if (!inPoland(pos.lat, pos.lon) && inPoland(pos.lat, Math.abs(pos.lon))) { pos = { lat:pos.lat, lon:Math.abs(pos.lon) }; note = t('Longitude read as east.') + ' '; }
+    if (!inPoland(pos.lat, pos.lon)) { findMsg.textContent = t('That point lies outside Poland.'); return; }
     ENV.plot = { lat:pos.lat, lon:pos.lon };
     findMsg.textContent = (name ? name + '. ' : '') + note;
     refreshEnv();
@@ -4184,10 +4184,10 @@ function buildEnvironment(host) {
     const spot = parseSpot(q);
     if (spot) { place(spot, null); return; }
     findMsg.textContent = t('Searching…');
-    fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=pt&addressdetails=1&accept-language=pt&q=' + encodeURIComponent(q))
+    fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=pl&addressdetails=1&accept-language=pl&q=' + encodeURIComponent(q))
       .then(r => r.ok ? r.json() : Promise.reject(new Error(r.status)))
       .then(js => {
-        if (!js || !js.length) { findMsg.textContent = t('Nothing found for that address in Portugal.'); return; }
+        if (!js || !js.length) { findMsg.textContent = t('Nothing found for that address in Poland.'); return; }
         const la = +js[0].lat, lo = +js[0].lon;
         place({ lat:la, lon:lo }, String(js[0].display_name || '').split(',').slice(0, 3).join(','), regionFromAddress(js[0].address, la, lo));
       })
@@ -9992,8 +9992,6 @@ const REFS = [
    'The coordinates and heights of the embedded synoptic stations.', 'https://klimat.imgw.pl/en/meta-dane'],
   ['PN-EN 12831-1:2017, Table NB.',
    'The heating degree-days behind the Site optimum: the winter design temperatures and mean annual temperatures it stretches against.', null],
-  ['AEMET &amp; Instituto de Meteorologia de Portugal. (2011). <i>Atlas climático ibérico / Iberian climate atlas</i>. Madrid and Lisboa: AEMET and IM.',
-   'The Köppen–Geiger classes of the Iberian peninsula, 1971–2000: Csa south of the Montejunto–Estrela ridge and in the inner Douro valley, Csb to the north and on the south-west coast.', 'https://www.ipma.pt/resources.www/docs/publicacoes.site/atlas_clima_iberico.pdf'],
   ['IMGW-PIB. Climate normals 1991–2020 (klimat.imgw.pl).',
    'The observed monthly means and totals embedded for 19 synoptic stations — homogeneous series after WMO-No. 1203.', 'https://klimat.imgw.pl/en/climate-normals/'],
   ['Despacho n.º 15793-K/2013, de 3 de dezembro. Parâmetros térmicos do REH. Diário da República, 2.ª série. (Colour classes as in RCCTE, Decreto-Lei n.º 80/2006, Quadro V.5.)',
@@ -11320,18 +11318,18 @@ Object.assign(STATIC_PT, {
   brandsub: 'Desenho Bioclimático',
   btnReload: 'Mudar de local',
   setupTitle: 'Onde vai construir, e em que clima?',
-  setupBody: 'Esta aplicação não aplica nenhum limite regulamentar. Trabalha a partir da posição do edifício e do clima em que essa posição se encontra, classificado por <b>Köppen–Geiger</b>, porque é essa a classificação com que a literatura de projecto está escrita — e, em Portugal, situado nas <b>zonas climáticas do SCE</b> de Inverno e de Verão, a leitura que o próprio regulamento faz do território. Indique o lugar, as suas coordenadas e a altitude, e depois introduza as normais mensais da estação mais próxima. O que se segue é orientação, compacidade, cobertura, envidraçado, sombreamento, a organização da planta e o movimento do ar — as decisões que se tomam antes de lhes poder ser aplicado qualquer limite.',
+
   fldConc: 'Lugar',
-  fldConcSub: 'Escreva um concelho português, ou o nome que quiser que as exportações levem.',
+
   fldNuts: 'Região',
-  fldNutsSub: 'Semeia as coordenadas com a cidade principal da região e identifica o local. Com a altitude, fixa as zonas climáticas do SCE (Manual SCE, Anexo II), e afina o óptimo do Local para Portugal.',
+
   fldLat: 'Latitude',
   fldLatSub: 'Graus, norte positivo. Semeada a partir da cidade principal da região; substitua-a pela do próprio edifício.',
   fldLon: 'Longitude',
   fldLonSub: 'Graus, este positivo. Leia-a num mapa, sobre o próprio local.',
   fldAlt: 'Altitude do local',
   altLookup: 'Consultar',
-  fldAltSub: 'Metros acima do nível do mar, no edifício, não na câmara municipal. As zonas do SCE são corrigidas por ela.',
+
   fldUse: 'Utilização do edifício',
   useHab: 'Habitação',
   useCS: 'Comércio e serviços',
@@ -11341,7 +11339,7 @@ Object.assign(STATIC_PT, {
   opRenovation: 'Grande intervenção',
   fldOpSub: 'Um edifício novo ainda pode escolher a sua orientação e a sua forma; uma reabilitação tem de tomar ambas como as encontra.',
   normTitle: 'Normais mensais',
-  normBody: 'Köppen–Geiger é calculado, não consultado, pelo que precisa das doze temperaturas médias mensais e dos doze totais mensais de precipitação. Esta aplicação não traz nenhuns: as normais são dados medidos e ela não tem autoridade para os inventar. Tome-os das <i>normais climatológicas</i> do IPMA para a estação mais próxima, de outro serviço nacional, ou de um produto em grelha como o WorldClim, e identifique a fonte para que a exportação a leve consigo. Os quadros preenchem-se sozinhos por esta ordem: a estação do IPMA incorporada a menos de 5 km das coordenadas acima; onde não houver nenhuma, uma mistura das estações mais próximas, ponderada pelo inverso da distância; e, a pedido, normais da web — reanálise para estas coordenadas exactas. Misturar próximas e Buscar na web só se abrem onde nenhuma estação fica a menos de 5 km. Mude as coordenadas e a escolha refaz-se; escreva nos quadros e eles ficam seus.',
+
   ghSite: 'O local',
   ghCoords: 'Coordenadas',
   ghBuilding: 'O edifício',
@@ -11352,23 +11350,23 @@ Object.assign(STATIC_PT, {
   srcBlend: 'Misturar próximas',
   srcWeb: 'Buscar na web',
   fldSource: 'De onde vêm as normais',
-  fldSourceSub: 'Escrita em cada CSV e cada PNG que esta aplicação exporta. Ainda se pode escolher uma estação da lista — fichas em ipma.pt/oclima/normais.clima — ou indicar a sua própria fonte. Estações, misturas e leituras web identificam-se sozinhas.',
+
   btnGo: 'Percorrer o projecto',
   ex1h: 'Fundada na literatura de projecto',
   ex1p: 'Olgyay, Lechner, DeKay e Brown, Hyde, Ching e Shapiro, Brophy e Lewis. Cada orientação nomeia o livro de onde vem, e onde os livros divergem a aplicação di-lo em vez de os reduzir a uma média.',
   ex2h: 'As decisões que precedem os limites',
   ex2p: 'Para onde o edifício se volta, quão compacto é, o que faz a sua cobertura, quanto vidro leva cada fachada, onde ficam os compartimentos em relação ao sol, e como o ar atravessa a planta. Nenhuma destas se resolve com um coeficiente de transmissão térmica máximo.',
   ex3h: 'Um companheiro, não um substituto',
-  ex3p: 'O Construction Advisor responde ao SCE e diz o que uma envolvente não pode exceder. Este traz apenas as zonas climáticas do SCE, como leitura do território, e nenhum dos seus limites. Use-os por essa ordem: dê forma ao edifício aqui, e leve-o depois ali para ser verificado.',
-  privacyNote: 'Nada é carregado; o seu trabalho fica neste navegador. O que sai dele, só para preencher algo: as coordenadas, para dois serviços de elevação quando carrega em Consultar e para o Open-Meteo quando carrega em Buscar na web; a área do mapa, para a Esri e o OpenStreetMap, pelos mosaicos; a posição do lote, para os servidores Overpass do OpenStreetMap, pelos edifícios vizinhos e, quando desloca o lote, para o Open-Meteo, pela altitude do terreno, e para o Nominatim, pelo concelho; uma morada que procure, para o Nominatim do OpenStreetMap.',
+
+
   footTag: 'Um conselheiro de desenho bioclimático para estudantes de arquitectura, escrito para as decisões que se tomam antes de um regulamento ter algo a dizer sobre elas.',
   footAuthor: 'Autor',
   footInst: 'Instituição',
   footDev: 'Desenvolvido com',
   footClass: 'Classificação',
-  footClassBody: 'Köppen–Geiger, na formalização de Peel, Finlayson e McMahon (2007), calculada a partir das normais que introduzir; para um local em Portugal, as zonas climáticas de Inverno e de Verão do Manual SCE, a partir da região e da altitude.',
+
   footPriv: 'Privacidade',
-  footPrivBody: 'Nada é carregado nem guardado fora deste navegador. As coordenadas só vão para os serviços que preenchem algo: elevação (Consultar), Open-Meteo (Buscar na web), os mosaicos do mapa (Esri, OpenStreetMap), os edifícios vizinhos (Overpass), a pesquisa de moradas (Nominatim) e, quando o lote se desloca, a sua altitude (Open-Meteo) e o seu concelho (Nominatim).',
+
   footMethods: 'Métodos e fontes',
   footLegal: '© 2026 Nuno Dinis Cortiços. Este é um instrumento pedagógico. Reporta o que a literatura de projecto recomenda e nomeia a fonte de cada recomendação, mas uma orientação não é um cálculo e esta aplicação não é um modelo energético. Nada do que reporta constitui declaração de conformidade, e nada disto substitui as verificações exigidas no âmbito do SCE.'
 });
