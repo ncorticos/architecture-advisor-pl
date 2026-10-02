@@ -909,7 +909,7 @@ details.more[open] > summary{color:var(--ink)}
 /* ------------------------------------------------------------ 0. IDENTITY -- */
 const APP = {
   name:        'Architecture Advisor PL',
-  version:     '1.108.1',
+  version:     '1.108.2',
   author:      'Nuno Dinis Cortiços',
   institution: 'Lisbon School of Architecture, Universidade de Lisboa',
   builtWith:   'Claude Opus 5 (Anthropic)',
@@ -7837,7 +7837,7 @@ function buildOpenings(host) {
         OPEN[curFace].laid = true;
         updateTexts(); refreshOpenings();
       }, v => fmt(v, 0) + '%');
-      if (faceUnits(curFace).length < 2) sh.range.disabled = true;
+      /* a lone window resizes too: shrinking it frees wall to compose with */
       const r = { m:el('div', { class:'hint' }) };
       const mvL = el('button', { class:'btn small', text:'\u2039', title:t('Move window to the previous face'), 'aria-label':t('Move window to the previous face'), onclick:() => stepFace(i, -1) });
       const mvR = el('button', { class:'btn small', text:'\u203A', title:t('Move window to the next face'), 'aria-label':t('Move window to the next face'), onclick:() => stepFace(i, 1) });
@@ -14712,6 +14712,8 @@ Object.assign(PT_HINT, {
     'Jak drzewo zimą tam, gdzie zima bardzo mocna: gdzie pada śnieg, powiedz to słowami — ta strona nie rysuje śniegu, który oko mogłoby przeoczyć. Dni śniegu liczą tu dni ERA5 z co najmniej 0,5 cm świeżego śniegu, 1991–2020, czytane w tych dokładnych współrzędnych: prowizoryczna reanaliza, jak normy sieciowe na stronie startowej, nie obserwacja stacji — a reanaliza wygładza góry, więc wysokie miejsce czyta mniej dni śniegu niż jego stacja. W Suwałkach i w Tatrach to kilkadziesiąt dni w roku, od listopada do kwietnia; w Szczecinie — kilka. Gdzie liczba nie jest zerem, zanieś ją do projektu: śnieg obciąża dach, nawiewa na attykę, zasypuje okapy i potrafi zamknąć drogę — zimne miejsce zarabia nachylenie, odśnieżony dojazd i detal, który przeżyje odwilż.', 
   'open-shape':
     'Wysokie szkło, głębokie światło; szerokie szkło, równe światło. Światło dzienne sięga około dwukrotności wysokości nadproża w głąb pokoju (Lechner, <i>Heating, Cooling, Lighting</i>), więc wyższe nadproże oświetla głębszą podłogę — nadproże 2,1 m sięga około 4 m w głąb — a szersze okno rozprasza to światło na boki i zostawia ścianę poniżej na ogrzewanie, zwykłe miejsce grzejnika pod szkłem. Okna wstęgowe, długie i niskie, oświetlają pokój równo od końca do końca (Ching &amp; Shapiro o rozmiarze, rozmieszczeniu i równomierności światła dziennego). Odznaka kształtu uśrednia te dwa: głębokość z nadproża przeciw głębokości pokoju, ku której ta strona patrzy, rozpiętość ze średniej szerokości okien przeciw hojnym 2,4 m wnęki. Jak dopasowanie WWR, to własna synteza tej aplikacji przez źródła, nie liczba z żadnej książki — porównuj nią strony; wysokie wąskie okno południowe i długie niskie potrafią punktować dobrze, z różnych powodów.', 
+  'roof-chimney':
+    'Jeden komin, rysowany tak, jak buduje je region — wybierz styl powyżej, gdzie buduje się więcej niż jeden. Stoi tam, gdzie go postawisz, i wznosi się, ile mówi suwak; ocena ciągu sądzi koronę według reguły, której odpowiada każdy komin: pół metra luzu nad kalenicą na stromym dachu, metr luzu na płaskim, żeby wiatr ciągnął, zamiast spychać w dół. „Według reguły” wznosi go dokładnie tam. Krótki komin na zawietrznym zboczu zadymia poddasze — najpierw wysokość, potem położenie.',
   'roof-divide':
     'Jeden budynek, kilka dachów — płaski stropodach obok stromego dachu: podziel dłuższy bok (do trzech części), daj każdej części własne połacie i nachylenie i przeciągnij podział na modelu albo powyżej. Odznaki czytają największą część.',
 
