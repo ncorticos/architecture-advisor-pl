@@ -347,7 +347,7 @@ footer{border-top:1px solid var(--line); margin-top:26px; background:var(--wash)
 .nrow input:focus{outline:2px solid var(--c1); outline-offset:-1px; border-color:var(--c1)}
 .nrow input.miss{border-color:#D97706; background:rgba(217,119,6,.05)}
 .srcfld{margin-top:14px}
-.srcrow{display:flex; gap:8px; flex-wrap:wrap}
+.srcrow{display:flex; gap:8px; flex-wrap:wrap} .urow{border-radius:8px; padding:2px 4px} .urow.sel{outline:2px solid #B45309}
 .srcrow input{flex:1 1 220px; min-width:0}
 .fieldstatus{display:block; color:var(--ink2); font-family:var(--mono); font-size:11px; margin-top:6px}
 .fieldstatus:empty{display:none}
@@ -3521,9 +3521,10 @@ function faceUnits(f) {
   const o = OPEN && OPEN[f];
   if (!o) return [{ on:true, frac:1 }];
   if (!Array.isArray(o.units)) o.units = [];
-  o.units = o.units.filter(w => w && isFinite(+w.frac) && +w.frac > 0).slice(0, 4);
+  o.units = o.units.filter(w => w && isFinite(+w.frac) && +w.frac > 0).slice(0, 6);
   if (!o.units.length) o.units.push({ on:true, frac:1 });
-  o.units.forEach(w => { w.on = w.on !== false; w.frac = +w.frac; });
+  o.units.forEach(w => { w.on = w.on !== false; w.frac = +w.frac; w.off = isFinite(+w.off) ? Math.max(-30, Math.min(30, +w.off)) : 0; });
+  if (!(o.sel >= 0) || o.sel >= o.units.length) o.sel = -1;
   const s = o.units.reduce((a, w) => a + w.frac, 0) || 1;
   o.units.forEach(w => { w.frac /= s; });
   return o.units;
@@ -3532,14 +3533,18 @@ function faceUnits(f) {
 function glassShare(f) {
   return faceUnits(f).reduce((a, w) => a + (w.on ? w.frac : 0), 0);
 }
-/** Absolute spans of one wall's glass [u0,u1] per unit, in order. */
+/** Absolute spans of one wall's glass [u0,u1] per unit, in order: each
+    unit's share shifted by its own offset along the wall, then settled
+    left to right inside the glass so neighbours never overlap. */
 function glassSpans(f, u0, u1) {
   const us = faceUnits(f), out = [];
-  let u = u0;
+  let u = u0, prev = u0;
   us.forEach((w, i) => {
     const b = i === us.length - 1 ? u1 : u0 + (u1 - u0) * us.slice(0, i + 1).reduce((a, q) => a + q.frac, 0);
-    out.push({ a:u, b, on:w.on });
-    u = b;
+    const wd = Math.max(0, b - u), c = (u + b) / 2 + (w.off || 0);
+    const a = Math.min(Math.max(c - wd / 2, prev), Math.max(prev, u1 - wd));
+    out.push({ a, b:Math.min(u1, a + wd), on:w.on, ui:i });
+    u = b; prev = out[out.length - 1].b;
   });
   return out;
 }
@@ -4331,6 +4336,13 @@ function buildEnvironment(host) {
     ctx.beginPath(); ctx.ellipse(x, y, 1.5 + 4.5 * q, (1.5 + 4.5 * q) * flat, 0, 0, 6.284); ctx.stroke();
   };
   const fall = (d, tt, rate) => (d.ph + tt * d.sp * rate) % 1.2;   // 0–1 falling, 1–1.2 splashing
+  /** Storms pass on a six-second cycle — three seconds of rain or snow,
+      then three of sun: even a winter day is not rain all day. Every
+      drop and flake shares the same phase, so the whole sky clears
+      together and the sun comes out between showers; the ramps keep
+      the change from popping. */
+  const stormEnv = tt => { const c = tt % 6; return c < 3 ? clamp(Math.min(c / 0.5, (3 - c) / 0.5), 0, 1) : 0; };
+  const stormOn = tt => stormEnv(tt) > 0;
   const rnd = (() => { let sd = 20240611; return () => (sd = (sd * 16807) % 2147483647) / 2147483647; })();
   const CLOUDS = Array.from({ length:9 }, () => ({ u:rnd(), v:rnd(), size:0.6 + 0.7 * rnd(), sp:0.6 + 0.8 * rnd(), gy:rnd() }));
   const DROPS = Array.from({ length:180 }, () => ({ u:rnd(), v:rnd(), ph:rnd() * 1.2, sp:0.85 + 0.5 * rnd() }));
@@ -4376,6 +4388,7 @@ function buildEnvironment(host) {
     if (!nd) return;
     const P = climRect(W, H), xc = P.sx(monthPos(ENV.doy)) + 5, bw = P.w / 12;
     DROPS.slice(0, nd).forEach(d => {
+      if (!stormOn(tt)) return;
       const xEnd = xc + (d.u - 0.5) * bw * 1.3, yEnd = P.y + P.h, top = 22, q = fall(d, tt, 0.9);
       if (q <= 1) { const y = top + q * (yEnd - top); drop(ctx, xEnd - (yEnd - y) * 0.08, y, 5 + 3 * d.sp, 0.5); }
       else splash(ctx, xEnd, yEnd, (q - 1) / 0.2, 0.35);
@@ -4386,12 +4399,13 @@ function buildEnvironment(host) {
   const drawWeatherEnv = (ctx, W, H, tt) => {
     const FR = envPanel && envPanel.data.FR, wx = weatherOf(ENV.doy);
     if (!FR) return;
+    const env = stormEnv(tt);
     const n = Math.round(CLOUDS.length * wx.cloud), nd = Math.round(DROPS.length * wx.rain);
     const ex = FR.Rg * FR.s, ey = ex * FR.se, kS = clamp(W / 700, 0.6, 1.25);
     const skyTop = ENV.plot ? 58 : 74, skyBot = FR.cy - ey - 4, sky = !FR.plan && skyBot - skyTop > 36;
     CLOUDS.slice(0, n).forEach(c => {
-      const R = (12 + 12 * c.size) * kS, x = ((c.u + tt * c.sp * 0.018) % 1) * (W + 4 * R) - 2 * R;
-      const gy = FR.cy + (c.gy * 1.5 - 0.75) * ey, a = 0.1 + 0.16 * wx.cloud;
+      const R = (12 + 12 * c.size) * kS * (0.7 + 0.3 * env), x = ((c.u + tt * c.sp * 0.018) % 1) * (W + 4 * R) - 2 * R;
+      const gy = FR.cy + (c.gy * 1.5 - 0.75) * ey, a = (0.1 + 0.16 * wx.cloud) * (0.35 + 0.65 * env);
       ctx.save();
       ctx.beginPath(); ctx.ellipse(FR.cx, FR.cy, ex, ey, 0, 0, 6.284); ctx.clip();
       ctx.translate(x, gy); ctx.scale(1, FR.se);
@@ -4399,7 +4413,7 @@ function buildEnvironment(host) {
       sg.addColorStop(0, 'rgba(20,23,26,' + a.toFixed(3) + ')'); sg.addColorStop(0.6, 'rgba(20,23,26,' + (a * 0.6).toFixed(3) + ')'); sg.addColorStop(1, 'rgba(20,23,26,0)');
       ctx.fillStyle = sg; ctx.beginPath(); ctx.arc(0, 0, R * 1.7, 0, 6.284); ctx.fill();
       ctx.restore();
-      if (sky) cloudPuff(ctx, x, skyTop + R * 0.6 + c.v * Math.max(0, skyBot - skyTop - R * 1.2), R, wx, 0.5 + 0.4 * wx.cloud);
+      if (sky) cloudPuff(ctx, x, skyTop + R * 0.6 + c.v * Math.max(0, skyBot - skyTop - R * 1.2), R, wx, (0.5 + 0.4 * wx.cloud) * (0.35 + 0.65 * env));
     });
     const top = sky ? skyTop + 0.45 * (skyBot - skyTop) : 0;   // from the clouds down
     /* snow falls where the month knows it: the temperature mix, or the
@@ -4413,10 +4427,14 @@ function buildEnvironment(host) {
       const srec = SNOW[S.lat.toFixed(2) + ',' + S.lon.toFixed(2)];
       const base = srec && srec.days ? clamp(srec.days[wx.m] / 10, 0, 0.8) : 0;
       if (!snowState.init && srec && srec.days) { snowState.cover = base; snowState.init = true; }
-      const target = snowRate > 0.02 ? 1 : (wx.T > 2 ? 0 : base);
+      /* snow lies while the storm passes and lets go in the sun gap:
+         it builds toward a thin cover the ground shows through, then
+         melts clear inside the three sunny seconds */
+      const target = env <= 0 ? 0 : (snowRate > 0.02 ? 0.55 : (wx.T > 2 ? 0 : base));
       const dt = snowState.last ? Math.min(0.5, Math.max(0, tt - snowState.last)) : 0;
       snowState.last = tt;
-      snowState.cover += clamp(target - snowState.cover, -0.015 * dt, 0.05 * dt);
+      const dc = target - snowState.cover;
+      snowState.cover += dc > 0 ? Math.min(dc, 0.15 * dt) : Math.max(dc, -0.25 * dt);
       /* the ground, minus the building's own footprint: darker where the
          rain wets it, white where the snow lies — raindrops rest on it */
       const gnd = () => {
@@ -4431,18 +4449,20 @@ function buildEnvironment(host) {
           ctx.closePath();
         });
       };
-      if (wx.rain > 0.02) { ctx.save(); gnd(); ctx.fillStyle = 'rgba(30,35,45,' + (0.22 * clamp(wx.rain, 0, 1)).toFixed(3) + ')'; ctx.fill('evenodd'); ctx.restore(); }
+      if (wx.rain > 0.02) { ctx.save(); gnd(); ctx.fillStyle = 'rgba(30,35,45,' + (0.22 * clamp(wx.rain, 0, 1) * (0.15 + 0.85 * env)).toFixed(3) + ')'; ctx.fill('evenodd'); ctx.restore(); }
       if (snowState.cover > 0.005) { ctx.save(); gnd(); ctx.fillStyle = 'rgba(244,247,250,' + (0.92 * snowState.cover).toFixed(3) + ')'; ctx.fill('evenodd'); ctx.restore(); }
     }
     DROPS.slice(0, nd).forEach(d => {
+      if (!stormOn(tt)) return;
       const yv = (d.v * 2 - 1) * 0.9, yEnd = FR.cy + yv * ey, xEnd = FR.cx + (d.u * 2 - 1) * ex * Math.sqrt(1 - yv * yv) * 0.95;
       const q = fall(d, tt, 1.1), len = (7 + 6 * d.sp) * kS;
       if (q <= 1) { const y = top + q * (yEnd - top); drop(ctx, xEnd - (yEnd - y) * 0.14, y, len, 0.5); }
       else splash(ctx, xEnd, yEnd, (q - 1) / 0.2, FR.se);
     });
     /* a little snow mixed with the rain near zero — infrequent by design */
-    const ns = Math.round(SNOWF.length * snowRate * 0.8);
+    const ns = Math.round(SNOWF.length * snowRate * 1.5);
     SNOWF.slice(0, ns).forEach(f => {
+      if (!stormOn(tt)) return;
       const yv = (f.v * 2 - 1) * 0.9, yEnd = FR.cy + yv * ey, xEnd = FR.cx + (f.u * 2 - 1) * ex * Math.sqrt(1 - yv * yv) * 0.95;
       const q = fall(f, tt, 0.45), sway = Math.sin(tt * 1.7 + f.ph * 6.28) * 6 * kS;
       if (q <= 1) { const y = top + q * (yEnd - top); flake(ctx, xEnd + sway * q, y, (1.6 + f.sp) * kS, 0.9); }
@@ -4464,6 +4484,7 @@ function buildEnvironment(host) {
       cloudPuff(ctx, x, P.y + R * 0.8 + c.v * Math.max(0, bandB - P.y - R * 1.2), R, wx, 0.5 + 0.4 * wx.cloud);
     });
     DROPS.slice(0, nd).forEach(d => {
+      if (!stormOn(tt)) return;
       const xEnd = P.x + d.u * P.w, yEnd = P.y + P.h, top = P.y + (bandB - P.y) * 0.6, q = fall(d, tt, 1.3);
       if (q <= 1) { const y = top + q * (yEnd - top); drop(ctx, xEnd - (yEnd - y) * 0.14, y, 6 + 4 * d.sp, 0.45); }
       else splash(ctx, xEnd, yEnd, (q - 1) / 0.2, 0.35);
@@ -7586,7 +7607,7 @@ function buildOpenings(host) {
   const lat = S.lat, lon = S.lon, tz = lon / 15;
   const G = MASS, RF = ROOF;
   pageHead(host, 'Windows & Shading',
-    'Glazing, overhangs and fins for each facade, sized against the plan fixed on Site and the roof fixed on Roof — this tab cannot change either. Choosing a facade turns the model to face it, so you can drag its window directly; the compass shows which way is which.');
+    'Glazing, overhangs and fins for each facade, sized against the plan fixed on Site and the roof fixed on Roof — this tab cannot change either. Choosing a facade turns the model to face it, so you can drag its window directly; the compass shows which way is which. Click a window to select it — drag its black node to push it along the wall, double-click it to open or close it, double-click bare wall to plant a new one.');
 
   const h0 = () => G.fl * G.fh;   // read live: the tab outlives changes made on Site
   const Mod = () => roofModel(G, RF);   // the worked volume from Site and Roof, cached
@@ -7760,7 +7781,7 @@ function buildOpenings(host) {
       }, v => fmt(v, 0) + '%');
       if (faceUnits(curFace).length < 2) sh.range.disabled = true;
       const r = { m:el('div', { class:'hint' }) };
-      const line = el('div', {}, [chk, r.m]);
+      const line = el('div', { class:OPEN[curFace].sel === i ? 'urow sel' : 'urow' }, [chk, r.m]);
       rows.push(r);
       unitBox.appendChild(line);
       unitBox.appendChild(sh);
@@ -7775,7 +7796,7 @@ function buildOpenings(host) {
     } });
     const plus = el('button', { class:'btn small', text:'+', title:t('One window more'), 'aria-label':t('One window more'), onclick:() => {
       const us = faceUnits(curFace);
-      if (us.length > 3) return;
+      if (us.length > 5) return;
       let bi = 0;
       us.forEach((q, j) => { if (q.frac > us[bi].frac) bi = j; });
       us.splice(bi + 1, 0, { on:us[bi].on, frac:us[bi].frac / 2 });
@@ -7784,7 +7805,7 @@ function buildOpenings(host) {
     } });
     const nU = faceUnits(curFace).length;
     if (nU < 2) minus.disabled = true;
-    if (nU > 3) plus.disabled = true;
+    if (nU > 5) plus.disabled = true;
     const row = el('div', { class:'srcrow' }, [minus, plus]);
     unitBox.appendChild(row);
     updateTexts();
@@ -7972,7 +7993,7 @@ function buildOpenings(host) {
         const uu = uus && uus[sp.ui];
         const v0 = uu && uu.door ? floor + 0.05 : rect.v0;
         if (rect.v1 - v0 < 0.1) return;
-        glass.push([onWall(sg, sp.a, v0), onWall(sg, sp.b, v0), onWall(sg, sp.b, rect.v1), onWall(sg, sp.a, rect.v1)]);
+        const quad = [onWall(sg, sp.a, v0), onWall(sg, sp.b, v0), onWall(sg, sp.b, rect.v1), onWall(sg, sp.a, rect.v1)];
       });
     });
     return { devs, glass };
@@ -8250,10 +8271,26 @@ function buildOpenings(host) {
         ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(q[0], q[1], 8, 0, 6.284); ctx.fill();
         stroke(ctx, CH.ink, 1); ctx.stroke();
         ctx.fillStyle = CH.ink; ctx.beginPath(); ctx.arc(q[0], q[1], 4.5, 0, 6.284); ctx.fill(); };
+      /* one black node per window on the side under study, at its head:
+         the selected one ringed gold, like a handling mark */
+      const wdot = (p, selected) => { const q = proj(p[0], p[1], p[2]);
+        if (selected) { stroke(ctx, '#B45309', 2.5); ctx.beginPath(); ctx.arc(q[0], q[1], 12, 0, 6.284); ctx.stroke(); }
+        ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(q[0], q[1], 8, 0, 6.284); ctx.fill();
+        stroke(ctx, CH.ink, 1); ctx.stroke();         ctx.fillStyle = CH.ink; ctx.beginPath(); ctx.arc(q[0], q[1], 4.5, 0, 6.284); ctx.fill(); };
       rowHandles.forEach(dot);
       /* the window handles, on the longest wall of the side under study */
       const rh = winHandles();
-      if (rh) { dot(rh.top); dot(rh.sill); }
+      if (rh) { dot(rh.top); dot(rh.sill);
+        const wsel = OPEN[curFace].sel, wv1 = Math.min(rh.w.rows[0].head, h0());
+        glassSpans(curFace, rh.w.uc - rh.w.w / 2, rh.w.uc + rh.w.w / 2).forEach(sp => {
+          if (!sp.on || sp.b - sp.a < 0.05) return;
+          const mid = (sp.a + sp.b) / 2;
+          wdot(onWall(rh.sg, mid, wv1), sp.ui === wsel);
+          if (sp.ui === wsel) poly([onWall(rh.sg, sp.a, rh.w.rows[0].sill), onWall(rh.sg, sp.b, rh.w.rows[0].sill), onWall(rh.sg, sp.b, wv1), onWall(rh.sg, sp.a, wv1)], 'rgba(180,83,9,0.10)', '#B45309', 2.5);
+        });
+      }
+
+      // the readout, and the two badges, as on Site
 
       // the readout, and the two badges, as on Site
       const o = OPEN[curFace];
@@ -8358,6 +8395,24 @@ function buildOpenings(host) {
     const wh = winHandles();
     if (wh && near(wh.top, 22)) return 'window';
     if (wh && near(wh.sill, 22)) return 'sill';
+    if (wh) {
+      const spans = glassSpans(curFace, wh.w.uc - wh.w.w / 2, wh.w.uc + wh.w.w / 2);
+      const v1 = Math.min(wh.w.rows[0].head, h0());
+      for (let i = spans.length - 1; i >= 0; i--) {
+        const sp = spans[i];
+        if (!sp.on || sp.b - sp.a < 0.05) continue;
+        if (near(onWall(wh.sg, (sp.a + sp.b) / 2, v1), 22)) return 'unit' + i;
+      }
+      const inv = invOnWall(FR, px, py, wh.sg);
+      const zTop = Math.min(wh.w.rows[wh.w.rows.length - 1].head, h0());
+      if (inv && inv.z >= wh.w.rows[0].sill - 0.3 && inv.z <= zTop + 0.3) {
+        for (let i = 0; i < spans.length; i++) {
+          const sp = spans[i];
+          if (sp.on && inv.u >= sp.a && inv.u <= sp.b) return 'glass' + i;
+        }
+      }
+    }
+    for (const sl of ['S', 'N', 'E', 'W', 'F']) if (near(rowHandleOf(sl), 20)) return 'rw' + sl;
     for (const sl of ['S', 'N', 'E', 'W', 'F']) if (near(rowHandleOf(sl), 20)) return 'rw' + sl;
     return null;
   };
@@ -8381,6 +8436,13 @@ function buildOpenings(host) {
         syncCtl(cSill, o.sillZ, v => fmt(v, 2) + ' m');
       }
       syncCtl(cWWR, Math.round(o.wwr * 100), v => fmt(v, 0) + '%');
+    } else if (kind === 'winmove') {
+      const us = faceUnits(curFace), u = us[drag.ui];
+      if (!u || !drag.wall || drag.u0 === null) return;
+      const inv = invOnWall(FR, px, py, drag.wall.sg);
+      if (!inv) return;
+      u.off = Math.max(-30, Math.min(30, drag.off0 + (inv.u - drag.u0)));
+      refreshOpenings();
     } else if (kind === 'sunspace') {
       const sg = sunspaceWall(Mod().pl, SUNSP.face);
       if (!sg) return;
@@ -8423,6 +8485,15 @@ function buildOpenings(host) {
       const sl = kind.slice(2), h = rowParam(sl, FR, ev.clientX - r.left, ev.clientY - r.top);
       if (!h) return;
       drag = sl === 'F' ? { kind:'rw', sl, dx:h.x - RWIN.fX } : { kind:'rw', sl, df:h.f - RWIN[RW_KEY[sl]] };
+    } else if (kind.startsWith('unit') || kind.startsWith('glass')) {
+      const ui = +kind.replace(/^(unit|glass)/, ''), us = faceUnits(curFace);
+      if (!us[ui]) return;
+      OPEN[curFace].sel = ui;
+      toast(t('Window') + ' ' + (ui + 1) + ' ' + t('selected — drag it along the wall'));
+      buildUnitUI(); refreshOpenings();
+      const r2 = ocv.getBoundingClientRect(), wh2 = winHandles();
+      const inv = wh2 ? invOnWall(openFrame(openPanel.W, openPanel.H), ev.clientX - r2.left, ev.clientY - r2.top, wh2.sg) : null;
+      drag = { kind:'winmove', ui, wall:wh2, u0:inv ? inv.u : null, off0:us[ui].off || 0 };
     } else drag = { kind, wall:winHandles() };
     try { ocv.setPointerCapture(ev.pointerId); } catch (err) {}
     ocv.style.cursor = 'grabbing';
@@ -8439,9 +8510,44 @@ function buildOpenings(host) {
       refreshOpenings();
     } else if (drag.wall || drag.kind === 'sunspace') doDrag(drag.kind, ev.clientX, ev.clientY);
   });
-  const endDrag = () => { orbit.end(); drag = null; ocv.style.cursor = 'default'; };
+  const endDrag = () => {
+    const wasOrbit = orbit.on, moved = orbit.end(), wasDrag = drag;
+    drag = null; ocv.style.cursor = 'default';
+    if (wasOrbit && !moved && !wasDrag && OPEN[curFace].sel !== -1 && OPEN[curFace].sel !== undefined) {
+      OPEN[curFace].sel = -1; buildUnitUI(); refreshOpenings();
+    }
+  };
   ocv.addEventListener('pointerup', endDrag);
   ocv.addEventListener('pointercancel', endDrag);
+  ocv.addEventListener('pointerup', endDrag);
+  ocv.addEventListener('pointercancel', endDrag);
+  ocv.addEventListener('dblclick', ev => {
+    const kind = pick(ev.clientX, ev.clientY), us = faceUnits(curFace);
+    if (kind && (kind.startsWith('unit') || kind.startsWith('glass'))) {
+      const ui = +kind.replace(/^(unit|glass)/, '');
+      if (!us[ui]) return;
+      us[ui].on = !us[ui].on;
+      OPEN[curFace].sel = ui; buildUnitUI(); refreshOpenings();
+      toast(t('Window') + ' ' + (ui + 1) + ' ' + (us[ui].on ? t('open') : t('closed')));
+      return;
+    }
+    const r = ocv.getBoundingClientRect(), FR = openFrame(openPanel.W, openPanel.H), wh = winHandles();
+    if (!wh) return;
+    if (us.length > 5) { toast(t('No room for more windows on this side')); return; }
+    const inv = invOnWall(FR, ev.clientX - r.left, ev.clientY - r.top, wh.sg);
+    if (!inv) return;
+    const w = segWindow(wh.sg, G);
+    if (!w || inv.u < w.uc - w.w / 2 - 0.5 || inv.u > w.uc + w.w / 2 + 0.5) return;
+    let bi = 0;
+    us.forEach((q, j) => { if (q.frac > us[bi].frac) bi = j; });
+    us.splice(bi + 1, 0, { on:true, frac:us[bi].frac / 2, off:0 });
+    us[bi].frac /= 2;
+    const sp = glassSpans(curFace, w.uc - w.w / 2, w.uc + w.w / 2)[bi + 1];
+    if (sp) us[bi + 1].off = Math.max(-30, Math.min(30, inv.u - (sp.a + sp.b) / 2));
+    OPEN[curFace].sel = bi + 1;
+    buildUnitUI(); refreshOpenings();
+    toast(t('Window planted — drag it into place'));
+  });
   zoomGesture(ocv, 'openings');
 }
 
@@ -14024,7 +14130,7 @@ Object.assign(PT, {
 
   /* windows & shading */
   "Windows & Shading": "Okna i Zacienianie",
-  "Glazing, overhangs and fins for each facade, sized against the plan fixed on Site and the roof fixed on Roof — this tab cannot change either. Choosing a facade turns the model to face it, so you can drag its window directly; the compass shows which way is which.":
+  "Glazing, overhangs and fins for each facade, sized against the plan fixed on Site and the roof fixed on Roof — this tab cannot change either. Choosing a facade turns the model to face it, so you can drag its window directly; the compass shows which way is which. Click a window to select it — drag its black node to push it along the wall, double-click it to open or close it, double-click bare wall to plant a new one.":
     "Szklenie, okapy i lamele dla każdej fasady, zwymiarowane względem planu ustalonego w Terenie i dachu ustalonego w Dachu — ta zakładka nie może zmienić żadnego z nich. Wybór fasady obraca model ku niej, więc możesz przeciągać jej okno bezpośrednio; kompas pokazuje, co jest czym.",
   "South": "Południe", "North": "Północ", "East": "Wschód", "West": "Zachód",
   "Facade": "Fasada",
@@ -14066,6 +14172,11 @@ Object.assign(PT, {
   "of wall": "ściany",
   "One window fewer": "O jedno okno mniej",
   "One window more": "O jedno okno więcej",
+  "selected — drag it along the wall": "wybrane — przeciągnij je wzdłuż ściany",
+  "open": "otwarte",
+  "closed": "zamknięte",
+  "Window planted — drag it into place": "Okno posadzone — przeciągnij je na miejsce",
+  "No room for more windows on this side": "Brak miejsca na więcej okien z tej strony",
   "door": "drzwi",
   "A glazed door instead of a window: drops its sill to the floor": "Przeszklone drzwi zamiast okna: opuszczają parapet do podłogi",
   "Winter shelter /100": "Abrigo de inverno /100",
