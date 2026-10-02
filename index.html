@@ -6981,7 +6981,7 @@ function buildRoof(host) {
   }
   buildChimUI();
   host.appendChild(hint('roof-chimney',
-    'Jeden komin, rysowany tak, jak buduje je region — wybierz styl powyżej, gdzie buduje się więcej niż jeden. Stoi tam, gdzie go postawisz, i wznosi się, ile mówi suwak; ocena ciągu sądzi koronę według reguły, której odpowiada każdy komin: pół metra luzu nad kalenicą na stromym dachu, metr luzu na płaskim, żeby wiatr ciągnął, zamiast spychać w dół. „Według reguły” wznosi go dokładnie tam. Krótki komin na zawietrznym zboczu zadymia poddasze — najpierw wysokość, potem położenie.'));
+    'One chimney, drawn as the region builds them — pick its style above where more than one is built. It stands where it is put and rises what the slider says; the draw score judges the crown against the rule every chimney answers to: half a metre clear of the ridge on a pitched roof, a metre clear on a flat one, so the wind draws instead of pushing back down. “To the rule” raises it exactly there. A short chimney on the lee slope smokes back into the attic — height first, then position.'));
   const pillChim = el('span', { class:'pill empty' });
   props.appendChild(pillChim);
   props.appendChild(el('div', { class:'gh', text:'Roof colour — albedo' }));
@@ -7308,6 +7308,8 @@ function buildRoof(host) {
       return csvRows([['Parameter', 'Value'],
       ['Roof (largest part)', ['flat', 'shed', 'gable', 'hip'][RF.n]], ['Pitch (°)', RF.n === 0 ? 0 : RF.th],
       ['Roof parts', RF.zones.map((z, i) => 'ABC'[i] + ':' + ['flat', 'shed', 'gable', 'hip'][z.n] + (z.n === 0 ? '' : ' ' + z.th + '°')).join(' | ')],
+      ['Parapet', RF.par && RF.par.on ? fmt(RF.par.h, 2) + ' m' : 'none'],
+      ['Chimney', RF.chim && RF.chim.on ? CHIMNEY_FAM[RF.chim.fam].name + ' at ' + fmt(RF.chim.x, 1) + ', ' + fmt(RF.chim.y, 1) + ' m · ' + fmt(chimEffH(RF.chim), 2) + ' m above roof' : 'none'],
       ['Plan form (from Site)', (G.form || 'rect') + (G.patio && G.patio.on && G.patio.ok !== false ? ' + patio' : '')],
       ['Winter solar ideal (°)', +idealW.toFixed(0)],
       ['Summer solar ideal (°)', +idealS.toFixed(0)],
@@ -7781,7 +7783,7 @@ function buildOpenings(host) {
       }, v => fmt(v, 0) + '%');
       if (faceUnits(curFace).length < 2) sh.range.disabled = true;
       const r = { m:el('div', { class:'hint' }) };
-      const line = el('div', { class:OPEN[curFace].sel === i ? 'urow sel' : 'urow' }, [chk, r.m]);
+      const line = el('div', { class:OPEN[curFace].sel === i ? 'urow sel' : 'urow' }, [chk, dor, r.m]);
       rows.push(r);
       unitBox.appendChild(line);
       unitBox.appendChild(sh);
@@ -7979,7 +7981,7 @@ function buildOpenings(host) {
   const winGeo = (sg, w) => {
     const o = OPEN[w.f], n = sg.n;
     const off = (p, d) => [p[0] + n[0] * d, p[1] + n[1] * d, p[2]];
-    const devs = [], glass = [];
+    const devs = [], glass = [], sel = [];
     const uus = OPEN[w.f] && OPEN[w.f].units;
     w.rows.forEach((r, k) => {
       const floor = r.sill - o.sillZ;
@@ -7994,9 +7996,11 @@ function buildOpenings(host) {
         const v0 = uu && uu.door ? floor + 0.05 : rect.v0;
         if (rect.v1 - v0 < 0.1) return;
         const quad = [onWall(sg, sp.a, v0), onWall(sg, sp.b, v0), onWall(sg, sp.b, rect.v1), onWall(sg, sp.a, rect.v1)];
+        glass.push(quad);
+        if (uu && sp.ui === o.sel) sel.push(quad);
       });
     });
-    return { devs, glass };
+    return { devs, glass, sel };
   };
   /** Windows on one side: one per wall per storey. */
   const winCount = f => { const nU = faceUnits(f).filter(u => u.on).length; return winsOf(f).reduce((a, x) => a + x.w.n * nU, 0); };
@@ -8006,15 +8010,19 @@ function buildOpenings(host) {
   function facadeNumbers(f) {
     const ws = winsOf(f), o = OPEN[f], us = faceUnits(f);
     const wall = ws.reduce((a, x) => a + x.w.glass / (o.wwr || 1), 0);
-    const per = us.map(u => {
-      if (!u.on) return { area:0, w:0, on:false, frac:u.frac, door:!!u.door };
-      let area = 0;
-      ws.forEach(x => { x.w.rows.forEach((r, k) => {
-        const h = u.door ? Math.min(r.head, h0()) - (k * G.fh + 0.05) : Math.min(r.head, h0()) - r.sill;
-        area += u.frac * x.w.w * Math.max(0, h);
-      }); });
-      return { area, w:u.frac * (ws.length ? ws.reduce((a, x) => a + x.w.w, 0) / ws.length : 0), on:true, frac:u.frac, door:!!u.door };
+    const per = us.map(u => ({ area:0, w:0, on:!!u.on, frac:u.frac, door:!!u.door }));
+    ws.forEach(x => {
+      const u0 = x.w.uc - x.w.w / 2, u1 = x.w.uc + x.w.w / 2, spans = glassSpans(f, u0, u1);
+      spans.forEach(sp => { per[sp.ui].w += Math.max(0, sp.b - sp.a) / Math.max(1, ws.length); });
+      x.w.rows.forEach((r, k) => {
+        const hTop = Math.min(r.head, h0()), hBase = hTop - r.sill, hDoor = hTop - (k * G.fh + 0.05);
+        spans.forEach(sp => {
+          const h = us[sp.ui].door ? hDoor : hBase;
+          per[sp.ui].area += Math.max(0, sp.b - sp.a) * Math.max(0, h);
+        });
+      });
     });
+    us.forEach((u, i) => { if (!u.on) { per[i].area = 0; per[i].w = 0; } });
     const built = per.reduce((a, q) => a + q.area, 0);
     return { wall, built, eff:wall > 0 ? built / wall : 0, per };
   }
@@ -11970,8 +11978,8 @@ function applyStudy(o) {
     if (isFinite(+s.finN)) d.finN = clamp(Math.round(+s.finN), 0, 6);
     if (['left', 'right', 'both'].indexOf(s.finSide) >= 0) d.finSide = s.finSide;
     if (Array.isArray(s.units) && s.units.length) {
-      const vu = s.units.filter(w => w && isFinite(+w.frac) && +w.frac > 0).slice(0, 4)
-        .map(w => ({ on:w.on !== false, frac:+w.frac, door:!!w.door }));
+      const vu = s.units.filter(w => w && isFinite(+w.frac) && +w.frac > 0).slice(0, 6)
+        .map(w => ({ on:w.on !== false, frac:+w.frac, door:!!w.door, off:isFinite(+w.off) ? Math.max(-30, Math.min(30, +w.off)) : 0 }));
       if (vu.length) { const t = vu.reduce((a, w) => a + w.frac, 0) || 1; vu.forEach(w => { w.frac /= t; }); d.units = vu; }
     }
   });
