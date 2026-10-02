@@ -2628,7 +2628,7 @@ function radiationFor(site, onReady) {
     .then(() => { rec.pending = false; if (onReady) onReady(); });
   return rec;
 }
-/** Snow days, month by month: days with ≥1 cm of fresh snow 1991–2020
+/** Snow days, month by month: days with ≥0.5 cm of fresh snow 1991–2020
  *  from the ERA5 reanalysis via Open-Meteo, fetched once per site — only the
  *  coordinates leave the browser. Like the web normals, provisional by
  *  definition: reanalysis, not a station observation. Until it arrives (or
@@ -2652,7 +2652,7 @@ function snowFor(site, onReady) {
         if (!(m >= 0 && m < 12) || !isFinite(y) || typeof x !== 'number' || !isFinite(x)) return;
         const k = y * 12 + m;
         (ym[k] = ym[k] || [0, 0])[1]++;
-        if (x >= 1) ym[k][0]++;
+        if (x >= 0.5) ym[k][0]++;
       });
       const acc = Array.from({ length:12 }, () => []);
       Object.keys(ym).forEach(k => { if (ym[k][1] >= 20) acc[k % 12].push(ym[k][0]); });
@@ -3223,16 +3223,23 @@ function roofModel(G, RF) {
   /* a parapet: every outline wall carried up by its height — envelope too */
   let paras = [], paraArea = 0;
   if (RF.par && RF.par.on) {
-    const ph = clamp(+RF.par.h || 0.6, 0.2, 1.5);
+    const ph = clamp(+RF.par.h || 0.6, 0.2, 1.5), pt = 0.2;   // a 20 cm wall: outer face, inner face, cap
     walls.forEach(wl => {
       const sg = wl.sg, L = sg.len, ux = (sg.b[0] - sg.a[0]) / L, uy = (sg.b[1] - sg.a[1]) / L;
+      const nx = sg.n[0], ny = sg.n[1];
       const P = (u, z) => [sg.a[0] + ux * u, sg.a[1] + uy * u, z];
+      const Q = (u, z) => [sg.a[0] + ux * u - nx * pt, sg.a[1] + uy * u - ny * pt, z];
       wl.prof.forEach((q, k) => {
         if (!k) return;
-        const p0 = wl.prof[k - 1];
-        paras.push({ sg, quad:[P(p0[0], p0[1]), P(q[0], q[1]), P(q[0], q[1] + ph), P(p0[0], p0[1] + ph)] });
+        const p0 = wl.prof[k - 1], a = P(p0[0], p0[1]), b = P(q[0], q[1]);
+        const a2 = [a[0], a[1], a[2] + ph], b2 = [b[0], b[1], b[2] + ph];
+        const c = Q(p0[0], p0[1]), d = Q(q[0], q[1]);
+        const c2 = [c[0], c[1], c[2] + ph], d2 = [d[0], d[1], d[2] + ph];
+        paras.push({ sg, quad:[a, b, b2, a2] });
+        paras.push({ sg, quad:[d, c, c2, d2] });
+        paras.push({ sg, quad:[a2, b2, d2, c2] });
       });
-      paraArea += sg.len * ph;
+      paraArea += sg.len * (2 * ph + pt);
     });
   }
   const val = { key, pl, H0, t:topT, th:topTh, n:topN, pieces, walls, steps, paras, paraArea, at, zOf, roofArea, roofVol, ridge,
@@ -4245,6 +4252,9 @@ function buildEnvironment(host) {
     days.forEach((d, i) => { if (d >= 0.5) ms.push(MON3[i]); });
     return ms.length ? ms.join(' · ') : '—';
   };
+  /* snow on the ground: cover eases toward snowfall while it falls and
+     toward the month's own snow-day share otherwise, melting away above 2 °C */
+  const snowState = { cover:0, last:0, init:false };
   function paintSnow() {
     const rec = snowFor(S, () => { if (host.isConnected) paintSnow(); });
     const yv = snowYear.querySelector('b'), mv = snowWhen.querySelector('b');
@@ -4258,7 +4268,7 @@ function buildEnvironment(host) {
   }
   paintSnow();
   host.appendChild(hint('env-snow',
-    'Like a winter tree where the winter is very strong: where it snows, say so in words — this page draws no snow the eye could miss. Snow days here count ERA5 days with at least 1 cm of fresh snow, 1991–2020, read at these exact coordinates: provisional reanalysis, like the web normals on the setup page, not a station observation — and reanalysis smooths the mountains, so a high site reads fewer snow days than its station. In Suwałki and the Tatras that is several dozen days a year, November to April; in Szczecin, a handful. Where the count is not zero, carry it into the design: snow loads the roof, drifts against the parapet, buries the eaves and can close the road — a cold-climate site earns pitch, cleared access and detailing that survives the thaw.'));
+    'Like a winter tree where the winter is very strong: where it snows, say so in words — this page draws no snow the eye could miss. Snow days here count ERA5 days with at least 0.5 cm of fresh snow, 1991–2020, read at these exact coordinates: provisional reanalysis, like the web normals on the setup page, not a station observation — and reanalysis smooths the mountains, so a high site reads fewer snow days than its station. In Suwałki and the Tatras that is several dozen days a year, November to April; in Szczecin, a handful. Where the count is not zero, carry it into the design: snow loads the roof, drifts against the parapet, buries the eaves and can close the road — a cold-climate site earns pitch, cleared access and detailing that survives the thaw.'));
   const pMax = Math.max(10, Math.ceil(Math.max.apply(null, C.p) / 10) * 10);
   const tLo = Math.min(0, Math.floor(Math.min.apply(null, C.t) / 5) * 5);
   const tHi = Math.ceil(Math.max.apply(null, C.t) / 5) * 5;
@@ -4287,7 +4297,8 @@ function buildEnvironment(host) {
   const monthOf = doy => { let d = doy, m = 0; while (m < 11 && d > MDAYS[m]) { d -= MDAYS[m]; m++; } return m; };
   const weatherOf = doy => {
     const T = atDay(C.t, doy), Pm = Math.max(0, atDay(C.p, doy));
-    return { T, P:Pm, m:monthOf(doy), warm:clamp(T / 28, 0, 1), cloud:clamp(Pm / 150, 0, 1), rain:clamp((Pm - 10) / 140, 0, 1) };
+    return { T, P:Pm, m:monthOf(doy), warm:clamp(T / 28, 0, 1), cloud:clamp(Pm / 150, 0, 1), rain:clamp((Pm - 10) / 140, 0, 1),
+      snow:clamp((0.5 - T) / 2, 0, 1) };
   };
   const normalsLine = m => [LANG === 'pl' ? MONTHS[m] + ' — normy' : MONTHS[m] + ' normals', fmt(C.t[m], 1) + ' °C · ' + fmt(C.p[m], 0) + ' mm'];
   /** The sun: bigger, deeper in colour and brighter in its halo the warmer
@@ -4323,6 +4334,12 @@ function buildEnvironment(host) {
   const rnd = (() => { let sd = 20240611; return () => (sd = (sd * 16807) % 2147483647) / 2147483647; })();
   const CLOUDS = Array.from({ length:9 }, () => ({ u:rnd(), v:rnd(), size:0.6 + 0.7 * rnd(), sp:0.6 + 0.8 * rnd(), gy:rnd() }));
   const DROPS = Array.from({ length:180 }, () => ({ u:rnd(), v:rnd(), ph:rnd() * 1.2, sp:0.85 + 0.5 * rnd() }));
+  const SNOWF = Array.from({ length:110 }, () => ({ u:rnd(), v:rnd(), ph:rnd() * 1.2, sp:0.5 + 0.5 * rnd() }));
+  const flake = (ctx, x, y, r, a) => {
+    stroke(ctx, 'rgba(255,255,255,' + a + ')', 1.2);
+    for (let k = 0; k < 3; k++) { const an = k * Math.PI / 3;
+      seg(ctx, x - r * Math.cos(an), y - r * Math.sin(an), x + r * Math.cos(an), y + r * Math.sin(an)); }
+  };
   /* the moving part rides on a transparent canvas over each chart, so the
      model under it is not redrawn thirty times a second */
   const still = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -4385,10 +4402,50 @@ function buildEnvironment(host) {
       if (sky) cloudPuff(ctx, x, skyTop + R * 0.6 + c.v * Math.max(0, skyBot - skyTop - R * 1.2), R, wx, 0.5 + 0.4 * wx.cloud);
     });
     const top = sky ? skyTop + 0.45 * (skyBot - skyTop) : 0;   // from the clouds down
+    /* snow falls where the month knows it: the temperature mix, or the
+         month's own snow-day share when the mean sits above freezing */
+    const srec0 = SNOW[S.lat.toFixed(2) + ',' + S.lon.toFixed(2)];
+    const dayRate = srec0 && srec0.days ? srec0.days[wx.m] / 30 : 0;
+    const snowFrac = Math.max(wx.snow, dayRate > 0.005 ? clamp(dayRate * 2.5, 0, 0.5) : 0);
+    const snowRate = wx.rain * snowFrac;
+    if (wx.rain > 0.02 || snowRate > 0.005 || snowState.cover > 0.005 || !snowState.init) {
+      const M = roofModel(G, RF);
+      const srec = SNOW[S.lat.toFixed(2) + ',' + S.lon.toFixed(2)];
+      const base = srec && srec.days ? clamp(srec.days[wx.m] / 10, 0, 0.8) : 0;
+      if (!snowState.init && srec && srec.days) { snowState.cover = base; snowState.init = true; }
+      const target = snowRate > 0.02 ? 1 : (wx.T > 2 ? 0 : base);
+      const dt = snowState.last ? Math.min(0.5, Math.max(0, tt - snowState.last)) : 0;
+      snowState.last = tt;
+      snowState.cover += clamp(target - snowState.cover, -0.015 * dt, 0.05 * dt);
+      /* the ground, minus the building's own footprint: darker where the
+         rain wets it, white where the snow lies — raindrops rest on it */
+      const gnd = () => {
+        ctx.beginPath();
+        ctx.ellipse(FR.cx, FR.cy, ex, ey, 0, 0, 6.284);
+        M.pl.boxes.forEach(r => {
+          const c = [[r[0], r[1]], [r[2], r[1]], [r[2], r[3]], [r[0], r[3]]].map(q => {
+            const xp = q[0] * FR.ca - q[1] * FR.sa, yp = q[0] * FR.sa + q[1] * FR.ca;
+            return [FR.cx + xp * FR.s, FR.cy - yp * FR.se * FR.s];
+          });
+          c.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]));
+          ctx.closePath();
+        });
+      };
+      if (wx.rain > 0.02) { ctx.save(); gnd(); ctx.fillStyle = 'rgba(30,35,45,' + (0.22 * clamp(wx.rain, 0, 1)).toFixed(3) + ')'; ctx.fill('evenodd'); ctx.restore(); }
+      if (snowState.cover > 0.005) { ctx.save(); gnd(); ctx.fillStyle = 'rgba(244,247,250,' + (0.92 * snowState.cover).toFixed(3) + ')'; ctx.fill('evenodd'); ctx.restore(); }
+    }
     DROPS.slice(0, nd).forEach(d => {
       const yv = (d.v * 2 - 1) * 0.9, yEnd = FR.cy + yv * ey, xEnd = FR.cx + (d.u * 2 - 1) * ex * Math.sqrt(1 - yv * yv) * 0.95;
       const q = fall(d, tt, 1.1), len = (7 + 6 * d.sp) * kS;
       if (q <= 1) { const y = top + q * (yEnd - top); drop(ctx, xEnd - (yEnd - y) * 0.14, y, len, 0.5); }
+      else splash(ctx, xEnd, yEnd, (q - 1) / 0.2, FR.se);
+    });
+    /* a little snow mixed with the rain near zero — infrequent by design */
+    const ns = Math.round(SNOWF.length * snowRate * 0.8);
+    SNOWF.slice(0, ns).forEach(f => {
+      const yv = (f.v * 2 - 1) * 0.9, yEnd = FR.cy + yv * ey, xEnd = FR.cx + (f.u * 2 - 1) * ex * Math.sqrt(1 - yv * yv) * 0.95;
+      const q = fall(f, tt, 0.45), sway = Math.sin(tt * 1.7 + f.ph * 6.28) * 6 * kS;
+      if (q <= 1) { const y = top + q * (yEnd - top); flake(ctx, xEnd + sway * q, y, (1.6 + f.sp) * kS, 0.9); }
       else splash(ctx, xEnd, yEnd, (q - 1) / 0.2, FR.se);
     });
   };
@@ -4867,7 +4924,7 @@ function buildEnvironment(host) {
         ['Mean temperature at the day, interpolated (°C)', +wx.T.toFixed(1)], ['Precipitation at the day, interpolated (mm/month)', +wx.P.toFixed(0)],
         ['Sun drawn: warmth 0–1 (0 to 28 °C)', +wx.warm.toFixed(2)], ['Cloud drawn: 0–1 (0 to 150 mm)', +wx.cloud.toFixed(2)], ['Rain drawn: 0–1 (10 to 150 mm)', +wx.rain.toFixed(2)],
         ['Sun altitude (°)', +sp.alt.toFixed(1)], ['Sun azimuth (°)', +sp.azi.toFixed(1)],
-        ['Snow days a year (days ≥1 cm, ERA5 1991–2020)', snowTot], ['Snow source', 'ERA5 1991–2020 via Open-Meteo (provisional reanalysis)'],
+        ['Snow days a year (days ≥0.5 cm, ERA5 1991–2020)', snowTot], ['Snow source', 'ERA5 1991–2020 via Open-Meteo (provisional reanalysis)'],
         ['Sunrise (solar time)', ss ? hm(ss.rise) : ''], ['Sunset (solar time)', ss ? hm(ss.set) : ''], ['Day length (h)', ss ? +(ss.set - ss.rise).toFixed(2) : ''],
         ['Ridge height (m)', +M.ridge.toFixed(2)], ['Ridge shadow length (m)', sp.alt > 0.5 ? +(M.ridge / Math.tan(sp.alt * RAD)).toFixed(2) : ''],
         ['Base map', ENV.map === 'none' ? 'none' : TILE_SRC[ENV.map].attr]);
@@ -14366,7 +14423,7 @@ Object.assign(PT, {
 /* --- the long captions, keyed by identifier ----------------------------- */
 Object.assign(PT_HINT, {
   'env-snow':
-    'Jak drzewo zimą tam, gdzie zima bardzo mocna: gdzie pada śnieg, powiedz to słowami — ta strona nie rysuje śniegu, który oko mogłoby przeoczyć. Dni śniegu liczą tu dni ERA5 z co najmniej 1 cm świeżego śniegu, 1991–2020, czytane w tych dokładnych współrzędnych: prowizoryczna reanaliza, jak normy sieciowe na stronie startowej, nie obserwacja stacji — a reanaliza wygładza góry, więc wysokie miejsce czyta mniej dni śniegu niż jego stacja. W Suwałkach i w Tatrach to kilkadziesiąt dni w roku, od listopada do kwietnia; w Szczecinie — kilka. Gdzie liczba nie jest zerem, zanieś ją do projektu: śnieg obciąża dach, nawiewa na attykę, zasypuje okapy i potrafi zamknąć drogę — zimne miejsce zarabia nachylenie, odśnieżony dojazd i detal, który przeżyje odwilż.', 
+    'Jak drzewo zimą tam, gdzie zima bardzo mocna: gdzie pada śnieg, powiedz to słowami — ta strona nie rysuje śniegu, który oko mogłoby przeoczyć. Dni śniegu liczą tu dni ERA5 z co najmniej 0,5 cm świeżego śniegu, 1991–2020, czytane w tych dokładnych współrzędnych: prowizoryczna reanaliza, jak normy sieciowe na stronie startowej, nie obserwacja stacji — a reanaliza wygładza góry, więc wysokie miejsce czyta mniej dni śniegu niż jego stacja. W Suwałkach i w Tatrach to kilkadziesiąt dni w roku, od listopada do kwietnia; w Szczecinie — kilka. Gdzie liczba nie jest zerem, zanieś ją do projektu: śnieg obciąża dach, nawiewa na attykę, zasypuje okapy i potrafi zamknąć drogę — zimne miejsce zarabia nachylenie, odśnieżony dojazd i detal, który przeżyje odwilż.', 
   'open-shape':
     'Wysokie szkło, głębokie światło; szerokie szkło, równe światło. Światło dzienne sięga około dwukrotności wysokości nadproża w głąb pokoju (Lechner, <i>Heating, Cooling, Lighting</i>), więc wyższe nadproże oświetla głębszą podłogę — nadproże 2,1 m sięga około 4 m w głąb — a szersze okno rozprasza to światło na boki i zostawia ścianę poniżej na ogrzewanie, zwykłe miejsce grzejnika pod szkłem. Okna wstęgowe, długie i niskie, oświetlają pokój równo od końca do końca (Ching &amp; Shapiro o rozmiarze, rozmieszczeniu i równomierności światła dziennego). Odznaka kształtu uśrednia te dwa: głębokość z nadproża przeciw głębokości pokoju, ku której ta strona patrzy, rozpiętość ze średniej szerokości okien przeciw hojnym 2,4 m wnęki. Jak dopasowanie WWR, to własna synteza tej aplikacji przez źródła, nie liczba z żadnej książki — porównuj nią strony; wysokie wąskie okno południowe i długie niskie potrafią punktować dobrze, z różnych powodów.', 
   'roof-divide':
