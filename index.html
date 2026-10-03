@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Architecture Advisor PL — Bioclimatic Design</title>
+<title>AA PL — Bioclimatic Design</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='32' fill='%23000'/%3E%3Ctext x='24' y='43' font-family='Helvetica, Arial, sans-serif' font-size='26' font-weight='700' fill='%23FFFFFF' text-anchor='middle'%3EA%3C/text%3E%3Ctext x='40' y='43' font-family='Helvetica, Arial, sans-serif' font-size='26' font-weight='700' fill='%23E03246' text-anchor='middle'%3EA%3C/text%3E%3C/svg%3E">
 <style>
 :root{
@@ -909,7 +909,8 @@ details.more[open] > summary{color:var(--ink)}
 /* ------------------------------------------------------------ 0. IDENTITY -- */
 const APP = {
   name:        'Architecture Advisor PL',
-  version:     '1.110.0',
+  tag:         'AA PL',
+  version:     '1.110.1',
   author:      'Nuno Dinis Cortiços',
   institution: 'Lisbon School of Architecture, Universidade de Lisboa',
   builtWith:   'Claude Opus 5 (Anthropic)',
@@ -13604,7 +13605,7 @@ function mountApp(site, clim, keepTab, keepModel, keepScroll) {
     + fmt(Math.abs(site.lon), 2) + '° ' + (site.lon < 0 ? 'W' : 'E') + ' · '
     + fmt(site.alt, 0) + ' m <span class="zn">' + STATE.clim.k.code + '</span>'
     + (inPoland(site.lat, site.lon) && sceZone(site.nuts, site.alt, site.lat, site.lon) ? ' <span class="zn">' + sceKey(sceZone(site.nuts, site.alt, site.lat, site.lon)) + '</span>' : '');
-  document.title = APP.name + ' — ' + (site.place || site.nuts);
+  document.title = (APP.tag || APP.name) + ' — ' + (site.place || site.nuts);
 
   const tl = $('#tablist'); tl.innerHTML = '';
   TABS.forEach((tab, i) => {
@@ -13783,7 +13784,7 @@ $('#btnReload').addEventListener('click', () => {
   $('#empty').hidden = false;
   $('#tabsNav').hidden = true;
   $('#sitechip').classList.remove('on');
-  document.title = APP.name + ' — ' + subtitleFor();
+  document.title = (APP.tag || APP.name) + ' — ' + subtitleFor();
   window.scrollTo(0, 0);
   if (initSetup.redraw) initSetup.redraw();   // the window may have changed while the setup was hidden
 });
@@ -13807,8 +13808,8 @@ function setLanguage(lang) {
   applyLanguage();
   applyStatic();
   $$('#langsel button').forEach(b => b.setAttribute('aria-pressed', b.dataset.lang === lang ? 'true' : 'false'));
-  document.title = STATE.site ? APP.name + ' — ' + (STATE.site.place || STATE.site.nuts)
-                              : APP.name + ' — ' + subtitleFor();
+  document.title = STATE.site ? (APP.tag || APP.name) + ' — ' + (STATE.site.place || STATE.site.nuts)
+                              : (APP.tag || APP.name) + ' — ' + subtitleFor();
   if (STATE.site) mountApp(STATE.site, null, STATE.tab, true);   // rebuild every page in the new language, model kept
   else initSetup();                                        // the month labels change with the language
 }
