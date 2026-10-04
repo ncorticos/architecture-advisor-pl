@@ -910,7 +910,7 @@ details.more[open] > summary{color:var(--ink)}
 const APP = {
   name:        'Architecture Advisor PL',
   tag:         'AA PL',
-  version:     '1.111.0',
+  version:     '1.112.0',
   author:      'Nuno Dinis Cortiços',
   institution: 'Lisbon School of Architecture, Universidade de Lisboa',
   builtWith:   'Claude Opus 5 (Anthropic)',
@@ -9014,10 +9014,50 @@ function buildVentilation(host) {
   const K0 = KEEP.vent && havKm(KEEP.vent.lat, KEEP.vent.lon, lat, lon) <= 10 ? KEEP.vent : null;
   let terrainKey = K0 ? K0.terrainKey : 'flat', windKey = K0 ? K0.windKey : 'moderate';
   let showShadow = K0 ? K0.showShadow : true, showAir = K0 ? K0.showAir : true;
+  let showTerrain = K0 && K0.showTerrain !== undefined ? K0.showTerrain : true;
+  /* Regular terrain round the site: a square grid of ground heights in
+     metres relative to the site itself (the grid's own centre), fetched
+     from the same open-Meteo elevation service as the altitude lookup —
+     only the coordinates leave the browser. Null until derived. */
+  let terrainGrid = K0 && K0.terrainGrid ? K0.terrainGrid : null;
+  /** Bilinear ground height under a plan point, m above the site; 0 where
+      there is no grid yet, or the point lies beyond it. The grid is stored
+      in world metres east/north of the site; the plan frame turns with the
+      building, so the point is carried back to world first. */
+  const terraAt = (x, y) => {
+    const g = terrainGrid;
+    if (!g || !g.h || !g.n || !g.step) return 0;
+    let E = x, N = y;
+    try {
+      const b = betaV();
+      E = x * Math.cos(b) + y * Math.sin(b);
+      N = -x * Math.sin(b) + y * Math.cos(b);
+    } catch (e) {}
+    const e2 = (g.n - 1) * g.step / 2, fx = (E + e2) / g.step, fy = (N + e2) / g.step;
+    if (!(fx >= 0 && fy >= 0 && fx <= g.n - 1 && fy <= g.n - 1)) return 0;
+    const ix = Math.min(g.n - 2, Math.floor(fx)), jy = Math.min(g.n - 2, Math.floor(fy));
+    const ax = fx - ix, ay = fy - jy, H = g.h;
+    return H[jy * g.n + ix] * (1 - ax) * (1 - ay) + H[jy * g.n + ix + 1] * ax * (1 - ay)
+      + H[(jy + 1) * g.n + ix] * (1 - ax) * ay + H[(jy + 1) * g.n + ix + 1] * ax * ay;
+  };
+  const terraMinMax = () => {
+    if (!terrainGrid || !terrainGrid.h || !terrainGrid.h.length) return null;
+    let lo = Infinity, hi = -Infinity;
+    terrainGrid.h.forEach(v => { if (isFinite(v)) { if (v < lo) lo = v; if (v > hi) hi = v; } });
+    return isFinite(lo) ? { lo, hi } : null;
+  };
   let airAnim = (K0 && K0.airAnim !== undefined) ? K0.airAnim
     : !(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const VEGETATION = SCENE.veg;   // {type, height, density, x, y} — shared, see SCENE
   const WALLS = SCENE.walls;      // {x, y, along:'x'|'y', height, length}
+  /* Surrounding buildings for this redraw, in the plan's own metres with
+     their ground and top above the site — refreshed wherever the wind is
+     rebuilt, read by the scores, the streamlines and the drawing alike. */
+  let NBV = [];
+  /* Neighbours stay out of the drawn model — the 10 m reference wind blows
+     above most rooftops — but every number still feels them. The student is
+     asked whether they agree; either answer is kept. */
+  let nbView = K0 && K0.nbView === 'shown' ? 'shown' : 'hidden', nbAgreed = !!(K0 && K0.nbAgreed);
   /* Monthly wind, direction FROM in degrees plus speed at 10 m: the pattern
      the blue arrows draw and the pair scores are weighted by. Set per month
      below; default north at 3 m/s until judged. */
@@ -9938,8 +9978,87 @@ function buildVentilation(host) {
       the most it can cut the wind in its lee (a solid wall 0.8; foliage by
       its density — porous screens cut less but shelter further); Lmax the
       distance, in heights, at which its shelter has died away. */
+  const nbRef = () => (ENV.plot || { lat:S.lat, lon:S.lon });
+  const nbVent = () => {
+    if (!ENV.nb || !NB.list.length) return [];
+    const ref = nbRef(), cl = Math.cos(ref.lat * RAD), b = betaV();
+    const cb = Math.cos(b), sb = Math.sin(b), boxes = planModel(G).boxes, out = [];
+    NB.list.forEach(bd => {
+      const p = bd.ll.map(q => {
+        const E = (q[1] - ref.lon) * 111320 * cl, N = (q[0] - ref.lat) * 111320;
+        return [E * cb - N * sb, E * sb + N * cb];
+      });
+      const bb = [Infinity, Infinity, -Infinity, -Infinity];
+      p.forEach(q => { if (q[0] < bb[0]) bb[0] = q[0]; if (q[1] < bb[1]) bb[1] = q[1]; if (q[0] > bb[2]) bb[2] = q[0]; if (q[1] > bb[3]) bb[3] = q[1]; });
+      if (bb[0] > 120 || bb[2] < -120 || bb[1] > 120 || bb[3] < -120) return;
+      if (inPoly(0, 0, p)) return;
+      if (boxes.some(r => r.some(q => inPoly(q[0], q[1], p)) || p.some(q => q[0] > r[0] && q[0] < r[2] && q[1] > r[1] && q[1] < r[3]))) return;
+      const cx = (bb[0] + bb[2]) / 2, cy = (bb[1] + bb[3]) / 2, ground = terraAt(cx, cy), h = Math.max(1, bd.h);
+      out.push({ poly:p, bb, cx, cy, ground, h, top:ground + h, how:bd.how,
+        dist:Math.hypot(cx, cy), r:Math.max(0.5, (bb[2] - bb[0] + bb[3] - bb[1]) / 4) });
+    });
+    out.sort((x, y) => x.dist - y.dist);
+    return out.slice(0, 48);
+  };
+  /* Avenues: pairs of neighbours whose gap runs with the wind, pouring it
+     down the street onto the design — channeling, the sheltering mirror
+     image. Two blocks at least 4 m tall flank a street-like gap (4–30 m);
+     the gap's axis lies within 25° of the wind's flow; the design stands
+     downwind inside the gap's mouth. The speed-up (up to ×1.4 down a
+     narrow aligned canyon, fading past its mouth) is this app's teaching
+     rule for street-canyon flow, not a measured coefficient. f is the
+     wind's flow vector (where it blows to), in the plan's frame. */
+  const avenuesFor = f => {
+    const nbs = nbVent().filter(nb => nb.h >= 4), out = [];
+    for (let i = 0; i < nbs.length; i++) for (let j = i + 1; j < nbs.length; j++) {
+      const A = nbs[i], B = nbs[j];
+      const dx = B.cx - A.cx, dy = B.cy - A.cy, dc = Math.hypot(dx, dy) || 1e-9;
+      const g = dc - (A.r + B.r);
+      if (!(g >= 4 && g <= 30) || Math.min(2 * A.r, 2 * B.r) < 6) continue;
+      let ax = -dy / dc, ay = dx / dc;
+      if (ax * f[0] + ay * f[1] < 0) { ax = -ax; ay = -ay; }
+      if (ax * f[0] + ay * f[1] < Math.cos(25 * RAD)) continue;
+      const mx = (A.cx + B.cx) / 2, my = (A.cy + B.cy) / 2;
+      const a = -mx * f[0] + -my * f[1], w = Math.abs(-mx * f[1] + my * f[0]);
+      if (!(a > 0 && a <= 120) || w > g / 2 + 4) continue;
+      out.push({ mx, my, ax, ay, g, top:Math.min(A.top, B.top),
+        chan:Math.min(1.4, 1 + 0.5 * (1 - g / 30) * (ax * f[0] + ay * f[1])) });
+    }
+    return out;
+  };
+  /** Speed-up at a point and height inside a canyon mouth, 1 in the open. */
+  const canyonChanAt = (avs, x, y, z) => {
+    let k = 1;
+    for (const av of avs) {
+      if (z > av.top) continue;
+      const rx = x - av.mx, ry = y - av.my;
+      const a = rx * av.ax + ry * av.ay, w = Math.abs(rx * av.ay - ry * av.ax);
+      if (a < -30 || a > 130 || w > av.g / 2 + 4) continue;
+      const fade = a <= 0 ? 1 : Math.max(0.4, 1 - a / 150);
+      const kk = 1 + (av.chan - 1) * fade;
+      if (kk > k) k = kk;
+    }
+    return k;
+  };
   const obstacles = () => {
     const out = [];
+    /* neighbours first: solid lee like the building's own (fresh list —
+       the scores may run before the drawing rebuilds its cache) */
+    nbVent().forEach(nb => {
+      const P = nb.poly, per = [];
+      let L = 0;
+      const lens = P.map((q, i) => { const r = P[(i + 1) % P.length]; return Math.hypot(r[0] - q[0], r[1] - q[1]); });
+      L = lens.reduce((a, x) => a + x, 0);
+      const n = Math.max(4, Math.min(24, Math.round(L / 1.5)));
+      let acc = 0, tgt = 0, k = 0;
+      for (let s = 0; s < n; s++) {
+        tgt = L * (s + 0.5) / n;
+        while (k < P.length - 1 && acc + lens[k] < tgt) { acc += lens[k]; k++; }
+        const f = lens[k] > 1e-9 ? (tgt - acc) / lens[k] : 0, a = P[k], c = P[(k + 1) % P.length];
+        per.push([a[0] + (c[0] - a[0]) * clamp(f, 0, 1), a[1] + (c[1] - a[1]) * clamp(f, 0, 1)]);
+      }
+      out.push({ ref:nb, pts:per, r:nb.r, h:Math.max(0.5, nb.top), R0:0.7, Lmax:20, F0:0 });
+    });
     VEGETATION.forEach(v => {
       const bush = specOf(v.type).kind === 'bush', d = v.density != null ? v.density : 0.6;
       out.push({ ref:v, pts:[[v.x, v.y]], r:Math.max(0.4, canopyOf(v) * spreadOf(v)), h:Math.max(0.3, v.height),
@@ -9967,13 +10086,16 @@ function buildVentilation(host) {
   const winterWind = (skip) => {
     const pl = planModel(G), H0 = h0live(), ww = seasonWind('winter'), U = eaveFor(ww.spd), u = localDir(ww.dir);
     const obs = obstacles().filter(o => o.ref !== skip);
-    let wsum = 0, rsum = 0;
+    const avs = avenuesFor([-u[0], -u[1]]);
+    let wsum = 0, hsum = 0, chanMax = 1;
     pl.segs.forEach(sg => {
       const c = sg.n[0] * u[0] + sg.n[1] * u[1];
       if (c <= 0.34) return;
       const nS = Math.max(2, Math.ceil(sg.len / 0.75));
       for (let k = 0; k < nS; k++) {
         const t0 = (k + 0.5) / nS, x = sg.a[0] + (sg.b[0] - sg.a[0]) * t0 + sg.n[0] * 0.05, y = sg.a[1] + (sg.b[1] - sg.a[1]) * t0 + sg.n[1] * 0.05;
+        const chan = canyonChanAt(avs, x, y, H0 * 0.5);
+        if (chan > chanMax) chanMax = chan;
         let red = pl.boxes.some(r => rayHitsBox([x, y, H0 * 0.5], [u[0], u[1], 0], r, H0)) ? 0.7 : 0;
         obs.forEach(o => o.pts.forEach(q => {
           const rx = q[0] - x, ry = q[1] - y, along = rx * u[0] + ry * u[1], lat = Math.abs(rx * u[1] - ry * u[0]);
@@ -9981,11 +10103,11 @@ function buildVentilation(host) {
           const L = along / o.h, g = L <= 5 ? 1 : L >= o.Lmax ? 0 : (o.Lmax - L) / (o.Lmax - 5);
           red = Math.max(red, o.R0 * g);
         }));
-        wsum += c; rsum += c * red;
+        wsum += c; hsum += c * chan * (1 - red);
       }
     });
-    const cut = wsum > 0 ? rsum / wsum : 0;
-    return { dir:ww.dir, spd:ww.spd, U, Uwall:U * (1 - cut), cut };
+    const cut = wsum > 0 ? 1 - hsum / wsum : 0;
+    return { dir:ww.dir, spd:ww.spd, U, Uwall:U * hsum / Math.max(1e-9, wsum), cut, chan:chanMax };
   };
   /**
    * Summer: the air the cross paths drive through the house. The June-to-
@@ -10007,6 +10129,7 @@ function buildVentilation(host) {
   const summerAir = (skip) => {
     const pl = planModel(G), sw = seasonWind('summer'), U = eaveFor(sw.spd), u = localDir(sw.dir);
     const obs = obstacles().filter(o => o.ref !== skip), fr = formReach(), V = formFactor(G, RF).V;
+    const avs = avenuesFor([-u[0], -u[1]]);
     const pair = (fA, fB, axis) => {
       const cosT = Math.abs(u[0] * axis[0] + u[1] * axis[1]), dcp = 0.9 * Math.max(0.1, cosT * cosT);
       const aA = openArea(fA), aB = openArea(fB);
@@ -10030,9 +10153,12 @@ function buildVentilation(host) {
         });
       }
       const k = (1 - kb) * (1 + Math.min(0.4, kf));
-      const Q = 0.61 * Ae * U * k * Math.sqrt(dcp), aIn = inlet === fA ? aA : aB;
+      /* ...times what the avenue pours in: a canyon mouth at the inlet
+         accelerates the same air the garden would otherwise only block */
+      const ck = sg ? canyonChanAt(avs, (sg.a[0] + sg.b[0]) / 2, (sg.a[1] + sg.b[1]) / 2, 1.5) : 1;
+      const Q = 0.61 * Ae * U * k * ck * Math.sqrt(dcp), aIn = inlet === fA ? aA : aB;
       const reach = fr.total > 0 ? (axis[0] ? fr.x : fr.y) / fr.total : 0;
-      return { key:fA + '–' + fB, Q, v:aIn > 0 ? Q / aIn : 0, ach:V > 0 ? Q * 3600 / V : 0, reach, dcp, k, kb, kf, inlet, Ae };
+      return { key:fA + '–' + fB, Q, v:aIn > 0 ? Q / aIn : 0, ach:V > 0 ? Q * 3600 / V : 0, reach, dcp, k, kb, kf, ck, inlet, Ae };
     };
     const SN = pair('S', 'N', [0, 1]), EW = pair('E', 'W', [1, 0]);
     /* the rating reads the better path that reaches at least a quarter of the floor */
@@ -10159,38 +10285,64 @@ function buildVentilation(host) {
   /* ---- terrain & wind controls ---- */
   host.appendChild(section('Site exposure — coordinates and altitude',
     'Air thins with altitude, so the same wind pushes less; the eave height from Site drives the stack effect. Terrain and exposure modify the 10 m reference wind.'));
-  const cTerrain = segCtl('Terrain', [{ value:'flat', label:'Flat' }, { value:'rolling', label:'Rolling' }, { value:'hilly', label:'Hilly' }, { value:'mountainous', label:'Mountainous' }], terrainKey,
-    v => { terrainKey = v; refresh(); });
-  const cWind = segCtl('Wind exposure', [{ value:'sheltered', label:'Sheltered' }, { value:'moderate', label:'Moderate' }, { value:'exposed', label:'Exposed' }], windKey,
-    v => { windKey = v; setExposure('done'); refresh(); });
-  /* Exposure is the one judgement derivation cannot make for the student:
-     each successful derivation turns its control red until an option is
-     picked, then green. */
-  let exposureState = K0 && K0.exposureState ? K0.exposureState : 'idle';
-  const expoPill = el('span', { class:'pill bad', text:'' });
-  expoPill.style.display = 'none';
-  function setExposure(st) {
-    exposureState = st;
-    const seg = cWind.querySelector('.seg');
-    if (seg) { seg.classList.toggle('need', st === 'need'); seg.classList.toggle('done', st === 'done'); }
-    if (st === 'idle') { expoPill.style.display = 'none'; return; }
-    expoPill.style.display = '';
-    if (st === 'need') { expoPill.className = 'pill bad'; expoPill.textContent = t('Judge the wind exposure — yours to decide'); }
-    else {
-      expoPill.className = 'pill ok';
-      expoPill.textContent = t('Exposure judged') + ': ' + t({ sheltered:'Sheltered', moderate:'Moderate', exposed:'Exposed' }[windKey]);
-    }
-  }
-  siteBox.appendChild(cTerrain); siteBox.appendChild(cWind);
+  /* Exposure is read, not judged: the relief names the terrain, and the
+     mapped neighbours name the shelter — a street of houses shelters, an
+     open field exposes. Teaching cuts, stated beside the reading. */
   const TERRAIN_NAME = { flat:'Flat', rolling:'Rolling', hilly:'Hilly', mountainous:'Mountainous' };
+  const EXPOSURE_NAME = { sheltered:'Sheltered', moderate:'Moderate', exposed:'Exposed' };
+  const derivedExposure = () => {
+    let sum = 0, n = 0;
+    nbVent().forEach(nb => { sum += nb.h; n++; });
+    if (sum >= 100) return { key:'sheltered', n, sum };
+    if (sum < 20 && (terrainKey === 'flat' || terrainKey === 'rolling')) return { key:'exposed', n, sum };
+    return { key:'moderate', n, sum };
+  };
+  let expoInfo = { key:windKey, n:0, sum:0 };
   const deriveBtn = el('button', { class:'btn', text:'Derive terrain + wind from coordinates' });
   const deriveStatus = el('span', { class:'fieldstatus', text:'' });
   siteBox.appendChild(el('div', { class:'rgroup' }, [deriveBtn, deriveStatus]));
-  siteBox.appendChild(expoPill);
-  if (exposureState !== 'idle') setExposure(exposureState);   // as judged before the pages were rebuilt
+  const expoRead = el('span', { class:'fieldstatus', text:'' });
+  siteBox.appendChild(expoRead);
+  const cNb = checkCtl('Neighbouring buildings', ENV.nb, v => {
+    ENV.nb = v;
+    if (v) wantNeighbours(nbRef(), () => refresh());
+    refresh();
+  });
+  siteBox.appendChild(cNb);
+  const nbStatus = el('span', { class:'fieldstatus', text:'' });
+  siteBox.appendChild(nbStatus);
+  /* The agreement question: the model hides the neighbours because the
+     reference wind blows above them, while every number still feels them.
+     Shown until answered, then kept as a one-line verdict with a way back. */
+  const nbAsk = el('div', {});
+  nbAsk.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px';
+  siteBox.appendChild(nbAsk);
+  function syncNbAsk() {
+    nbAsk.innerHTML = '';
+    if (!ENV.nb) return;
+    const nbs = nbVent();
+    if (!nbs.length) return;
+    const btn = (lab, fn) => nbAsk.appendChild(el('button', { class:'btn small', text:lab, onclick:fn }));
+    if (nbView === 'shown') {
+      const p = el('span', { class:'pill empty', text:'Neighbours shown in the model' });
+      nbAsk.appendChild(p);
+      btn('Hide', () => { nbView = 'hidden'; refresh(); });
+      return;
+    }
+    if (!nbAgreed) {
+      const q = el('span', { class:'hint' });
+      q.textContent = t('The 10 m wind blows above the rooftops, so the model hides these neighbours — though every number still feels them. Do you agree?');
+      nbAsk.appendChild(q);
+      btn('Agree', () => { nbAgreed = true; refresh(); });
+      btn('Show them', () => { nbView = 'shown'; refresh(); });
+    } else {
+      nbAsk.appendChild(el('span', { class:'pill ok', text:'Hidden by your agreement' }));
+      btn('Show', () => { nbView = 'shown'; refresh(); });
+    }
+  }
   let derivedRelief = K0 ? K0.derivedRelief : null, derivedWindSrc = K0 ? K0.derivedWindSrc : '';
-  KEEPERS.push(() => { KEEP.vent = { lat, lon, cam:{ az:CAM.az, el:CAM.el }, terrainKey, windKey, showShadow, showAir, airAnim, windMonths:windMonths.slice(), windTouched,
-    WIND_M:WIND_M.map(w => Object.assign({}, w)), tuneDir, tuneSpd, derivedRelief, derivedWindSrc, exposureState }; });
+  KEEPERS.push(() => { KEEP.vent = { lat, lon, cam:{ az:CAM.az, el:CAM.el }, terrainKey, windKey, showShadow, showAir, showTerrain, terrainGrid, airAnim, windMonths:windMonths.slice(), windTouched,
+    WIND_M:WIND_M.map(w => Object.assign({}, w)), tuneDir, tuneSpd, derivedRelief, derivedWindSrc, nbView, nbAgreed }; });
   /** Terrain class from the relief around the site (same two public elevation
       services as the altitude lookup, one batched request each over a ~2 km
       window), plus one prevailing wind per month from the ERA5 hourly
@@ -10237,15 +10389,36 @@ function buildVentilation(host) {
       if (!grids.length) throw new Error('elevation');
       const relief = Math.max(...grids.map(g => Math.max(...g) - Math.min(...g)));
       terrainKey = relief < 25 ? 'flat' : relief < 100 ? 'rolling' : relief < 300 ? 'hilly' : 'mountainous';
-      const tBtns = cTerrain.querySelectorAll('button');
-      ['flat', 'rolling', 'hilly', 'mountainous'].forEach((k, i) => {
-        if (tBtns[i]) tBtns[i].setAttribute('aria-pressed', String(k === terrainKey));
-      });
       derivedRelief = relief;
       notes.push(t('Relief') + ' ' + fmt(relief, 0) + ' m/2 km ' + t('→') + ' ' + t(TERRAIN_NAME[terrainKey]));
       ok = true;
     } catch (eRelief) {
       notes.push(t('relief unavailable — terrain stays manual'));
+    }
+    /* Regular terrain round the site for the drawing itself: a 9 × 9 grid
+       at 30 m spacing (240 m across — the elevation service answers at
+       most a hundred points in one request), over the same service as the
+       relief above. Stored in world metres east/north of the site,
+       relative to the grid's own centre, so the building keeps the origin
+       and the wind lines can ride it. */
+    try {
+      const TN = 9, TSTEP = 30, TC = (TN - 1) / 2;
+      const mLat = TSTEP / 111320, mLon = TSTEP / Math.max(0.2, 111320 * Math.cos(lat * RAD));
+      const tLa = [], tLo = [];
+      for (let j = 0; j < TN; j++) for (let i = 0; i < TN; i++) {
+        tLa.push((lat + (j - TC) * mLat).toFixed(5));
+        tLo.push((lon + (i - TC) * mLon).toFixed(5));
+      }
+      const tg = await (await fetchT('https://api.open-meteo.com/v1/elevation?latitude=' + tLa.join(',') + '&longitude=' + tLo.join(','))).json();
+      const tv = tg && tg.elevation;
+      if (!Array.isArray(tv) || tv.length !== TN * TN || tv.some(v => typeof v !== 'number' || !isFinite(v))) throw new Error('terrain');
+      const datum = tv[TC * TN + TC];
+      terrainGrid = { n:TN, step:TSTEP, h:tv.map(v => +(v - datum).toFixed(1)) };
+      const mm = terraMinMax();
+      notes.push(t('terrain 240 m grid: low ' + fmt(mm.lo, 0) + ' m, high +' + fmt(mm.hi, 0) + ' m (Copernicus DEM via Open-Meteo)'));
+      ok = true;
+    } catch (eTerrain) {
+      notes.push(t('terrain grid unavailable — flat ground stands in'));
     }
     try {
       const yr = new Date().getFullYear() - 1;
@@ -10284,17 +10457,17 @@ function buildVentilation(host) {
     } catch (eWind) {
       notes.push(t('wind unavailable — months stay hand-set at N 3.0; retry when online'));
     }
-    deriveStatus.textContent = notes.join(' · ') + (ok ? ' · ' + t('exposure stays yours to judge') : '');
-    if (ok) setExposure('need');
+    deriveStatus.textContent = notes.join(' · ') + (ok ? ' · ' + t('exposure reads itself below') : '');
     refresh();
     deriveBtn.disabled = false;
   }
   deriveBtn.addEventListener('click', deriveFromSite);
   host.appendChild(hint('vent-terrain',
-    'Open (flat) ground slows the wind least; broken and mountainous ground shelters more (power-law exponent 0.14–0.28). Exposure multiplies it again: sheltered 0.6, moderate 1.0, exposed 1.4 (Olgyay, pp.37–40; DeKay & Brown, Strategy 85). Terrain and twelve monthly prevailing winds derive from these coordinates automatically on entry (ERA5 reanalysis via Open-Meteo — like the altitude lookup, only the coordinates leave the browser); the button re-runs it. Exposure stays manual: it reads the immediate surroundings, which no gridded product sees.'));
+    'Open (flat) ground slows the wind least; broken and mountainous ground shelters more (power-law exponent 0.14–0.28). Exposure multiplies it again: sheltered 0.6, moderate 1.0, exposed 1.4 (Olgyay, pp.37–40; DeKay & Brown, Strategy 85). Terrain class and twelve monthly prevailing winds derive from these coordinates automatically on entry (ERA5 reanalysis via Open-Meteo — like the altitude lookup, only the coordinates leave the browser); the button re-runs it. The drawing goes further: a regular 240 m grid of ground heights is fetched for the site and drawn under the model with its low and high, and every wind line rides it — climbing a rise, settling in a hollow — so the exposure judgement reads against real geography. The grid is the Copernicus DEM 2021 release (GLO-90, 90 m resolution, https://doi.org/10.5270/ESA-c5d3d65), served by Open-Meteo under a free licence — the same elevation model behind the altitude lookup. Exposure itself stays manual: it reads the immediate surroundings, which no gridded product sees.'));
   const cShadow = checkCtl('Show sun shadows', showShadow, v => { showShadow = v; refresh(); });
   const cAir = checkCtl('Show cross-ventilation paths', showAir, v => { showAir = v; refresh(); });
-  viewBox.appendChild(cShadow); viewBox.appendChild(cAir);
+  const cTerr = checkCtl('Show terrain relief', showTerrain, v => { showTerrain = v; refresh(); });
+  viewBox.appendChild(cShadow); viewBox.appendChild(cAir); viewBox.appendChild(cTerr);
   const cAnim = checkCtl('Animate wind', airAnim, v => { airAnim = v; airKick(); });
   viewBox.appendChild(cAnim);
   host.appendChild(hint('vent-air',
@@ -10609,6 +10782,7 @@ function buildVentilation(host) {
     const toA = (wm.dir + 180) % 360;
     const [tx, ty] = localDir(toA);
     const V0 = Math.max(0, eaveWind());
+    NBV = nbVent();
     const midH = clamp(h0live() * 0.55, 1.0, 2.6);
     const pp = planParts(G);
     const R = 1.45;
@@ -10836,14 +11010,87 @@ function buildVentilation(host) {
       if (strokeColor) { stroke(ctx, strokeColor, width || 1.4, dash); ctx.stroke(); }
     };
 
-    /* ---- garden ground (big enough for shadows, trees and walls) ---- */
+    /* ---- garden ground: the regular terrain where derived, else flat.
+       The grid's lows and highs wear the drawing: hypsometric tints with
+       spot heights, so the wind's context reads at a glance. ---- */
     const gm = FR.garden;
     const [gx, gy] = reachXY();
-    poly([[-gx-gm, -gy-gm, 0], [gx+gm, -gy-gm, 0],
-          [gx+gm, gy+gm, 0], [-gx-gm, gy+gm, 0]],
-         'rgba(20,23,26,.03)', CH.line, 1.2);
+    const terrMM = terraMinMax();
+    const terrOn = showTerrain && terrainGrid && terrainGrid.h && terrMM;
+    if (!terrOn) {
+      poly([[-gx-gm, -gy-gm, 0], [gx+gm, -gy-gm, 0],
+            [gx+gm, gy+gm, 0], [-gx-gm, gy+gm, 0]],
+           'rgba(20,23,26,.03)', CH.line, 1.2);
+    } else {
+      /* low sage through mid straw to high warm brown, keyed to this
+         grid's own range so a plain and a slope both read; each cell is
+         drawn in thirds so the bands melt instead of stepping */
+      const terrCol = h => {
+        const span = Math.max(1e-6, terrMM.hi - terrMM.lo), f = clamp((h - terrMM.lo) / span, 0, 1);
+        const c0 = [229, 236, 222], c1 = [212, 198, 162], c2 = [182, 144, 106];
+        const c = f < 0.5 ? c0.map((v, i) => Math.round(v + (c1[i] - v) * f * 2))
+          : c1.map((v, i) => Math.round(v + (c2[i] - v) * (f - 0.5) * 2));
+        return 'rgb(' + c[0] + ',' + c[1] + ',' + c[2] + ')';
+      };
+      const TN = terrainGrid.n, TS = terrainGrid.step, TE = (TN - 1) * TS / 2;
+      let cb = 1, sb = 0;
+      try { const bb = betaV(); cb = Math.cos(bb); sb = Math.sin(bb); } catch (eT) {}
+      const toPlan = (E, N) => [E * cb - N * sb, E * sb + N * cb];
+      /* bilinear node height in world metres */
+      const nodeH = (E, N) => {
+        const fx = (E + TE) / TS, fy = (N + TE) / TS;
+        const ix = clamp(Math.floor(fx), 0, TN - 2), jy = clamp(Math.floor(fy), 0, TN - 2);
+        const ax = clamp(fx - ix, 0, 1), ay = clamp(fy - jy, 0, 1), H = terrainGrid.h;
+        return H[jy * TN + ix] * (1 - ax) * (1 - ay) + H[jy * TN + ix + 1] * ax * (1 - ay)
+          + H[(jy + 1) * TN + ix] * (1 - ax) * ay + H[(jy + 1) * TN + ix + 1] * ax * ay;
+      };
+      const cells = [], SUB = 3, st = TS / SUB;
+      for (let jj = 0; jj < (TN - 1) * SUB; jj++) for (let ii = 0; ii < (TN - 1) * SUB; ii++) {
+        const E0 = -TE + ii * st, N0 = -TE + jj * st;
+        const h00 = nodeH(E0, N0), h10 = nodeH(E0 + st, N0);
+        const h11 = nodeH(E0 + st, N0 + st), h01 = nodeH(E0, N0 + st);
+        const p00 = toPlan(E0, N0), p10 = toPlan(E0 + st, N0);
+        const p11 = toPlan(E0 + st, N0 + st), p01 = toPlan(E0, N0 + st);
+        const hm = (h00 + h10 + h11 + h01) / 4;
+        cells.push({ d:camDepth(FR.ax, (p00[0] + p11[0]) / 2, (p00[1] + p11[1]) / 2, hm),
+          q:[[p00[0], p00[1], h00], [p10[0], p10[1], h10], [p11[0], p11[1], h11], [p01[0], p01[1], h01]], hm });
+      }
+      cells.sort((a, b) => b.d - a.d);
+      cells.forEach(c => poly(c.q, terrCol(c.hm), null, 1));
+      /* the grid's border, following its own heights */
+      {
+        const c00 = toPlan(-TE, -TE), c10 = toPlan(TE, -TE), c11 = toPlan(TE, TE), c01 = toPlan(-TE, TE);
+        poly([[c00[0], c00[1], terrainGrid.h[0]], [c10[0], c10[1], terrainGrid.h[TN - 1]],
+          [c11[0], c11[1], terrainGrid.h[TN * TN - 1]], [c01[0], c01[1], terrainGrid.h[(TN - 1) * TN]]],
+          null, CH.line, 1.2);
+      }
+      /* spot heights: the low and high in view, where they stand — the
+         grid's extremes often lie beyond the frame, so what the student
+         sees is labelled, not what is clipped away */
+      {
+        const inW = ventPanel && ventPanel.W ? ventPanel.W : 1e9, inH = ventPanel && ventPanel.H ? ventPanel.H : 1e9;
+        let kLo = -1, kHi = -1;
+        for (let k = 0; k < TN * TN; k++) {
+          const E = -TE + (k % TN) * TS, N = -TE + Math.floor(k / TN) * TS, p = toPlan(E, N);
+          const s = proj(p[0], p[1], terrainGrid.h[k]);
+          if (s[0] < -40 || s[1] < -30 || s[0] > inW + 40 || s[1] > inH + 10) continue;
+          if (kLo < 0 || terrainGrid.h[k] < terrainGrid.h[kLo]) kLo = k;
+          if (kHi < 0 || terrainGrid.h[k] > terrainGrid.h[kHi]) kHi = k;
+        }
+        [[kLo, 'terrain low'], [kHi, 'terrain high']].forEach(([k, nm]) => {
+          if (k < 0) return;
+          const v = terrainGrid.h[k];
+          const E = -TE + (k % TN) * TS, N = -TE + Math.floor(k / TN) * TS, p = toPlan(E, N);
+          const s = proj(p[0], p[1], v);
+          ctx.fillStyle = 'rgba(250,251,249,.92)'; ctx.fillRect(s[0] - 30, s[1] - 22, 60, 15);
+          label(ctx, t(nm) + ' ' + (v > 0 ? '+' : '') + fmt(v, 0) + ' m', s[0], s[1] - 14, CH.ink2, F(9), 'center', 'middle');
+          ctx.fillStyle = '#14171a';
+          ctx.beginPath(); ctx.arc(s[0], s[1] - 4, 2.5, 0, 6.284); ctx.fill();
+        });
+      }
+    }
 
-    /* ---- sun shadow of the whole volume on the garden: every roof piece's
+    /* /* ---- sun shadow of the whole volume on the garden: every roof piece's
        prism dropped along the sun ray, filled as one path ---- */
     let shadowTag = null, shadeHit = null;
     const shadeDbg = { wall: 0, roof: 0 };
@@ -10857,14 +11104,14 @@ function buildVentilation(host) {
       M.pieces.forEach(pc => {
         const pts = pc.poly.map(q => [q[0], q[1]]).concat(pc.poly.map(q => { const z = M.zOf(pc.f, q[0], q[1]); return [q[0] + ox * z, q[1] + oy * z]; }));
         all.push(...pts);
-        hullV(pts).forEach((p, i) => { const q = proj(p[0], p[1], 0); i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]); });
+        hullV(pts).forEach((p, i) => { const q = proj(p[0], p[1], terrOn ? terraAt(p[0], p[1]) + 0.05 : 0); i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]); });
         ctx.closePath();
       });
       ctx.fillStyle = 'rgba(20,23,26,.13)'; ctx.fill('nonzero');
       /* labelled at the end, beside the shadow's farthest corners still in
          sight — never on the building drawn over it */
       shadowTag = { txt:t('shadow') + ' ' + fmt(M.ridge * k, 1) + ' m',
-        pts:hullV(all).sort((a2, b2) => (b2[0] * ox + b2[1] * oy) - (a2[0] * ox + a2[1] * oy)).map(q => proj(q[0], q[1], 0)) };
+        pts:hullV(all).sort((a2, b2) => (b2[0] * ox + b2[1] * oy) - (a2[0] * ox + a2[1] * oy)).map(q => proj(q[0], q[1], terrOn ? terraAt(q[0], q[1]) + 0.05 : 0)) };
       /* Each plant throws the disc of its own canopy, dropped from its full
          height along the same sun ray — enough to read who shades whom. */
       VEGETATION.forEach(v => {
@@ -10968,6 +11215,23 @@ function buildVentilation(host) {
     });
     const depthV = it => it.pts.reduce((a2, q) => a2 + camDepth(q[0], q[1], q[2]), 0) / it.pts.length - (it.dev ? 0.01 : 0);
     const pathV = pts3 => { ctx.beginPath(); pts3.forEach((q, i) => { const p2 = proj(q[0], q[1], q[2]); i ? ctx.lineTo(p2[0], p2[1]) : ctx.moveTo(p2[0], p2[1]); }); ctx.closePath(); };
+    /* surrounding buildings as translucent prisms on their ground, inside
+       the same depth order so near ones cover and far ones hide — drawn
+       only when the student asks to see them; the wind feels them either
+       way */
+    if (nbView === 'shown') NBV.forEach(nb => {
+      const ring = nb.poly, top = nb.top;
+      const tpts = ring.map(q => [q[0], q[1], top]);
+      items.push({ pts:tpts, fill:'rgba(148,158,168,.45)',
+        d:tpts.reduce((a2, q) => a2 + camDepth(q[0], q[1], q[2]), 0) / tpts.length });
+      for (let i = 0; i < ring.length; i++) {
+        const a2 = ring[i], b2 = ring[(i + 1) % ring.length];
+        const q = [[a2[0], a2[1], terraAt(a2[0], a2[1]) + 0.05], [b2[0], b2[1], terraAt(b2[0], b2[1]) + 0.05],
+          [b2[0], b2[1], top], [a2[0], a2[1], top]];
+        items.push({ pts:q, fill:'rgba(130,140,150,.38)',
+          d:q.reduce((s2, r) => s2 + camDepth(r[0], r[1], r[2]), 0) / 4 });
+      }
+    });
     pushImportFaces(items);
     pushChimPar(items, M);
     items.sort((p1, q1) => roofWallOrder(p1, q1) || ((q1.d === undefined ? depthV(q1) : q1.d) - (p1.d === undefined ? depthV(p1) : p1.d))).forEach(it => {
@@ -11133,6 +11397,11 @@ function buildVentilation(host) {
     };
     const topAt = (x, y) => {
       let top = hAt(x, y);
+      for (const nb of NBV) {
+        if (nb.top <= top) continue;
+        if (x > nb.bb[0] - 0.2 && x < nb.bb[2] + 0.2 && y > nb.bb[1] - 0.2 && y < nb.bb[3] + 0.2
+          && inPoly(x, y, nb.poly)) top = nb.top;
+      }
       for (const v of VEGETATION) {
         const sp = specOf(v.type);
         if (!sp) continue;
@@ -11186,6 +11455,13 @@ function buildVentilation(host) {
       L.pts.forEach(p => {
         const here = topAt(p.x, p.y);
         if (here > -1e8 && p.z < here + 0.35) p.z = here + 0.35;
+        /* the layer rides the ground too: every point takes the terrain
+           under it, never closer than head clearance above it */
+        if (terrOn) {
+          const tg = terraAt(p.x, p.y);
+          p.z += tg;
+          if (p.z < tg + 0.4) p.z = tg + 0.4;
+        }
         if (p.z > airMaxZ) airMaxZ = p.z;
       });
     });
@@ -11198,8 +11474,8 @@ function buildVentilation(host) {
     const addEddy = (cx2, cy2, a, b) => {
       const pts = [], N = 40;
       for (let i = 0; i <= N; i++) {
-        const t = i / N * Math.PI * 2;
-        pts.push({ x: cx2 + Math.cos(t) * a, y: cy2 + Math.sin(t) * b, sf: 0.3, z: layH });
+        const t = i / N * Math.PI * 2, ex = cx2 + Math.cos(t) * a, ey = cy2 + Math.sin(t) * b;
+        pts.push({ x:ex, y:ey, sf:0.3, z:layH + (terrOn ? terraAt(ex, ey) : 0) });
       }
       const cum = [0];
       for (let k = 1; k < pts.length; k++) cum.push(cum[k - 1] + Math.hypot(pts[k].x - pts[k - 1].x, pts[k].y - pts[k - 1].y));
@@ -11247,6 +11523,18 @@ function buildVentilation(host) {
       return false;
     };
     ventAir.behind = behindHouse;
+    /* A hill between the point and the camera hides it exactly like the
+       house does — without this, lines on the far slope draw over the
+       hill they run behind and read as dragging through the ground. The
+       ground is smooth, so the march runs coarse; anything above the
+       grid's own high point cannot be hidden. */
+    const terrainHides = (x, y, z) => {
+      if (!terrOn || AX.te > 40 || z > terrMM.hi + 2) return false;
+      for (let t = 1; t < 160; t += 1.5) {
+        if (z + t * AX.te < terraAt(x + t * AX.c[0], y + t * AX.c[1]) - 0.15) return true;
+      }
+      return false;
+    };
     let airSolid = 0, airDash = 0;
 
     /* ---- summer cross-ventilation paths through opposite pairs ---- */
@@ -11266,7 +11554,7 @@ function buildVentilation(host) {
           const al = 0.45 + 0.4 * Math.min(1, sm / 1.2);
           const az = a.z == null ? midH : a.z, bz = b.z == null ? midH : b.z;
           const A = proj(a.x, a.y, az), B = proj(b.x, b.y, bz);
-          const hid = behindHouse(a.x, a.y, az) || behindHouse(b.x, b.y, bz);
+          const hid = behindHouse(a.x, a.y, az) || behindHouse(b.x, b.y, bz) || terrainHides(a.x, a.y, az) || terrainHides(b.x, b.y, bz);
           if (hid) airDash++; else airSolid++;
           stroke(ctx, 'rgba(' + cc[0] + ',' + cc[1] + ',' + cc[2] + ',' + al.toFixed(2) + ')', 1.6, hid ? [6, 4] : null);
           seg(ctx, A[0], A[1], B[0], B[1]);
@@ -11276,7 +11564,7 @@ function buildVentilation(host) {
           const z0 = q0.z == null ? midH : q0.z, z1 = q1.z == null ? midH : q1.z;
           const A = proj(q0.x, q0.y, z0), B = proj(q1.x, q1.y, z1);
           const an = Math.atan2(B[1] - A[1], B[0] - A[0]), hl = 8;
-          const hid = behindHouse(q1.x, q1.y, z1), ac = speedRGB(q1.sf);
+          const hid = behindHouse(q1.x, q1.y, z1) || terrainHides(q1.x, q1.y, z1), ac = speedRGB(q1.sf);
           stroke(ctx, 'rgba(' + ac[0] + ',' + ac[1] + ',' + ac[2] + ',.8)', 1.6, hid ? [6, 4] : null);
           seg(ctx, B[0], B[1], B[0] - hl * Math.cos(an - 0.45), B[1] - hl * Math.sin(an - 0.45));
           seg(ctx, B[0], B[1], B[0] - hl * Math.cos(an + 0.45), B[1] - hl * Math.sin(an + 0.45));
@@ -11321,9 +11609,9 @@ function buildVentilation(host) {
     const cmp = az => COMPASS8[Math.round(az / 45) % 8];
     ctx.fillStyle = '#14171a'; ctx.font = 'bold 10px ui-monospace'; ctx.textAlign = 'left';
     ctx.fillText(t('Winter') + ' ' + (lat < 0 ? t('Jun–Aug') : t('Dec–Feb')) + ' ' + cmp(wwR.dir) + ' ' + fmt(wwR.U, 1) + ' m/s ' + t('at the eaves') + ' → '
-      + fmt(wwR.Uwall, 1) + ' m/s ' + t('at the walls') + ' (−' + Math.round(100 * wwR.cut) + ' %)', 8, ry);
+      + fmt(wwR.Uwall, 1) + ' m/s ' + t('at the walls') + ' (' + (wwR.cut >= 0 ? '−' : '+') + Math.round(100 * Math.abs(wwR.cut)) + ' %)' + (wwR.chan > 1.05 ? ' · ' + t('avenue') + ' ×' + fmt(wwR.chan, 2) : ''), 8, ry);
     ctx.fillStyle = '#1D4ED8'; ctx.fillText(t('Summer') + ' ' + (lat < 0 ? t('Dec–Feb') : t('Jun–Aug')) + ' ' + cmp(saR.dir) + ' ' + fmt(saR.U, 1) + ' m/s → S–N '
-      + fmt(saR.SN.v, 2) + ' · E–W ' + fmt(saR.EW.v, 2) + ' m/s ' + t('at the inlet windows') + ' · ' + fmt(saR.ach, 0) + ' ' + t('air changes/h'), 8, ry + 12);
+      + fmt(saR.SN.v, 2) + ' · E–W ' + fmt(saR.EW.v, 2) + ' m/s ' + t('at the inlet windows') + ' · ' + fmt(saR.ach, 0) + ' ' + t('air changes/h') + (Math.max(saR.SN.ck, saR.EW.ck) > 1.05 ? ' · ' + t('avenue') + ' ×' + fmt(Math.max(saR.SN.ck, saR.EW.ck), 2) : ''), 8, ry + 12);
 
     /* ---- corner etiqueta: the Olgyay meta-evaluation on the model ----
        Winter badge reads the vegetation-and-wall windbreak (blockage after
@@ -11381,6 +11669,14 @@ function buildVentilation(host) {
     rows.push(['Latitude (°)', +lat.toFixed(3)], ['Longitude (°)', +lon.toFixed(3)], ['Altitude (m)', +(S.alt || 0)]);
     rows.push(['Air density (kg/m³)', +airDensity().toFixed(3)]);
     rows.push(['Terrain', terrainKey], ['Wind exposure', windKey]);
+    rows.push(['Neighbouring buildings (OpenStreetMap)', ENV.nb ? NBV.length + ' within 120 m' : 'off']);
+    if (ENV.nb && NBV.length) rows.push(['  of which with assumed heights', NBV.filter(n => n.how === 'assumed').length]);
+    {
+      const mm = terraMinMax();
+      if (terrainGrid && mm) rows.push(['Terrain grid (regular, m across)', terrainGrid.n + '×' + terrainGrid.n + ' at ' + terrainGrid.step + ' m'],
+        ['Terrain low / high vs site (m)', +mm.lo.toFixed(1) + ' / +' + mm.hi.toFixed(1)],
+        ['Terrain grid source', 'Copernicus DEM 2021 (GLO-90), 90 m, via Open-Meteo']);
+    }
     rows.push(['Wind set', monthSetName(MON3_EN) + ' ' + COMPASS8_EN[Math.round(tunedWind().dir / 45) % 8] + ' ' + tunedWind().spd.toFixed(1) + ' m/s']);
     rows.push(['Local tune', (tuneDir >= 0 ? '+' : '') + tuneDir + '\u00b0 \u00d7' + tuneSpd.toFixed(2)]);
     WIND_M.forEach((w, m) => rows.push(['Wind ' + MONTHS_EN[m], COMPASS8_EN[Math.round(w.dir / 45) % 8] + ' ' + w.spd.toFixed(1) + ' m/s']));
@@ -11784,6 +12080,15 @@ function buildVentilation(host) {
     syncPlantEd();
     syncWindCtls();
     vegCount.textContent = VEGETATION.length + '/10';
+    /* exposure follows the surroundings every refresh: the relief names the
+       terrain, the mapped neighbours name the shelter */
+    expoInfo = derivedExposure();
+    windKey = expoInfo.key;
+    expoRead.textContent = t('Terrain') + ' ' + t(TERRAIN_NAME[terrainKey]) + ' · ' + t('exposure') + ' ' + t(EXPOSURE_NAME[windKey])
+      + (expoInfo.n ? ' — ' + t(expoInfo.n + ' neighbours within 120 m, their heights add up to ' + Math.round(expoInfo.sum) + ' m') : ' — ' + t('no mapped neighbours in reach'));
+    nbStatus.textContent = !ENV.nb ? t('Neighbours off — switch them on for the wind to meet them.')
+      : NBV.length ? t(NBV.length + ' neighbours shape the wind (OpenStreetMap)') + (nbView === 'shown' ? '' : ' ' + t('— hidden from the model')) : t('No mapped neighbours here — the wind meets the garden alone.');
+    syncNbAsk();
     placeHint.textContent = (plantArmed ? ' planting ' + plantArmed + ' — click open ground' : '') + (wallArmed ? ' placing wall — click open ground' : '');
     const sn = sunPos(SH.doy, SH.h, lat, lon, tz);
     liveLine.innerHTML = '';
@@ -11809,6 +12114,9 @@ function buildVentilation(host) {
   /* Monthly wind should never sit on placeholder values while the site has
      coordinates: derive on entry, once per mount — the button re-runs it. */
   deriveFromSite();
+  /* Surrounding buildings for the wind: asked once per spot at most — the
+     fetch guards itself and serves the store first. */
+  if (ENV.nb) wantNeighbours(nbRef(), () => refresh());
 }
 /* The popular house by region — what the walls and roof are made of where
    the site sits: timber and stone under steep metal in the Podhale
@@ -15401,6 +15709,15 @@ Object.assign(PT, {
   "Exposed": "Odsłonięty",
   "Terrain": "Teren",
   "Wind exposure": "Ekspozycja na wiatr",
+  "exposure": "ekspozycja",
+  "Neighbours off \u2014 switch them on for the wind to meet them.": "S\u0105siedzi wy\u0142\u0105czeni \u2014 w\u0142\u0105cz ich, aby wiatr ich spotyka\u0142.",
+  "No mapped neighbours here \u2014 the wind meets the garden alone.": "Brak zmapowanych s\u0105siad\u00f3w tutaj \u2014 wiatr spotyka sam ogr\u00f3d.",
+  "terrain grid unavailable \u2014 flat ground stands in": "siatka terenu niedost\u0119pna \u2014 stoi p\u0142aski grunt",
+  "exposure reads itself below": "ekspozycja odczytuje si\u0119 poni\u017cej",
+  "terrain low": "nisko",
+  "terrain high": "wysoko",
+  "no mapped neighbours in reach": "brak zmapowanych s\u0105siad\u00f3w w zasi\u0119gu",
+  "avenue": "aleja",
   "Reference wind at 10 m": "Vento de referência a 10 m",
   "Show sun shadows": "Pokaż cienie słoneczne",
   "Show cross-ventilation paths": "Pokaż ciągi wentylacji poprzecznej",
@@ -16035,7 +16352,7 @@ Object.assign(PT_HINT, {
   'clim-note-Dfc':
     'Zimna śnieżna zima z krótkim chłodnym latem — polskie góry powyżej około 800 m. Grzanie dominuje absolutnie, a lato nigdy nie prowadzi formy: zwarcie, ciężka izolacja, osłona od wiatru, przy czym śnieg i zamróz–odmarzanie rządzą detalem.',
   'vent-terrain':
-    'Otwarty (płaski) grunt najsłabiej hamuje wiatr; teren pocięty i górski osłania mocniej (wykładnik prawa potęgowego 0,14–0,28). Ekspozycja mnoży go znowu: osłonięta 0,6, umiarkowana 1,0, odsłonięta 1,4 (Olgyay, ss. 37–40; DeKay &amp; Brown, Strategia 85). Teren i dwanaście miesięcznych dominujących wiatrów wywodzą się z tych współrzędnych same przy wejściu (reanaliza ERA5 przez Open-Meteo — jak lookup wysokości, tylko współrzędne opuszczają przeglądarkę); przycisk przelicza je na nowo. Ekspozycja zostaje ręczna: czyta bezpośrednie otoczenie, którego żaden produkt siatkowy nie widzi.',
+    'Otwarty (p\u0142aski) grunt najs\u0142abiej hamuje wiatr; teren poci\u0119ty i g\u00f3rski os\u0142ania mocniej (wyk\u0142adnik prawa pot\u0119gowego 0,14\u20130,28). Ekspozycja mno\u017cy go znowu: os\u0142oni\u0119ta 0,6, umiarkowana 1,0, ods\u0142oni\u0119ta 1,4 (Olgyay, ss. 37\u201340; DeKay & Brown, Strategia 85). Klasa terenu i dwana\u015bcie miesi\u0119cznych dominuj\u0105cych wiatr\u00f3w wywodz\u0105 si\u0119 z tych wsp\u00f3\u0142rz\u0119dnych same przy wej\u015bciu (reanaliza ERA5 przez Open-Meteo \u2014 jak lookup wysoko\u015bci, tylko wsp\u00f3\u0142rz\u0119dne opuszczaj\u0105 przegl\u0105dark\u0119); przycisk przelicza je na nowo. Rysunek idzie dalej: regularna siatka 240 m wysoko\u015bci terenu jest pobierana dla dzia\u0142ki i rysowana pod modelem z jej ni\u017cem i wy\u017cem, a ka\u017cda linia wiatru jedzie po niej \u2014 wspinaj\u0105c si\u0119 na wzniesienie, osiadaj\u0105c w zag\u0142\u0119bieniu \u2014 wi\u0119c os\u0105d ekspozycji czyta si\u0119 na prawdziwej geografii. Siatk\u0105 jest DEM Copernicus edycja 2021 (GLO-90, rozdzielczo\u015b\u0107 90 m, https://doi.org/10.5270/ESA-c5d3d65), serwowany przez Open-Meteo na wolnej licencji \u2014 ten sam model wysoko\u015bci co za lookupiem wysoko\u015bci. Sama ekspozycja zostaje r\u0119czna: czyta bezpo\u015brednie otoczenie, kt\u00f3rego \u017caden produkt siatkowy nie widzi.',
   'vent-wind':
     'Kierunek to skąd wiatr przychodzi, w ósmych jak róża stanowiskowa. Północny wiatr pędzi parę południe–północ, a wschód–zachód tylko muska — przełączaj miesiące i patrz, jak niebieski wzór i obie oceny ruszają się razem. Przeciwne miesiące w jednym zestawie znoszą się w średniej, dokładnie jak przemienna pogoda.',
 });
