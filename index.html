@@ -910,7 +910,7 @@ details.more[open] > summary{color:var(--ink)}
 const APP = {
   name:        'Architecture Advisor PL',
   tag:         'AA PL',
-  version:     '1.110.1',
+  version:     '1.111.0',
   author:      'Nuno Dinis Cortiços',
   institution: 'Lisbon School of Architecture, Universidade de Lisboa',
   builtWith:   'Claude Opus 5 (Anthropic)',
@@ -11810,13 +11810,939 @@ function buildVentilation(host) {
      coordinates: derive on entry, once per mount — the button re-runs it. */
   deriveFromSite();
 }
+/* The popular house by region — what the walls and roof are made of where
+   the site sits: timber and stone under steep metal in the Podhale
+   highlands, clinker brick and tile in Silesia, whitewashed masonry and
+   tile in Mazovia, brick and tile on the coast, timber and thatch in the
+   east. Unknown ground falls back on Mazowieckie, as the planting
+   palette does. */
+const RENDER_REGION = {
+  'Dolnośląskie':['stone', 'slate', 'gory'], 'Kujawsko-pomorskie':['brick', 'tile', 'pomorze'],
+  'Lubelskie':['whitewash', 'tile', 'mazowsze'], 'Lubuskie':['brick', 'tile', 'wielkopolska'],
+  'Łódzkie':['plaster', 'tile', 'mazowsze'], 'Małopolskie':['stone', 'tile', 'podhale'],
+  'Mazowieckie':['whitewash', 'tile', 'mazowsze'], 'Opolskie':['brick', 'tile', 'slask'],
+  'Podkarpackie':['timber', 'metal', 'bieszczady'], 'Podlaskie':['timber', 'thatch', 'podlasie'],
+  'Pomorskie':['brick', 'tile', 'wybrzeze'], 'Śląskie':['brick', 'tile', 'slask'],
+  'Świętokrzyskie':['stone', 'tile', 'gory'], 'Warmińsko-mazurskie':['brick', 'tile', 'pomorze'],
+  'Wielkopolskie':['plaster', 'tile', 'wielkopolska'], 'Zachodniopomorskie':['brick', 'tile', 'wybrzeze']
+};
+const RENDER_NOTES = {
+  podhale:{ en:'timber and stone under steep metal — the Podhale highland house', pl:'drewno i kamień pod stromą blachą — dom podhalański' },
+  mazowsze:{ en:'whitewashed masonry under tile — the Mazovian house', pl:'bielone mury pod dachówką — dom mazowiecki' },
+  slask:{ en:'clinker brick under tile — the Silesian house', pl:'cegła klinkierowa pod dachówką — dom śląski' },
+  pomorze:{ en:'brick under tile — the Pomeranian house', pl:'cegła pod dachówką — dom pomorski' },
+  bieszczady:{ en:'dark timber under metal — the Bieszczady house', pl:'ciemne drewno pod blachą — dom bieszczadzki' },
+  wielkopolska:{ en:'plaster under tile — the Greater Poland house', pl:'tynk pod dachówką — dom wielkopolski' },
+  wybrzeze:{ en:'brick and plaster under tile — the coastal house', pl:'cegła i tynk pod dachówką — dom nadmorski' },
+  gory:{ en:'stone under slate — the mountain house', pl:'kamień pod łupkiem — dom górski' },
+  podlasie:{ en:'timber under thatch — the Podlasie house', pl:'drewno pod strzechą — dom podlaski' }
+};
+const renderRegionFor = nuts => {
+  const key = nuts && RENDER_REGION[nuts] ? nuts : 'Mazowieckie';
+  const r = RENDER_REGION[key];
+  return { key, wall:RENDER_WALLS.find(o => o.key === r[0]), roof:RENDER_ROOFS.find(o => o.key === r[1]), note:r[2] };
+};
+/* ------------------------------------------------------------- 7. RENDER --
+   The model in its terrain, rendered from a prompt. The student describes
+   the finish they want — materials, light, finish — and the tab assesses
+   the request word by word, dresses the same massing the other tabs work
+   on, and renders it right here in the browser: no upload, no account, no
+   waiting room. A second path serves the freer briefs this engine cannot
+   paint: one press copies the view, the model and the prompt as a render
+   brief for an image studio of the student's choosing. */
+const RENDER_WALLS = [
+  { key:'whitewash', c:'#EFE7D5', words:['whitewash', 'whitewashed', 'white', 'biel', 'bielony', 'bielona', 'bielone', 'wapno'] },
+  { key:'plaster', c:'#E2D5BE', words:['plaster', 'stucco', 'tynk', 'tynkowany', 'tynkowana', 'tynkowane'] },
+  { key:'brick', c:'#A2593B', words:['brick', 'cegla', 'cegła', 'ceglany', 'ceglana', 'ceglane', 'klinkier'] },
+  { key:'stone', c:'#99928A', words:['stone', 'granite', 'kamien', 'kamień', 'kamienny', 'kamienna', 'kamienne', 'granit'] },
+  { key:'timber', c:'#8A6844', words:['timber', 'wood', 'wooden', 'drewno', 'drewniany', 'drewniana', 'drewniane'] },
+  { key:'concrete', c:'#B7BABD', words:['concrete', 'beton', 'betonowy', 'betonowa', 'betonowe'] },
+  { key:'cork', c:'#B5894F', words:['cork', 'korek', 'korkowy'] },
+  { key:'glass', c:'#9FC4DE', words:['glass', 'glazed', 'szklo', 'szkło', 'szklany', 'szklana', 'szklane'] }
+];
+const RENDER_ROOFS = [
+  { key:'tile', c:'#A34A2E', words:['tile', 'tiled', 'terracotta', 'dachowka', 'dachówka', 'karpiowka', 'ceramiczna'] },
+  { key:'slate', c:'#4B5158', words:['slate', 'lupek', 'łupek', 'lupkowy'] },
+  { key:'metal', c:'#8F979E', words:['metal', 'zinc', 'blacha', 'blaszany', 'blaszana', 'blaszane'] },
+  { key:'thatch', c:'#C2A15C', words:['thatch', 'strzecha', 'strzechowy', 'sloma', 'słoma'] },
+  { key:'green', c:'#5F7F4A', words:['green roof', 'zielony dach', 'dach zielony'] },
+  { key:'white', c:'#E6E3DA', words:['white roof', 'bialy dach', 'biały dach'] }
+];
+const RENDER_TIMES = [
+  { key:'dawn', h:6.5, words:['dawn', 'sunrise', 'swit', 'świt', 'wschod slonca'] },
+  { key:'morning', h:9.5, words:['morning', 'ranek', 'rano'] },
+  { key:'noon', h:12.5, words:['noon', 'midday', 'poludnie', 'południe', 'w poludnie'] },
+  { key:'afternoon', h:16, words:['afternoon', 'popoludnie', 'popołudnie', 'po poludniu'] },
+  { key:'golden', h:18, words:['golden', 'zlota godzina', 'złota godzina'] },
+  { key:'dusk', h:19.3, words:['dusk', 'sunset', 'zmierzch', 'o zmierzchu', 'zachod slonca'] },
+  { key:'night', h:21.5, words:['night', 'noc', 'noca', 'nocą', 'w nocy'] }
+];
+const RENDER_SKIES = [
+  { key:'clear', words:['clear', 'blue sky', 'pogodnie', 'czyste niebo', 'bezchmurnie'] },
+  { key:'cloudy', words:['cloudy', 'clouds', 'pochmurnie', 'chmury', 'zachmurzenie'] },
+  { key:'overcast', words:['overcast', 'grey sky', 'szare niebo', 'pochmurno'] }
+];
+const RENDER_STYLES = [
+  { key:'photo', words:['photo', 'photorealistic', 'foto', 'fotorealistyczny', 'fotorealistycznie', 'realistyczny'] },
+  { key:'watercolor', words:['watercolor', 'watercolour', 'akwarela', 'akwarelowy'] },
+  { key:'clay', words:['clay', 'makieta', 'glina', 'gliniany', 'model'] },
+  { key:'sketch', words:['sketch', 'szkic', 'rysunek', 'odreczny', 'odręczny'] }
+];
+const RENDER_STOP = ('the a an de da do das dos em no na nos nas com uma umas uns para por como is are and or with without with of to in on at ' + 'i w z na do od o a nie tak jak sie to co lub oraz albo czy jest sa przez dla ale tez').split(' ');
+const RENDER_NOUN = ['wall', 'walls', 'roof', 'roofs', 'sun', 'house', 'building', 'model', 'prompt', 'render', 'sciana', 'sciany', 'mur', 'mury', 'dach', 'dachy', 'slonce', 'dom', 'budynek', 'wizualizacja', 'elewacja'];
+/** Read a prompt the way the tab renders it: first keyword per family wins,
+    the rest is reported back as not yet understood. Single words match whole
+    tokens (so "afternoon" never reads as "noon"); only multi-word finishes
+    match as phrases. */
+function parseRenderPrompt(str) {
+  const norm = plainName(str || '');
+  const toks = norm.replace(/[^a-z0-9\s-]/g, ' ').split(/[\s-]+/).filter(Boolean);
+  const hit = (list, w) => {
+    const pw = plainName(w);
+    return pw.indexOf(' ') >= 0 || pw.indexOf('-') >= 0 ? norm.indexOf(pw) >= 0 : toks.indexOf(pw) >= 0;
+  };
+  const found = list => {
+    for (const o of list) for (const w of o.words) if (hit(list, w)) return o;
+    return null;
+  };
+  const wall = found(RENDER_WALLS), roof = found(RENDER_ROOFS), time = found(RENDER_TIMES);
+  const sky = found(RENDER_SKIES), style = found(RENDER_STYLES);
+  /* words spent inside a matched phrase ("green" in "green roof") are
+     understood — never reported back as unknown */
+  const used = {};
+  [wall, roof, time, sky, style].forEach(o => {
+    if (!o) return;
+    o.words.forEach(w => {
+      const pw = plainName(w);
+      if ((pw.indexOf(' ') >= 0 || pw.indexOf('-') >= 0) && norm.indexOf(pw) >= 0) pw.split(/[\s-]+/).forEach(t => { used[t] = 1; });
+    });
+  });
+  const vocab = {};
+  [RENDER_WALLS, RENDER_ROOFS, RENDER_TIMES, RENDER_SKIES, RENDER_STYLES].forEach(l => l.forEach(o => o.words.forEach(w => { vocab[plainName(w)] = 1; })));
+  const unknown = [];
+  plainName(str).replace(/[^a-z0-9\s-]/g, ' ').split(/[\s-]+/)
+    .forEach(w => {
+      w = plainName(w);
+      if (w.length < 4 || used[w] || RENDER_STOP.indexOf(w) >= 0 || RENDER_NOUN.indexOf(w) >= 0 || vocab[w] || unknown.indexOf(w) >= 0) return;
+      if (unknown.length < 6) unknown.push(w);
+    });
+  return { wall, roof, time, sky, style, unknown };
+}
+function buildRender(host) {
+  const S = STATE.site, C = STATE.clim;
+  const lat = S.lat, lon = S.lon, tz = lon / 15;
+  const G = MASS, RF = ROOF;
+  pageHead(host, 'Render',
+    'The model in its terrain, finished from a prompt. Describe materials, light and finish — the tab reads the request, dresses the massing, and renders it here. Freer scenes go by brief: copy it into an image studio.');
+  if (!G) { host.appendChild(el('p', { text:t('Define the site first — go to the Site tab.') })); return; }
+  const K0 = KEEP.render || null;
+  /* Fresh students start dressed for their region: the popular architecture
+     where the house stands becomes the opening prompt, freely overwritten. */
+  const reg0 = renderRegionFor(S.nuts);
+  const regPrompt = reg0.wall.words[0] + ' walls, ' + reg0.roof.words[0] + ' roof, afternoon sun, photorealistic';
+  let promptTouched = !!(typeof RENDER_PROMPT === 'string' && RENDER_PROMPT) || !!(K0 && (K0.promptTouched || (typeof K0.prompt === 'string' && K0.prompt)));
+  let prompt = promptTouched
+    ? (typeof RENDER_PROMPT === 'string' && RENDER_PROMPT ? RENDER_PROMPT : (K0 && typeof K0.prompt === 'string' ? K0.prompt : regPrompt))
+    : regPrompt;
+  let look = parseRenderPrompt(prompt);
+  let hour = K0 && isFinite(+K0.hour) ? clamp(+K0.hour, 5, 22) : (look.time ? look.time.h : 15);
+  let hourTouched = !!(K0 && K0.hourTouched);
+  let styleLock = K0 && K0.styleLock ? K0.styleLock : 'auto';
+  let showShadow = !K0 || K0.showShadow !== false, showTrees = !K0 || K0.showTrees !== false;
+  let showGround = !K0 || K0.showGround !== false;
+  /* Surrounding buildings as a transparent tip: the Environment tab's
+     OpenStreetMap footprints, hinted as massing only — their final render
+     appearance is still to be decided, so they stay deliberately plain. */
+  let showNb = !!(K0 && K0.showNb);
+  /* terrain: the ventilation grid where this browser already derived it,
+     else a grid of our own over the same service — only coordinates leave */
+  let rGrid = KEEP.vent && KEEP.vent.terrainGrid ? KEEP.vent.terrainGrid : null;
+  let rGridNote = rGrid ? '' : t('Flat for now — open Ventilation once, or fetch below, for the real ground.');
+  const betaR = () => (G.rot - 180) * RAD;
+  const rTerraAt = (x, y) => {
+    const g = rGrid;
+    if (!g || !g.h || !g.n || !g.step) return 0;
+    const b = betaR(), E = x * Math.cos(b) + y * Math.sin(b), N = -x * Math.sin(b) + y * Math.cos(b);
+    const e2 = (g.n - 1) * g.step / 2, fx = (E + e2) / g.step, fy = (N + e2) / g.step;
+    if (!(fx >= 0 && fy >= 0 && fx <= g.n - 1 && fy <= g.n - 1)) return 0;
+    const ix = Math.min(g.n - 2, Math.floor(fx)), jy = Math.min(g.n - 2, Math.floor(fy));
+    const ax = fx - ix, ay = fy - jy, H = g.h;
+    return H[jy * g.n + ix] * (1 - ax) * (1 - ay) + H[jy * g.n + ix + 1] * ax * (1 - ay)
+      + H[(jy + 1) * g.n + ix] * (1 - ax) * ay + H[(jy + 1) * g.n + ix + 1] * ax * ay;
+  };
+  const rMinMax = () => {
+    if (!rGrid || !rGrid.h || !rGrid.h.length) return null;
+    let lo = Infinity, hi = -Infinity;
+    rGrid.h.forEach(v => { if (isFinite(v)) { if (v < lo) lo = v; if (v > hi) hi = v; } });
+    return isFinite(lo) ? { lo, hi } : null;
+  };
+  const nbRenderRef = () => (ENV.plot || { lat:S.lat, lon:S.lon });
+  const nbRender = () => {
+    if (!showNb || !ENV.nb || !NB.list.length) return [];
+    const ref = nbRenderRef(), cl = Math.cos(ref.lat * RAD), b = betaR();
+    const cb = Math.cos(b), sb = Math.sin(b), boxes = planModel(G).boxes, out = [];
+    NB.list.forEach(bd => {
+      const p = bd.ll.map(q => {
+        const E = (q[1] - ref.lon) * 111320 * cl, N = (q[0] - ref.lat) * 111320;
+        return [E * cb - N * sb, E * sb + N * cb];
+      });
+      const bb = [Infinity, Infinity, -Infinity, -Infinity];
+      p.forEach(q => { if (q[0] < bb[0]) bb[0] = q[0]; if (q[1] < bb[1]) bb[1] = q[1]; if (q[0] > bb[2]) bb[2] = q[0]; if (q[1] > bb[3]) bb[3] = q[1]; });
+      if (bb[0] > 120 || bb[2] < -120 || bb[1] > 120 || bb[3] < -120) return;
+      if (inPoly(0, 0, p)) return;
+      if (boxes.some(r => r.some(q => inPoly(q[0], q[1], p)) || p.some(q => q[0] > r[0] && q[0] < r[2] && q[1] > r[1] && q[1] < r[3]))) return;
+      const cx = (bb[0] + bb[2]) / 2, cy = (bb[1] + bb[3]) / 2, ground = rTerraAt(cx, cy), h = Math.max(1, bd.h);
+      out.push({ poly:p, cx, cy, ground, top:ground + h, dist:Math.hypot(cx, cy) });
+    });
+    out.sort((x, y) => x.dist - y.dist);
+    return out.slice(0, 24);
+  };
+  async function fetchRenderTerrain() {
+    rGridNote = t('Fetching the ground…');
+    refreshRender();
+    try {
+      const TN = 9, TSTEP = 30, TC = (TN - 1) / 2, o = {};
+      try { if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) o.signal = AbortSignal.timeout(20000); } catch (e) {}
+      const mLa = TSTEP / 111320, mLo = TSTEP / Math.max(0.2, 111320 * Math.cos(lat * RAD));
+      const tLa = [], tLo = [];
+      for (let j = 0; j < TN; j++) for (let i = 0; i < TN; i++) {
+        tLa.push((lat + (j - TC) * mLa).toFixed(5));
+        tLo.push((lon + (i - TC) * mLo).toFixed(5));
+      }
+      const tg = await (await fetch('https://api.open-meteo.com/v1/elevation?latitude=' + tLa.join(',') + '&longitude=' + tLo.join(','), o)).json();
+      const tv = tg && tg.elevation;
+      if (!Array.isArray(tv) || tv.length !== TN * TN || tv.some(v => typeof v !== 'number' || !isFinite(v))) throw new Error('terrain');
+      const datum = tv[TC * TN + TC];
+      rGrid = { n:TN, step:TSTEP, h:tv.map(v => +(v - datum).toFixed(1)) };
+      const mm = rMinMax();
+      rGridNote = t('Ground in view: low ' + fmt(mm.lo, 0) + ' m, high +' + fmt(mm.hi, 0) + ' m (240 m grid).');
+    } catch (e) {
+      rGridNote = t('The ground could not be fetched — flat stands in. Retry when online.');
+    }
+    refreshRender();
+  }
+
+  /* ---- the look the prompt resolves to ---- */
+  const wallBase = () => {
+    if (look.wall) return look.wall.c;
+    const f = finishOf(MASS.col);
+    return f ? f.hex : '#D9D2C2';
+  };
+  const roofBase = () => {
+    if (look.roof) return look.roof.c;
+    const f = finishOf(ROOF.col);
+    return f ? f.hex : '#8F7A68';
+  };
+  const styleNow = () => styleLock !== 'auto' ? styleLock : (look.style ? look.style.key : 'photo');
+  const nightNow = () => hour >= 20 || hour < 6.5;
+  const sunNow = () => sunPos(172, hour, lat, lon, tz);
+  const sunDirPlan = () => {
+    const sp = sunNow(), b = betaR();
+    const X = Math.sin(sp.azi * RAD), Y = Math.cos(sp.azi * RAD);
+    return [X * Math.cos(b) - Y * Math.sin(b), X * Math.sin(b) + Y * Math.cos(b)];
+  };
+  const shadeHex = (hex, f) => {
+    const h = String(hex).replace('#', '');
+    const v = [0, 2, 4].map(i => Math.round(clamp(parseInt(h.slice(i, i + 2), 16) * f, 0, 255)));
+    return 'rgb(' + v[0] + ',' + v[1] + ',' + v[2] + ')';
+  };
+  /* Name a parsed material in the interface language for the reading line. */
+  const matName = o => {
+    if (!o) return null;
+    return LANG === 'pl' ? (RENDER_PLNAME[o.key] || o.words[0]) : o.words[0];
+  };
+
+  /* ---- workbench ---- */
+  const bench = host.appendChild(el('div', { class:'bench' }));
+  const rail = bench.appendChild(el('div', { class:'rail' }));
+  const stage = bench.appendChild(el('div', { class:'stage' }));
+  const props = bench.appendChild(el('div', { class:'props' }));
+  rail.appendChild(el('div', { class:'gh', text:'Prompt' }));
+  const promptBox = rail.appendChild(el('div', { class:'controls' }));
+  const ta = el('textarea', { rows:'3', maxlength:'500',
+    style:'font:inherit;font-size:12.5px;width:100%;min-height:64px;resize:vertical;padding:7px 9px;border:1px solid var(--line);border-radius:6px' });
+  ta.value = prompt;
+  ta.placeholder = t('whitewashed walls, clay tile roof, afternoon sun, photorealistic');
+  promptBox.appendChild(ta);
+  const readSlot = rail.appendChild(el('div', { class:'effect' }));
+  /* Finish presets, render-house style: every wall and roof finish as a
+     pick box, photorealistically dressed onto the surfaces. The region's
+     popular finish wears a star. Picking rewrites the prompt, so the study
+     file, the brief and the reading all stay truthful; typing clears back
+     to the prompt's own words. */
+  const presetSyncs = [];
+  function setPromptMaterial(cat, entry) {
+    const lists = cat === 'wall' ? RENDER_WALLS : RENDER_ROOFS;
+    const vocab = {};
+    lists.forEach(o => o.words.forEach(w => { vocab[plainName(w)] = 1; }));
+    const parts = String(ta.value).split(/(\s+|[,;]+)/);
+    let done = false;
+    const out = parts.map(p => {
+      if (!done && vocab[plainName(p)]) { done = true; return entry.words[0]; }
+      return p;
+    });
+    const tag = /\s/.test(entry.words[0]) ? entry.words[0] : entry.words[0] + (cat === 'wall' ? ' walls' : ' roof');
+    ta.value = (done ? out.join('') : (ta.value.replace(/\s+$/, '') + ', ' + tag)).slice(0, 500);
+    prompt = ta.value; RENDER_PROMPT = prompt; promptTouched = true;
+    applyPrompt(true); refreshRender();
+  }
+  function presetGroup(label, list, cat) {
+    rail.appendChild(el('div', { class:'gh', text:label }));
+    const box = rail.appendChild(el('div', { class:'controls' }));
+    box.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:4px';
+    const regKey = (cat === 'wall' ? reg0.wall : reg0.roof).key;
+    list.forEach(o => {
+      const b = el('button', { class:'btn small', title:o.key === regKey ? t('Popular here') : o.key });
+      const sw = el('span', {});
+      sw.style.cssText = 'display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-2px;border:1px solid rgba(20,23,26,.35);background:' + o.c;
+      b.appendChild(sw);
+      b.appendChild(document.createTextNode((o.key === regKey ? '★ ' : '') + matName(o)));
+      b.onclick = () => setPromptMaterial(cat, o);
+      box.appendChild(b);
+      presetSyncs.push({ b, cat, key:o.key });
+    });
+  }
+  presetGroup('Wall finishes', RENDER_WALLS, 'wall');
+  presetGroup('Roof finishes', RENDER_ROOFS, 'roof');
+  function syncPresets() {
+    const wk = look.wall ? look.wall.key : null, rk = look.roof ? look.roof.key : null;
+    presetSyncs.forEach(s => s.b.classList.toggle('solid', (s.cat === 'wall' ? wk : rk) === s.key));
+  }
+  rail.appendChild(el('div', { class:'gh', text:'Sun' }));
+  const sunBox = rail.appendChild(el('div', { class:'controls' }));
+  const hourCtl = rangeCtl('Solar hour', 5, 22, 0.5, hour, v => { hour = v; hourTouched = true; refreshRender(); }, v => fmt(v, 1) + ' h');
+  sunBox.appendChild(hourCtl);
+  props.appendChild(el('div', { class:'gh', text:'Finish' }));
+  const finBox = props.appendChild(el('div', { class:'controls' }));
+  const styleCtl = segCtl(null, [{ value:'auto', label:t('Auto') }, { value:'photo', label:t('Photo') }, { value:'watercolor', label:t('Watercolor') }, { value:'clay', label:t('Clay') }, { value:'sketch', label:t('Sketch') }],
+    styleLock, v => { styleLock = v; refreshRender(); });
+  finBox.appendChild(styleCtl);
+  props.appendChild(el('div', { class:'gh', text:'View' }));
+  const viewBox = props.appendChild(el('div', { class:'controls' }));
+  viewBox.appendChild(checkCtl('Sun shadows', showShadow, v => { showShadow = v; refreshRender(); }));
+  viewBox.appendChild(checkCtl('Planting', showTrees, v => { showTrees = v; refreshRender(); }));
+  viewBox.appendChild(checkCtl('Terrain relief', showGround, v => { showGround = v; refreshRender(); }));
+  viewBox.appendChild(checkCtl('Surrounding buildings', showNb, v => {
+    showNb = v;
+    if (v) { if (ENV.nb) wantNeighbours(nbRenderRef(), () => refreshRender()); else { ENV.nb = true; wantNeighbours(nbRenderRef(), () => refreshRender()); } }
+    refreshRender();
+  }));
+  props.appendChild(el('div', { class:'gh', text:'Look' }));
+  const lookSlot = props.appendChild(el('div', { class:'facts' }));
+  props.appendChild(el('div', { class:'gh', text:'Image studio' }));
+  const studioBox = props.appendChild(el('div', { class:'controls' }));
+  studioBox.appendChild(el('button', { class:'btn', text:'Copy render brief', title:'Copy the view, the model and the prompt for an image studio',
+    onclick: () => {
+      const b = renderBrief();
+      const done = () => toast('Brief copied — paste it into an image studio');
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(b).then(done, () => fallbackCopy(b, done));
+        else fallbackCopy(b, done);
+      } catch (e) { fallbackCopy(b, done); }
+    } }));
+  studioBox.appendChild(el('button', { class:'btn', text:'Fetch terrain', title:'Fetch the 240 m ground grid for this site',
+    onclick: () => fetchRenderTerrain() }));
+  const terrSlot = props.appendChild(el('div', { class:'hint' }));
+  host.appendChild(hint('render-how',
+    'The prompt dresses the massing drawn on Site, roofed on Roof and planted on Ventilation — <b>walls</b> (whitewash, brick, stone, timber, concrete, cork, glass), <b>roof</b> (tile, slate, metal, thatch, green), <b>light</b> (dawn to night) and <b>finish</b> (photo, watercolor, clay, sketch). The view is downstream of every tab: the plan, breaks and patio from Site, pitch, parapet, eaves, chimney and collectors from Roof, glass, doors, overhangs, fins and sunspace from Windows & Shading, planting, walls and neighbours from Ventilation — change any of them and this model follows on the next visit. What the tab cannot paint it says back under the prompt. The brief carries the same scene to an image studio for the freer renders.'));
+  function fallbackCopy(txt, done) {
+    const f = el('textarea', { style:'position:fixed;opacity:0' });
+    f.value = txt; document.body.appendChild(f); f.select();
+    try { document.execCommand('copy'); done(); } catch (e) { toast('Copy failed — select the brief by hand'); }
+    f.remove();
+  }
+
+  /* ---- camera + frame ---- */
+  const hullR = pts => {
+    const p = pts.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+    const lo = [], hi = [];
+    p.forEach(pt => { while (lo.length >= 2 && cross(lo[lo.length - 2], lo[lo.length - 1], pt) <= 0) lo.pop(); lo.push(pt); });
+    p.slice().reverse().forEach(pt => { while (hi.length >= 2 && cross(hi[hi.length - 2], hi[hi.length - 1], pt) <= 0) hi.pop(); hi.push(pt); });
+    lo.pop(); hi.pop();
+    return lo.concat(hi);
+  };
+  const CAM = { az:K0 && K0.cam ? K0.cam.az : 225, el:K0 && K0.cam ? K0.cam.el : ISO_EL };
+  const camAx = () => camAxes(CAM);
+  const proj = (FR, x, y, z) => {
+    const A = FR.ax, k = CAM_K * FR.s;
+    return [FR.cx + k * (x * A.r[0] + y * A.r[1]), FR.cy - k * ((x * A.d[0] + y * A.d[1]) * A.se + (z || 0) * A.ce)];
+  };
+  const frame = (W, H) => {
+    const cx = W / 2, M = roofModel(G, RF), H0 = M.H0, ridge = M.ridge, ax = camAx();
+    const bb = planModel(G).bbox;
+    const vegH = showTrees && SCENE.veg.length ? Math.max.apply(null, SCENE.veg.map(v => v.height)) : 0;
+    const terrHi = showGround && rGrid && rGrid.h ? Math.max.apply(null, [0].concat(rGrid.h)) : 0;
+    const maxH = Math.max(ridge + 2, H0 + 2, vegH + 2, terrHi + 2);
+    const gm = 10, gx = Math.max(-bb[0], bb[2]) + gm, gy = Math.max(-bb[1], bb[3]) + gm;
+    const cs = [[-gx, -gy], [gx, -gy], [gx, gy], [-gx, gy]];
+    const uMax = Math.max.apply(null, cs.map(q => Math.abs(q[0] * ax.r[0] + q[1] * ax.r[1])));
+    const vs = cs.map(q => (q[0] * ax.d[0] + q[1] * ax.d[1]) * ax.se), vMin = Math.min.apply(null, vs), vMax = Math.max.apply(null, vs);
+    const top = 34, bottom = H - 26, availV = Math.max(40, bottom - top);
+    const sByW = (W / 2 - 16) / (CAM_K * uMax);
+    const sByH = availV / (CAM_K * ((vMax - vMin) + maxH * ax.ce));
+    const s = Math.max(3, Math.min(sByW, sByH)) * zoomOf('render');
+    return { cx, cy:bottom + CAM_K * s * vMin, s, H0, ridge, M, ax };
+  };
+
+  /* ---- the painter ---- */
+  let renderPanel = null, FR = null;
+  const GREENS = ['#3F6B3B', '#2F5A35', '#6E9658', '#4A664A', '#5B7F52'];
+  const greenOf = ty => { let h = 0; for (const ch of String(ty)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return GREENS[h % GREENS.length]; };
+  const renderRender = (ctx, W, H) => {
+    FR = frame(W, H);
+    const { cx, cy, s, H0, ridge, M, ax } = FR;
+    const style = styleNow(), night = nightNow(), sun = sunNow();
+    const sunL = sunDirPlan(), sinA = clamp(Math.sin(Math.max(sun.alt, 0) * RAD), 0, 1);
+    const mm = rMinMax(), terrOn = showGround && rGrid && rGrid.h && mm;
+    const poly = (pts3, fill, strokeColor, width) => {
+      const p = pts3.map(q => proj(FR, q[0], q[1], q[2]));
+      ctx.beginPath();
+      p.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]));
+      ctx.closePath();
+      if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+      if (strokeColor) { stroke(ctx, strokeColor, width || 1.2); ctx.stroke(); }
+    };
+    /* sky */
+    const skyTop = night ? '#10182E' : style === 'clay' ? '#D8D5CE' : style === 'watercolor' ? '#F4EFE2'
+      : sun.alt > 30 ? '#7FB2E5' : sun.alt > 5 ? '#9CC3E8' : '#3A4A6B';
+    const skyBot = night ? '#2A3350' : style === 'clay' ? '#EDEAE3' : style === 'watercolor' ? '#F9F5EA'
+      : sun.alt > 30 ? '#DCEBF7' : sun.alt > 5 ? '#F2D9B8' : '#8A6A5A';
+    const grd = ctx.createLinearGradient(0, 0, 0, H);
+    grd.addColorStop(0, skyTop); grd.addColorStop(1, skyBot);
+    ctx.fillStyle = grd; ctx.fillRect(0, 0, W, H);
+    if (night) {
+      ctx.fillStyle = 'rgba(255,255,255,.8)';
+      for (let i = 0; i < 70; i++) {
+        const sx = (i * 173.3) % W, sy = (i * 97.7) % (H * 0.55);
+        ctx.fillRect(sx, sy, 1.3, 1.3);
+      }
+      ctx.fillStyle = '#F4F1DE';
+      ctx.beginPath(); ctx.arc(W * 0.8, H * 0.16, 13, 0, 6.284); ctx.fill();
+    } else if (sun.alt > 1 && style === 'photo') {
+      ctx.fillStyle = 'rgba(255,246,220,.9)';
+      ctx.beginPath(); ctx.arc(W * 0.78, H * 0.2, 15, 0, 6.284); ctx.fill();
+    }
+    if (style === 'watercolor') {   // cloud washes
+      ctx.fillStyle = 'rgba(255,255,255,.35)';
+      for (let i = 0; i < 4; i++) {
+        const wy = H * (0.1 + i * 0.09);
+        ctx.beginPath(); ctx.ellipse(W * (0.2 + 0.2 * i), wy, W * 0.22, 12, 0, 0, 6.284); ctx.fill();
+      }
+    }
+    const depthOf = (x, y, z) => (x * ax.d[0] + y * ax.d[1]) * ax.ce - (z || 0) * ax.se;
+    /* ground */
+    const terrCol = h => {
+      if (style === 'clay') return '#D5D2CA';
+      if (style === 'sketch') return '#EFEBE0';
+      const span = Math.max(1e-6, mm.hi - mm.lo), f = clamp((h - mm.lo) / span, 0, 1);
+      const c0 = [226, 233, 219], c1 = [210, 196, 160], c2 = [180, 142, 104];
+      const c = f < 0.5 ? c0.map((v, i) => Math.round(v + (c1[i] - v) * f * 2))
+        : c1.map((v, i) => Math.round(v + (c2[i] - v) * (f - 0.5) * 2));
+      return 'rgb(' + c[0] + ',' + c[1] + ',' + c[2] + ')';
+    };
+    if (terrOn) {
+      const TN = rGrid.n, TS = rGrid.step, TE = (TN - 1) * TS / 2;
+      let cb = 1, sb = 0;
+      try { const bb = betaR(); cb = Math.cos(bb); sb = Math.sin(bb); } catch (eT) {}
+      const toPlan = (E, N) => [E * cb - N * sb, E * sb + N * cb];
+      const nodeH = (E, N) => {
+        const fx = (E + TE) / TS, fy = (N + TE) / TS;
+        const ix = clamp(Math.floor(fx), 0, TN - 2), jy = clamp(Math.floor(fy), 0, TN - 2);
+        const axx = clamp(fx - ix, 0, 1), ayy = clamp(fy - jy, 0, 1), HH = rGrid.h;
+        return HH[jy * TN + ix] * (1 - axx) * (1 - ayy) + HH[jy * TN + ix + 1] * axx * (1 - ayy)
+          + HH[(jy + 1) * TN + ix] * (1 - axx) * ayy + HH[(jy + 1) * TN + ix + 1] * axx * ayy;
+      };
+      const cells = [], SUB = 3, st = TS / SUB, alpha = style === 'watercolor' ? .55 : 1;
+      for (let jj = 0; jj < (TN - 1) * SUB; jj++) for (let ii = 0; ii < (TN - 1) * SUB; ii++) {
+        const E0 = -TE + ii * st, N0 = -TE + jj * st;
+        const h00 = nodeH(E0, N0), h10 = nodeH(E0 + st, N0), h11 = nodeH(E0 + st, N0 + st), h01 = nodeH(E0, N0 + st);
+        const p00 = toPlan(E0, N0), p10 = toPlan(E0 + st, N0), p11 = toPlan(E0 + st, N0 + st), p01 = toPlan(E0, N0 + st);
+        const hm = (h00 + h10 + h11 + h01) / 4;
+        cells.push({ d:depthOf((p00[0] + p11[0]) / 2, (p00[1] + p11[1]) / 2, hm),
+          q:[[p00[0], p00[1], h00], [p10[0], p10[1], h10], [p11[0], p11[1], h11], [p01[0], p01[1], h01]], hm });
+      }
+      cells.sort((a, b) => b.d - a.d);
+      ctx.save();
+      if (style === 'watercolor') ctx.globalAlpha = alpha;
+      cells.forEach(c => poly(c.q, terrCol(c.hm), null, 1));
+      ctx.restore();
+    } else {
+      const bb = M.pl.bbox, gx = Math.max(-bb[0], bb[2]) + 10, gy = Math.max(-bb[1], bb[3]) + 10;
+      poly([[-gx, -gy, 0], [gx, -gy, 0], [gx, gy, 0], [-gx, gy, 0]],
+        style === 'clay' ? '#D5D2CA' : style === 'sketch' ? '#EFEBE0' : 'rgba(120,140,105,.30)',
+        style === 'sketch' ? CH.ink : CH.line, style === 'sketch' ? 1.6 : 1.2);
+    }
+    /* shadow blob: the footprint dropped along the sun ray */
+    if (showShadow && sun.alt > 0.5 && style !== 'sketch') {
+      const k = 1 / Math.max(0.08, Math.tan(Math.max(0.5, sun.alt) * RAD));
+      const ox = -sunL[0] * k, oy = -sunL[1] * k, pts = [];
+      M.pl.boxes.forEach(r => [[r[0], r[1]], [r[2], r[1]], [r[2], r[3]], [r[0], r[3]]].forEach(q => pts.push(q)));
+      const hull = hullR(pts.map(q => [q[0] + ox * H0 * 0.7, q[1] + oy * H0 * 0.7]));
+      poly(hull.map(q => [q[0], q[1], (terrOn ? rTerraAt(q[0], q[1]) : 0) + 0.06]),
+        night ? 'rgba(0,0,0,.30)' : 'rgba(20,23,26,.22)', null, 1);
+    }
+    /* faces + billboard crowns, far to near */
+    const items = [];
+    const wallSeen = n => n[0] * ax.c[0] + n[1] * ax.c[1] > 1e-6;
+    const onWall = (sg, u, v) => [sg.a[0] + (sg.b[0] - sg.a[0]) * u / sg.len, sg.a[1] + (sg.b[1] - sg.a[1]) * u / sg.len, v];
+    const faceK = n => 0.55 + 0.45 * Math.max(0, n[0] * sunL[0] + n[1] * sunL[1]) * (0.3 + 0.7 * sinA);
+    M.walls.forEach(wl => {
+      const sg = wl.sg;
+      if (!wallSeen(sg.n)) return;
+      const wpts = [onWall(sg, 0, 0), onWall(sg, sg.len, 0)].concat(wl.prof.slice().reverse().map(q => onWall(sg, q[0], q[1])));
+      const base = style === 'clay' ? '#E4E1D8' : wallBase();
+      items.push({ pts:wpts, fill:shadeHex(base, night ? 0.3 : faceK(sg.n) * (style === 'watercolor' ? 0.92 : 1)), d:wpts.reduce((a2, q) => a2 + depthOf(q[0], q[1], q[2]), 0) / wpts.length, mat:look.wall ? look.wall.key : 'site', wallSg:sg });
+    });
+    M.pieces.forEach(pc => {
+      const f = pc.f;
+      if ((-f.t * f.a * ax.c[0] - f.t * f.b * ax.c[1]) * ax.ce + ax.se <= 1e-6) return;
+      const pts = pc.poly.map(q => [q[0], q[1], M.zOf(f, q[0], q[1])]);
+      const base = style === 'clay' ? '#D5D2CA' : roofBase();
+      const fk = 0.6 + 0.4 * Math.max(0, -f.a * sunL[0] - f.b * sunL[1]) * (0.3 + 0.7 * sinA);
+      items.push({ pts, fill:shadeHex(base, night ? 0.32 : fk), d:pts.reduce((a2, q) => a2 + depthOf(q[0], q[1], q[2]), 0) / pts.length, mat:look.roof ? look.roof.key : 'site' });
+    });
+    /* glass: each wall's windows, a breath off the face */
+    const wins = M.pl.segs.map(sg => ({ sg, w:segWindow(sg, G) })).filter(o => o.w);
+    wins.forEach(o => {
+      if (!wallSeen(o.sg.n)) return;
+      const sg = o.sg, w = o.w, gl = [];
+      const u0 = w.uc - w.w / 2, u1 = w.uc + w.w / 2;
+      w.rows.forEach(r => {
+        const v0 = r.sill, v1 = Math.min(r.head, H0);
+        const off = (p, d) => [p[0] + sg.n[0] * d, p[1] + sg.n[1] * d, p[2]];
+        gl.push({ q:[off(onWall(sg, u0, v0), 0.07), off(onWall(sg, u1, v0), 0.07), off(onWall(sg, u1, v1), 0.07), off(onWall(sg, u0, v1), 0.07)], u0, u1, v0, v1 });
+      });
+      gl.forEach(g => items.push({ pts:g.q, win:{ sg, u0:g.u0, u1:g.u1, v0:g.v0, v1:g.v1 },
+        fill:night ? '#FFD27A' : style === 'clay' ? '#C9CFD2' : style === 'watercolor' ? 'rgba(150,180,205,.55)' : '#BCD6E8',
+        glass:true, d:g.q.reduce((a2, q) => a2 + depthOf(q[0], q[1], q[2]), 0) / 4 }));
+    });
+    /* entrance doors: only where Openings sets a door unit — never invented.
+       No door units, no doors: an all-window house is a legitimate state,
+       and a missing entrance is worth noticing. */
+    ['S', 'N', 'E', 'W'].forEach(f => {
+      const has = OPEN[f] && OPEN[f].units && OPEN[f].units.some(u => u.on && u.door);
+      if (!has) return;
+      const segs = M.pl.segs.filter(sg => segFace(sg) === f && wallSeen(sg.n));
+      if (!segs.length) return;
+      const sg = segs.reduce((a, b) => a.len > b.len ? a : b);
+      const dw = 1.05, dh = Math.min(2.2, H0 - 0.4);
+      if (dh < 1.6) return;
+      /* off-centre on purpose: the window band owns the middle of the wall */
+      const uc = clamp(sg.len * 0.22, dw, sg.len - dw);
+      const off = (p, d) => [p[0] + sg.n[0] * d, p[1] + sg.n[1] * d, p[2]];
+      const q = [off(onWall(sg, uc - dw / 2, 0.02), 0.06), off(onWall(sg, uc + dw / 2, 0.02), 0.06),
+        off(onWall(sg, uc + dw / 2, dh), 0.06), off(onWall(sg, uc - dw / 2, dh), 0.06)];
+      items.push({ pts:q, door:{ sg, uc, dw, dh },
+        fill:style === 'clay' ? '#C2BFB5' : '#2E3236',
+        d:q.reduce((a2, p) => a2 + depthOf(p[0], p[1], p[2]), 0) / 4 });
+    });
+    /* sunspace as a glass box on its facade */
+    if (SUNSP && SUNSP.on) {
+      const sg = sunspaceWall(M.pl, SUNSP.face);
+      if (sg && wallSeen(sg.n)) {
+        const w = sg.len * SUNSP.widthFrac, hgt = Math.min(H0, 3.0), m = sg.len / 2;
+        const inA = onWall(sg, m - w / 2, 0), inB = onWall(sg, m + w / 2, 0);
+        const push = p => [p[0] + sg.n[0] * SUNSP.depth, p[1] + sg.n[1] * SUNSP.depth, p[2]];
+        const outA = push(inA), outB = push(inB);
+        const oh = (p, z) => [p[0], p[1], z];
+        items.push({ pts:[outA, outB, oh(outB, hgt), oh(outA, hgt)], fill:night ? 'rgba(255,210,122,.85)' : 'rgba(150,185,210,.5)', glass:true,
+          d:depthOf((outA[0] + outB[0]) / 2, (outA[1] + outB[1]) / 2, hgt / 2) });
+      }
+    }
+    /* detached walls */
+    SCENE.walls.forEach(w => {
+      const hw = w.length / 2;
+      const quad = w.along === 'y'
+        ? [[w.x, w.y - hw, 0], [w.x, w.y + hw, 0], [w.x, w.y + hw, w.height], [w.x, w.y - hw, w.height]]
+        : [[w.x - hw, w.y, 0], [w.x + hw, w.y, 0], [w.x + hw, w.y, w.height], [w.x - hw, w.y, w.height]];
+      items.push({ pts:quad, fill:shadeHex(style === 'clay' ? '#E4E1D8' : wallBase(), night ? 0.3 : 0.85),
+        d:quad.reduce((a2, q) => a2 + depthOf(q[0], q[1], q[2]), 0) / 4 });
+    });
+    /* planting as billboard crowns inside the same depth order */
+    if (showTrees) SCENE.veg.forEach(v => {
+      const gz = terrOn ? rTerraAt(v.x, v.y) : 0, H = Math.max(0.5, v.height);
+      const trunkH = clamp(v.trunk != null ? v.trunk : H * 0.4, 0, H - 0.3);
+      const r = Math.max(0.5, (v.canopy != null ? v.canopy : H * 0.4) * 0.55);
+      const col = style === 'clay' ? '#D5D2CA' : greenOf(v.type);
+      items.push({ blob:true, x:v.x, y:v.y, z:gz, trunkH, r, H, col, d:depthOf(v.x, v.y, gz + H / 2) });
+    });
+    /* surrounding buildings as a transparent tip: plain massing prisms in
+       the same depth order, final appearance to be decided */
+    if (showNb) nbRender().forEach(nb => {
+      const tpts = nb.poly.map(q => [q[0], q[1], nb.top]);
+      items.push({ pts:tpts, fill:'rgba(150,180,205,.30)', nbTip:true,
+        d:tpts.reduce((a2, q) => a2 + depthOf(q[0], q[1], q[2]), 0) / tpts.length });
+      for (let i = 0; i < nb.poly.length; i++) {
+        const a2 = nb.poly[i], b2 = nb.poly[(i + 1) % nb.poly.length];
+        const q = [[a2[0], a2[1], nb.ground + 0.05], [b2[0], b2[1], nb.ground + 0.05],
+          [b2[0], b2[1], nb.top], [a2[0], a2[1], nb.top]];
+        items.push({ pts:q, fill:'rgba(150,180,205,.20)', nbTip:true,
+          d:q.reduce((s2, r) => s2 + depthOf(r[0], r[1], r[2]), 0) / 4 });
+      }
+    });
+    /* photorealistic dressing, photo finish only: material relief clipped
+       to each face, joinery on the glass, a leaf in every doorway, and the
+       contact shade that grounds the walls */
+    const hSeed = (x, y) => ((Math.round(x * 13.7) * 73856093) ^ (Math.round(y * 17.3) * 19349663)) >>> 0;
+    const hRnd = s => () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
+    const dressFace = (c, key) => {
+      const xs = c.map(q => q[0]), ys = c.map(q => q[1]);
+      const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+      if (x1 - x0 < 5 || y1 - y0 < 5) return;
+      const path = new Path2D();
+      c.forEach((q, i) => i ? path.lineTo(q[0], q[1]) : path.moveTo(q[0], q[1]));
+      path.closePath();
+      ctx.save(); ctx.clip(path);
+      const rnd = hRnd(hSeed(x0 + y0, x1 - y1));
+      const rows = (m, a) => {
+        ctx.strokeStyle = 'rgba(20,23,26,' + a + ')'; ctx.lineWidth = 1;
+        for (let yy = y0 + m * kpx * rnd(); yy < y1; yy += m * kpx) { ctx.beginPath(); ctx.moveTo(x0, yy); ctx.lineTo(x1, yy); ctx.stroke(); }
+      };
+      const cols = (m, a) => {
+        ctx.strokeStyle = 'rgba(20,23,26,' + a + ')'; ctx.lineWidth = 1;
+        for (let xx = x0 + m * kpx * rnd(); xx < x1; xx += m * kpx) { ctx.beginPath(); ctx.moveTo(xx, y0); ctx.lineTo(xx, y1); ctx.stroke(); }
+      };
+      const speck = (n, a, col) => {
+        ctx.fillStyle = col || 'rgba(20,23,26,' + a + ')';
+        for (let i = 0; i < n; i++) { ctx.beginPath(); ctx.arc(x0 + rnd() * (x1 - x0), y0 + rnd() * (y1 - y0), 0.7 + rnd(), 0, 6.284); ctx.fill(); }
+      };
+      const joints = (rm, vm, a) => {
+        rows(rm, a);
+        let ri = 0;
+        ctx.strokeStyle = 'rgba(20,23,26,' + (a * 0.6) + ')';
+        for (let yy = y0; yy < y1; yy += rm * kpx, ri++) {
+          for (let xx = x0 + (ri % 2 ? vm / 2 : 0) * kpx; xx < x1; xx += vm * kpx) {
+            ctx.beginPath(); ctx.moveTo(xx, yy); ctx.lineTo(xx, Math.min(y1, yy + rm * kpx)); ctx.stroke();
+          }
+        }
+      };
+      if (key === 'brick') joints(0.3, 0.6, 0.2);
+      else if (key === 'stone') { rows(0.45, 0.14); for (let i = 0; i < (x1 - x0) / (0.5 * kpx); i++) { const xx = x0 + rnd() * (x1 - x0), yy = y0 + rnd() * (y1 - y0); ctx.strokeStyle = 'rgba(20,23,26,.09)'; ctx.beginPath(); ctx.moveTo(xx, yy); ctx.lineTo(xx, yy + 0.4 * kpx); ctx.stroke(); } }
+      else if (key === 'timber') cols(0.18, 0.18);
+      else if (key === 'concrete') { rows(0.7, 0.07); speck(50, 0.05); }
+      else if (key === 'whitewash' || key === 'plaster') speck(70, 0.045);
+      else if (key === 'cork') speck(90, 0.08, 'rgba(60,35,15,.08)');
+      else if (key === 'tile') joints(0.35, 0.36, 0.2);
+      else if (key === 'slate') rows(0.3, 0.15);
+      else if (key === 'metal') cols(0.55, 0.1);
+      else if (key === 'thatch') { for (let i = 0; i < 70; i++) { const xx = x0 + rnd() * (x1 - x0), yy = y0 + rnd() * (y1 - y0); ctx.strokeStyle = 'rgba(60,40,15,.09)'; ctx.beginPath(); ctx.moveTo(xx, yy); ctx.lineTo(xx + (rnd() - 0.5) * 3, yy + 4 + rnd() * 8); ctx.stroke(); } }
+      else if (key === 'green') speck(120, 0.1, 'rgba(25,60,25,.12)');
+      else if (key === 'white') speck(40, 0.04);
+      ctx.restore();
+    };
+    const shadeFace = c => {
+      const ys = c.map(q => q[1]), yT = Math.min(...ys), yB = Math.max(...ys);
+      if (yB - yT < 8) return;
+      const path = new Path2D();
+      c.forEach((q, i) => i ? path.lineTo(q[0], q[1]) : path.moveTo(q[0], q[1]));
+      path.closePath();
+      ctx.save(); ctx.clip(path);
+      let g = ctx.createLinearGradient(0, yB - (yB - yT) * 0.35, 0, yB);
+      g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.20)');
+      ctx.fillStyle = g; ctx.fillRect(0, yT, W + 1, yB - yT + 1);
+      g = ctx.createLinearGradient(0, yT, 0, yT + (yB - yT) * 0.14);
+      g.addColorStop(0, 'rgba(0,0,0,.12)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g; ctx.fillRect(0, yT, W + 1, (yB - yT) * 0.14 + 1);
+      ctx.restore();
+    };
+    /* ---- everything else the other tabs decide: devices, parapet,
+       chimney, balconies, collectors — the render is downstream of all of
+       them, never a model of its own ---- */
+    const dc = q => q.reduce((a2, r) => a2 + depthOf(r[0], r[1], r[2]), 0) / q.length;
+    const devCol = style === 'clay' ? '#CFCCC2' : '#9A938A';
+    wins.forEach(o => {
+      const f = o.w.f, oo = OPEN[f];
+      if (!oo || !wallSeen(o.sg.n)) return;
+      const sg = o.sg, w = o.w;
+      const u0 = w.uc - w.w / 2, u1 = w.uc + w.w / 2;
+      const off = (p, d) => [p[0] + sg.n[0] * d, p[1] + sg.n[1] * d, p[2]];
+      if (oo.ovD > 0) w.rows.forEach(r => {
+        const v1 = Math.min(r.head, H0);
+        const a0 = onWall(sg, u0 - (oo.ovL || 0), v1), b0 = onWall(sg, u1 + (oo.ovR || 0), v1);
+        const a = off(a0, oo.ovD), b = off(b0, oo.ovD);
+        items.push({ pts:[a0, b0, b, a], fill:devCol, d:dc([a0, b0, b, a]) });
+      });
+      if (oo.finD > 0 && oo.finN > 0) {
+        const sides = oo.finSide === 'left' ? [u0] : oo.finSide === 'right' ? [u1] : [u0, u1];
+        w.rows.forEach(r => {
+          const v0 = r.sill, v1 = Math.min(r.head, H0);
+          sides.forEach(uu => {
+            const p0 = onWall(sg, uu, v0), p1 = onWall(sg, uu, v1);
+            const q = [p0, off(p0, oo.finD), off(p1, oo.finD), p1];
+            items.push({ pts:q, fill:devCol, d:dc(q) });
+          });
+        });
+      }
+    });
+    if (RF.par && RF.par.on && RF.n === 0) {
+      const ph = Math.max(0.2, +RF.par.h || 0.6);
+      M.pl.segs.forEach(sg => {
+        const nx = sg.n[0], ny = sg.n[1], a = sg.a, b = sg.b;
+        const o1 = [a[0] + nx * 0.09, a[1] + ny * 0.09], o2 = [b[0] + nx * 0.09, b[1] + ny * 0.09];
+        const i1 = [a[0] - nx * 0.09, a[1] - ny * 0.09], i2 = [b[0] - nx * 0.09, b[1] - ny * 0.09];
+        const q = [[o1[0], o1[1], H0], [o2[0], o2[1], H0], [o2[0], o2[1], H0 + ph], [o1[0], o1[1], H0 + ph]];
+        const t2 = [[o1[0], o1[1], H0 + ph], [o2[0], o2[1], H0 + ph], [i2[0], i2[1], H0 + ph], [i1[0], i1[1], H0 + ph]];
+        const base = style === 'clay' ? '#E4E1D8' : wallBase();
+        items.push({ pts:q, fill:shadeHex(base, night ? 0.3 : 0.85), d:dc(q) });
+        items.push({ pts:t2, fill:shadeHex(base, night ? 0.32 : 1), d:dc(t2) });
+      });
+    }
+    if (RF.chim && RF.chim.on && isFinite(+RF.chim.x) && isFinite(+RF.chim.y)) {
+      try {
+        const zx = M.zAt(+RF.chim.x, +RF.chim.y);
+        if (zx !== null && isFinite(zx)) {
+          const ft = chimFoot(RF.chim), hx = ft.x / 2, hy = ft.y / 2;
+          const hTop = zx + chimEffH(RF.chim), cx0 = +RF.chim.x, cy0 = +RF.chim.y;
+          const corners = [[cx0 - hx, cy0 - hy], [cx0 + hx, cy0 - hy], [cx0 + hx, cy0 + hy], [cx0 - hx, cy0 + hy]];
+          const chBase = style === 'clay' ? '#E4E1D8' : wallBase();
+          for (let i = 0; i < 4; i++) {
+            const a = corners[i], b = corners[(i + 1) % 4];
+            const q = [[a[0], a[1], zx - 0.1], [b[0], b[1], zx - 0.1], [b[0], b[1], hTop], [a[0], a[1], hTop]];
+            items.push({ pts:q, fill:shadeHex(chBase, night ? 0.3 : 0.85), d:dc(q) });
+          }
+          const cap = [[cx0 - hx - 0.08, cy0 - hy - 0.08, hTop], [cx0 + hx + 0.08, cy0 - hy - 0.08, hTop],
+            [cx0 + hx + 0.08, cy0 + hy + 0.08, hTop], [cx0 - hx - 0.08, cy0 + hy + 0.08, hTop]];
+          items.push({ pts:cap, fill:shadeHex(chBase, night ? 0.32 : 1), d:dc(cap) });
+        }
+      } catch (e) {}
+    }
+    try {
+      const BS = balcScene(G);
+      (BS.solids || []).forEach(sl => {
+        if (!sl.pts || sl.pts.length < 3) return;
+        items.push({ pts:sl.pts, fill:style === 'clay' ? '#D5D2CA' : 'rgba(190,185,175,.92)', d:dc(sl.pts) });
+      });
+    } catch (e) {}
+    ['pv', 'thermal'].forEach(t => {
+      if (!RF.sol || RF.sol.tech !== t) return;
+      try {
+        const opt = solarOptimum(S, t, G.rot, C.t);
+        const fld = solarField(G, RF, S.lat, opt.tilt);
+        if (!fld || !fld.fits) return;
+        fld.mods.forEach(mo => items.push({ pts:mo.q, fill:style === 'clay' ? '#C9CFD2' : t === 'pv' ? '#1E3A8A' : '#22262B', d:dc(mo.q) }));
+      } catch (e) {}
+    });
+    items.sort((a, b) => b.d - a.d);
+    const kpx = CAM_K * s;
+    items.forEach(it => {
+      if (it.blob) {
+        const gnd = proj(FR, it.x, it.y, it.z), top = proj(FR, it.x, it.y, it.z + it.trunkH + (it.H - it.trunkH) / 2);
+        if (it.trunkH > 0.2) { stroke(ctx, style === 'clay' ? '#B9B5AA' : '#6B4A3A', Math.max(1, kpx * 0.09)); seg(ctx, gnd[0], gnd[1], top[0], top[1]); }
+        const cz = it.z + it.trunkH + (it.H - it.trunkH) * 0.55;
+        [[0, 0, 1], [-0.45, 0.15, 0.7], [0.45, -0.1, 0.7]].forEach(([ox, oy, sc]) => {
+          const c = proj(FR, it.x + ox * it.r, it.y + oy * it.r, cz);
+          ctx.beginPath(); ctx.ellipse(c[0], c[1], it.r * kpx * sc, it.r * kpx * sc * 0.72, 0, 0, 6.284);
+          ctx.fillStyle = style === 'watercolor' ? it.col + '' : it.col;
+          if (style === 'watercolor') { ctx.save(); ctx.globalAlpha = 0.6; ctx.fill(); ctx.restore(); }
+          else ctx.fill();
+          if (style === 'sketch') { stroke(ctx, CH.ink, 1); ctx.stroke(); }
+        });
+        return;
+      }
+      poly(it.pts, it.fill, style === 'sketch' ? CH.ink : (it.glass ? 'rgba(20,23,26,.45)' : it.nbTip ? 'rgba(90,110,130,.55)' : CH.ink), style === 'sketch' ? 1.6 : it.glass ? 1 : 1.2);
+      if (style === 'photo' && !night && !it.glass && !it.blob && !it.nbTip && !it.door && it.mat && it.mat !== 'site') {
+        dressFace(it.pts.map(q => proj(FR, q[0], q[1], q[2])), it.mat);
+        if (it.wallSg) shadeFace(it.pts.map(q => proj(FR, q[0], q[1], q[2])));
+      }
+      if (style === 'photo' && it.win) {
+        const wn = it.win, sg = wn.sg, n = sg.n;
+        const fc2 = it.pts.map(q => proj(FR, q[0], q[1], q[2]));
+        const fw = night ? 'rgba(205,205,198,.55)' : '#EDEBE3';
+        const wp = new Path2D();
+        fc2.forEach((q, i) => i ? wp.lineTo(q[0], q[1]) : wp.moveTo(q[0], q[1]));
+        wp.closePath();
+        stroke(ctx, fw, Math.max(2, kpx * 0.055)); ctx.stroke(wp);
+        const mx0 = [(fc2[0][0] + fc2[3][0]) / 2, (fc2[0][1] + fc2[3][1]) / 2];
+        const mx1 = [(fc2[1][0] + fc2[2][0]) / 2, (fc2[1][1] + fc2[2][1]) / 2];
+        const my0 = [(fc2[0][0] + fc2[1][0]) / 2, (fc2[0][1] + fc2[1][1]) / 2];
+        const my1 = [(fc2[3][0] + fc2[2][0]) / 2, (fc2[3][1] + fc2[2][1]) / 2];
+        stroke(ctx, fw, Math.max(1.2, kpx * 0.028));
+        seg(ctx, mx0[0], mx0[1], mx1[0], mx1[1]);
+        seg(ctx, my0[0], my0[1], my1[0], my1[1]);
+        const sq = [[wn.u0 - 0.07, wn.v0 - 0.09], [wn.u1 + 0.07, wn.v0 - 0.09], [wn.u1 + 0.07, wn.v0 - 0.01], [wn.u0 - 0.07, wn.v0 - 0.01]]
+          .map(([u, v]) => { const p = onWall(sg, u, v); return proj(FR, p[0] + n[0] * 0.13, p[1] + n[1] * 0.13, p[2]); });
+        ctx.beginPath(); sq.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])); ctx.closePath();
+        ctx.fillStyle = night ? 'rgba(150,150,145,.6)' : '#D8D5CC'; ctx.fill();
+      }
+      if (it.door && style !== 'sketch') {
+        const dr = it.door, sg = dr.sg, n = sg.n;
+        const leaf = [[dr.uc - dr.dw / 2 + 0.07, 0.06], [dr.uc + dr.dw / 2 - 0.07, 0.06], [dr.uc + dr.dw / 2 - 0.07, dr.dh - 0.05], [dr.uc - dr.dw / 2 + 0.07, dr.dh - 0.05]]
+          .map(([u, v]) => { const p = onWall(sg, u, v); return proj(FR, p[0] + n[0] * 0.12, p[1] + n[1] * 0.12, p[2]); });
+        ctx.beginPath(); leaf.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])); ctx.closePath();
+        ctx.fillStyle = night ? '#3A3E42' : style === 'clay' ? '#C2BFB5' : '#44584E'; ctx.fill();
+        if (style === 'photo' && !night) {
+          stroke(ctx, 'rgba(0,0,0,.35)', 1);
+          [0.35, 0.65].forEach(f => {
+            seg(ctx, leaf[0][0] + (leaf[3][0] - leaf[0][0]) * f, leaf[0][1] + (leaf[3][1] - leaf[0][1]) * f,
+              leaf[1][0] + (leaf[2][0] - leaf[1][0]) * f, leaf[1][1] + (leaf[2][1] - leaf[1][1]) * f);
+          });
+          ctx.fillStyle = '#C8C8C0'; ctx.beginPath(); ctx.arc(leaf[1][0] - 4, (leaf[1][1] + leaf[2][1]) / 2, 1.8, 0, 6.284); ctx.fill();
+        }
+        if (night) {
+          const tq = [[dr.uc - dr.dw / 2, dr.dh + 0.05], [dr.uc + dr.dw / 2, dr.dh + 0.05], [dr.uc + dr.dw / 2, dr.dh + 0.35], [dr.uc - dr.dw / 2, dr.dh + 0.35]]
+            .map(([u, v]) => { const p = onWall(sg, u, v); return proj(FR, p[0] + n[0] * 0.09, p[1] + n[1] * 0.09, p[2]); });
+          ctx.beginPath(); tq.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])); ctx.closePath();
+          ctx.fillStyle = 'rgba(255,205,120,.85)'; ctx.fill();
+        }
+        const st = [[dr.uc - dr.dw / 2 - 0.25, 0.06], [dr.uc + dr.dw / 2 + 0.25, 0.06], [dr.uc + dr.dw / 2 + 0.25, 0.5], [dr.uc - dr.dw / 2 - 0.25, 0.5]]
+          .map(([u, o]) => { const p = onWall(sg, u, 0); return proj(FR, p[0] + n[0] * o, p[1] + n[1] * o, 0.02); });
+        ctx.beginPath(); st.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])); ctx.closePath();
+        ctx.fillStyle = night ? 'rgba(140,140,135,.7)' : '#CFCBC0'; ctx.fill();
+        stroke(ctx, 'rgba(20,23,26,.4)', 1); ctx.stroke();
+      }
+      if (it.glass && !night && style === 'photo') {   // a sky streak across the pane
+        const p0 = proj(FR, it.pts[0][0], it.pts[0][1], it.pts[0][2]), p2 = proj(FR, it.pts[2][0], it.pts[2][1], it.pts[2][2]);
+        stroke(ctx, 'rgba(255,255,255,.65)', 1.4);
+        seg(ctx, p0[0] + (p2[0] - p0[0]) * 0.25, p0[1] + (p2[1] - p0[1]) * 0.55, p0[0] + (p2[0] - p0[0]) * 0.55, p0[1] + (p2[1] - p0[1]) * 0.2);
+      }
+      if (it.glass && night) {
+        const c = it.pts.map(q => proj(FR, q[0], q[1], q[2]));
+        const mx = (c[0][0] + c[2][0]) / 2, my = (c[0][1] + c[2][1]) / 2;
+        ctx.fillStyle = 'rgba(255,210,122,.25)';
+        ctx.beginPath(); ctx.arc(mx, my, 9, 0, 6.284); ctx.fill();
+      }
+    });
+    ctx.fillStyle = night ? '#E8EAF0' : CH.ink2; ctx.font = F(10); ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText(prompt.slice(0, 90), 8, H - 22);
+    label(ctx, t('sun') + ' ' + fmt(sun.alt, 0) + '° · ' + t(styleNow()) + (night ? ' · ' + t('night') : ''), 8, H - 9, night ? '#AEB6C8' : CH.muted, F(9), 'left', 'middle');
+  };
+  function renderBrief() {
+    const sun = sunNow(), style = styleNow();
+    const L = [];
+    L.push(APP.name + ' — render brief (v' + APP.version + ')');
+    L.push('site: ' + (S.place || S.nuts) + ', ' + fmt(Math.abs(lat), 3) + '° ' + (lat < 0 ? 'S' : 'N') + ' ' + fmt(Math.abs(lon), 3) + '° ' + (lon < 0 ? 'W' : 'E') + ', alt ' + fmt(S.alt, 0) + ' m · Köppen ' + STATE.clim.k.code);
+    L.push('model: bar ' + fmt(G.L, 1) + ' × ' + fmt(G.D, 1) + ' m, ' + G.fl + ' storey(s) × ' + fmt(G.fh, 1) + ' m, main facade ' + fmt(G.rot, 0) + '°, form ' + (G.form || 'rect')
+      + ' · roof ' + ['flat', 'shed', 'gable', 'hip'][RF.n] + (RF.n === 0 ? '' : ' ' + RF.th + '°'));
+    L.push('openings WWR: S ' + fmt(OPEN.S.wwr, 2) + ' N ' + fmt(OPEN.N.wwr, 2) + ' E ' + fmt(OPEN.E.wwr, 2) + ' W ' + fmt(OPEN.W.wwr, 2)
+      + (SUNSP && SUNSP.on ? ' · sunspace on ' + SUNSP.face : '') + ' · planting ' + SCENE.veg.length + ', walls ' + SCENE.walls.length);
+    const mm = rMinMax();
+    L.push('ground: ' + (rGrid && mm ? '240 m grid, low ' + fmt(mm.lo, 0) + ' m, high +' + fmt(mm.hi, 0) + ' m vs site' : 'flat (no grid derived)'));
+    L.push('look: walls ' + (look.wall ? look.wall.key : 'site finish') + ', roof ' + (look.roof ? look.roof.key : 'site finish')
+      + ', 21 Jun ' + fmt(hour, 1) + ' h solar (alt ' + fmt(sun.alt, 0) + '°, azi ' + fmt(sun.azi, 0) + '°), sky ' + (look.sky ? look.sky.key : 'site') + ', finish ' + style + (nightNow() ? ', night' : ''));
+    L.push('prompt: ' + prompt);
+    if (showNb) L.push('surroundings: ' + nbRender().length + ' neighbour prisms as transparent tip (OpenStreetMap)');
+    if (look.unknown.length) L.push('unparsed: ' + look.unknown.join(', '));
+    L.push('camera: azimuth ' + fmt(CAM.az, 0) + '°, elevation ' + fmt(CAM.el, 0) + '°');
+    return L.join('\n');
+  }
+  function renderCSV() {
+    const sun = sunNow(), mm = rMinMax();
+    const rows = [['Parameter', 'Value'],
+      ['Prompt', prompt],
+      ['Wall material', look.wall ? look.wall.key : 'site finish (' + (MASS.col || 'none') + ')'],
+      ['Roof material', look.roof ? look.roof.key : 'site finish (' + (ROOF.col || 'none') + ')'],
+      ['Solar hour', +hour.toFixed(1)], ['Sun altitude (°)', +sun.alt.toFixed(1)], ['Sun azimuth (°)', +sun.azi.toFixed(1)],
+      ['Sky', look.sky ? look.sky.key : 'site'], ['Finish', styleNow()], ['Night', nightNow() ? 'yes' : 'no'],
+      ['Terrain grid', rGrid ? rGrid.n + '×' + rGrid.n + ' at ' + rGrid.step + ' m' : 'none'],
+      ['Terrain low / high vs site (m)', mm ? +mm.lo.toFixed(1) + ' / +' + mm.hi.toFixed(1) : ''],
+      ['Surrounding buildings', showNb ? nbRender().length + ' as transparent tip' : 'off'],
+      ['Unparsed words', look.unknown.join(' ') || 'none'],
+      ['Köppen–Geiger', STATE.clim.k.code]];
+    return csvRows(rows);
+  }
+  SCORES.render = () => ({ 'Render look':(look.wall ? look.wall.key : 'site') + ' + ' + (look.roof ? look.roof.key : 'site'),
+    'Render sun':fmt(hour, 1) + ' h', 'Render finish':styleNow() });
+
+  /* ---- prompt assessment line ---- */
+  function refreshReading() {
+    readSlot.innerHTML = '';
+    const chip = (txt, ok) => {
+      const c = el('span', { class:'pill ' + (ok ? 'ok' : 'empty') });
+      c.textContent = txt;
+      readSlot.appendChild(c); readSlot.appendChild(document.createTextNode(' '));
+    };
+    chip(t('Wall material') + ': ' + (look.wall ? matName(look.wall) : t('site finish')), !!look.wall);
+    chip(t('Roof material') + ': ' + (look.roof ? matName(look.roof) : t('site finish')), !!look.roof);
+    chip(t('Solar hour') + ': ' + fmt(hour, 1) + ' h', !!(look.time || hourTouched));
+    chip(t('Finish') + ': ' + t(styleNow()), !!(look.style || styleLock !== 'auto'));
+    if (look.unknown.length) chip(t('Not painted') + ': ' + look.unknown.join(', '), false);
+    lookSlot.innerHTML = '';
+    const rows = [[t('Wall material'), look.wall ? matName(look.wall) : t('site finish') + ' (' + (MASS.col || '—') + ')'],
+      [t('Roof material'), look.roof ? matName(look.roof) : t('site finish') + ' (' + (ROOF.col || '—') + ')'],
+      [t('Solar hour'), fmt(hour, 1) + ' h'], [t('Finish'), t(styleNow())]];
+    rows.forEach(([k, v]) => {
+      const d = el('div', { class:'fact' }, [el('span', { text:k })]);
+      const b = el('b', {}); b.textContent = v; d.appendChild(b); lookSlot.appendChild(d);
+    });
+    terrSlot.textContent = rGridNote;
+  }
+  function applyPrompt(resetHour) {
+    look = parseRenderPrompt(prompt);
+    if (resetHour && look.time && !hourTouched) { hour = look.time.h; hourCtl.range.value = hour; hourCtl.out.textContent = fmt(hour, 1) + ' h'; }
+    refreshReading();
+  }
+  let deb = 0;
+  ta.addEventListener('input', () => {
+    prompt = ta.value.slice(0, 500);
+    RENDER_PROMPT = prompt; promptTouched = true;
+    clearTimeout(deb);
+    deb = setTimeout(() => { applyPrompt(true); refreshRender(); }, 350);
+  });
+
+  /* ---- stage ---- */
+  const stageBar = stage.appendChild(el('div', { class:'viewbar' }));
+  renderPanel = makePanel(stage, { title:t('Render view'), note:t('The dressed massing in its ground, under the prompted sun.'),
+    render:renderRender, csv:renderCSV,
+    heightFn: w => Math.round(clamp(Math.min(w * 0.74, (window.innerHeight || 900) - 190), 320, 900)) });
+  const pillLine = stage.appendChild(el('div', { class:'limitrow readings' }));
+  const pillLook = el('span', { class:'pill ok', text:'' });
+  pillLine.appendChild(pillLook);
+  const renderCam = camBar(stage, CAM, () => G.rot, () => renderPanel.draw(), 'render', set => [
+    ['From S', 'Stand to the true south of the building', () => set(camAzFrom(G.rot, 180), camMidEl(CAM))],
+    ['Reset', 'Back to the south-west corner', () => set(225, ISO_EL)]], 0);
+  function refreshRender() {
+    applyPrompt(false);
+    const sun = sunNow();
+    pillLook.textContent = (look.wall ? matName(look.wall) : t('site finish')) + ' · ' + (look.roof ? matName(look.roof) : t('site finish'))
+      + ' · ' + t('sun') + ' ' + fmt(sun.alt, 0) + '° · ' + t(styleNow())
+      + (look.unknown.length ? ' · ' + t('not painted') + ': ' + look.unknown.join(', ') : '');
+    renderCam.sync();
+    if (renderPanel) renderPanel.draw();
+    benchStage(stage);
+  }
+  KEEPERS.push(() => { KEEP.render = { prompt, promptTouched, hour, hourTouched, styleLock, showShadow, showTrees, showGround, showNb, cam:{ az:CAM.az, el:CAM.el } }; });
+  host._refresh = () => { renderCam.sync(); refreshRender(); };
+  const rcv = renderPanel.canvas;
+  rcv.style.touchAction = 'none';
+  rcv.style.cursor = 'grab';
+  rcv.draggable = false;
+  rcv.addEventListener('dragstart', ev => ev.preventDefault());
+  const orbit = orbitDrag(CAM, (az, e) => renderCam.set(az, e));
+  rcv.addEventListener('pointerdown', ev => {
+    ev.preventDefault();
+    orbit.start(ev);
+    try { rcv.setPointerCapture(ev.pointerId); } catch (err) {}
+    rcv.style.cursor = 'grabbing';
+  });
+  rcv.addEventListener('pointermove', ev => { if (orbit.move(ev)) { ev.preventDefault(); } });
+  const endOrbit = () => { orbit.end(); rcv.style.cursor = 'grab'; };
+  rcv.addEventListener('pointerup', endOrbit);
+  rcv.addEventListener('pointercancel', endOrbit);
+  zoomGesture(rcv, 'render');
+  /* + and − zoom the model for a closer oversight, as on Ventilation */
+  document.addEventListener('keydown', ev => {
+    if (STATE.tab !== 'render' || !host.isConnected) return;
+    if (/INPUT|SELECT|TEXTAREA/.test((ev.target && ev.target.tagName) || '')) return;
+    if (ev.key === '+' || ev.key === '=') modelZoom('render', 1.25);
+    else if (ev.key === '-' || ev.key === '_') modelZoom('render', 1 / 1.25);
+  });
+  refreshReading();
+  refreshRender();
+  if (!rGrid) fetchRenderTerrain();
+}
+/* Name a parsed material in the interface language for the reading line. */
+const RENDER_PLNAME = { whitewash:'biel', plaster:'tynk', brick:'cegła', stone:'kamień', timber:'drewno', concrete:'beton', cork:'korek', glass:'szkło',
+  tile:'dachówka', slate:'łupek', metal:'blacha', thatch:'strzecha', green:'zielony dach', white:'biały dach' };
+
 /* --------------------------------------------------------------- 8. BOOT -- */
 const TABS = [
   { key:'environment', label:'Environmental', build:buildEnvironment },
   { key:'site', label:'Site', build:buildSite },
   { key:'roof', label:'Roof', build:buildRoof },
   { key:'openings', label:'Windows & Shading', build:buildOpenings },
-  { key:'ventilation', label:'Ventilation', build:buildVentilation }
+  { key:'ventilation', label:'Ventilation', build:buildVentilation },
+  { key:'render', label:'Render', build:buildRender }
 ];
 
 /* --- the references, built from one list so the footer and the pages agree - */
@@ -12339,6 +13265,7 @@ document.addEventListener('click', ev => { const m = $('#cadMenu'); if (m && !m.
    stopped (the 3D mesh itself is too heavy for a file like this — its size
    is noted, and the file is re-imported). Nothing is uploaded either way. */
 let STUDY = null;
+let RENDER_PROMPT = '';
 function studyJSON() {
   const S = STATE.site, C = STATE.clim;
   return JSON.stringify({
@@ -12347,7 +13274,7 @@ function studyJSON() {
     clim:{ t:C.t.slice(), p:C.p.slice(), source:C.source || '', mode:C.mode || '' },
     env:{ plot:ENV.plot ? { lat:ENV.plot.lat, lon:ENV.plot.lon } : null, doy:ENV.doy, h:ENV.h,
       map:ENV.map, view:ENV.view, wide:!!ENV.wide, nb:ENV.nb !== false },
-    mass:MASS, roof:ROOF, open:OPEN, sunsp:SUNSP, rwin:RWIN, veg:SCENE.veg, walls:SCENE.walls,
+    mass:MASS, roof:ROOF, open:OPEN, sunsp:SUNSP, rwin:RWIN, render:{ prompt:RENDER_PROMPT }, veg:SCENE.veg, walls:SCENE.walls,
     mesh:IMPORT.active ? { name:IMPORT.name, L:+IMPORT.L.toFixed(2), D:+IMPORT.D.toFixed(2), H:+IMPORT.H.toFixed(2) } : null,
     readout:JSON.parse(toDecisionsJSON())
   }, null, 2);
@@ -12412,6 +13339,7 @@ function applyStudy(o) {
   if (typeof W0.size === 'string' && /^\d+x\d+$/.test(W0.size)) RWIN.size = W0.size;
   SCENE.veg.length = 0;
   (Array.isArray(o.veg) ? o.veg : []).forEach(v => { if (v && typeof v.type === 'string' && isFinite(+v.x) && isFinite(+v.y)) SCENE.veg.push(v); });
+  if (o.render && typeof o.render.prompt === 'string') RENDER_PROMPT = o.render.prompt.slice(0, 500);
   SCENE.walls.length = 0;
   (Array.isArray(o.walls) ? o.walls : []).forEach(w => { if (w && isFinite(+w.x) && isFinite(+w.y) && ['x', 'y'].indexOf(w.along) >= 0) SCENE.walls.push(w); });
   const E0 = o.env || {};
@@ -13660,7 +14588,7 @@ function mountApp(site, clim, keepTab, keepModel, keepScroll) {
    the place and its region. Normals the student typed, or a station
    picked from the list, are theirs and stay. The model, the windows and
    the day chosen stay as they were. */
-const plainName = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+const plainName = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\u0142/g, 'l').replace(/\u0141/g, 'L').toLowerCase().trim();
 const CONC_BY_PLAIN = (() => { const m = {}; Object.keys(CONCELHOS).forEach(k => { m[plainName(k)] = k; }); return m; })();
 /* Poland has no island groups to separate: mainland only, always. */
 const islandOf = lo => 'mainland';
@@ -14560,7 +15488,31 @@ Object.assign(PT, {
   "ridge": "kalenica",
 
   /* windows & shading */
-  "Windows & Shading": "Okna i Zacienianie",
+    "Windows & Shading": "Okna i Zacienianie",
+  /* render */
+  "Render": "Renderowanie",
+  "Render view": "Widok renderu",
+  "The dressed massing in its ground, under the prompted sun.": "Gotowa bryła w terenie, pod słońcem z promptu.",
+  "Wall material": "Materiał ścian",
+  "Roof material": "Materiał dachu",
+  "Solar hour": "Godzina solarna",
+  "Finish": "Wykończenie",
+  "Auto": "Auto",
+  "Photo": "Foto",
+  "Watercolor": "Akwarela",
+  "Clay": "Makieta",
+  "Sketch": "Szkic",
+  "site finish": "materiał z Terenu",
+  "not painted": "nierozpoznane",
+  "Not painted": "Nierozpoznane",
+  "night": "noc",
+  "Popular here": "Popularne w regionie",
+  "Fetching the ground…": "Pobieranie terenu…",
+  "Flat for now — open Ventilation once, or fetch below, for the real ground.": "Na razie płaski teren — otwórz raz Wentylację albo pobierz prawdziwy teren poniżej.",
+  "Ground in view: low {} m, high +{} m (240 m grid).": "Teren w widoku: nisko {} m, wysoko +{} m (siatka 240 m).",
+  "The ground could not be fetched — flat stands in. Retry when online.": "Nie pobrano terenu — wstawiono płaski. Spróbuj ponownie, gdy będziesz online.",
+  "whitewashed walls, clay tile roof, afternoon sun, photorealistic": "mury bielone, dachówka, popołudnie, fotorealistycznie",
+  "The model in its terrain, finished from a prompt. Describe materials, light and finish — the tab reads the request, dresses the massing, and renders it here. Freer scenes go by brief: copy it into an image studio.": "Model w terenie, wykończony promptem. Opisz materiały, światło i wykończenie — zakładka odczytuje polecenie, ubiera bryłę i renderuje ją tutaj. Swobodniejsze sceny idą briefem: skopiuj go do studia graficznego.", 
   "Glazing, overhangs and fins for each facade, sized against the plan fixed on Site and the roof fixed on Roof — this tab cannot change either. Choosing a facade turns the model to face it, so you can drag its window directly; the compass shows which way is which. Click a window to select it — drag its black node to push it along the wall and up or down, drag a fin dot to stand it where the shade belongs, double-click it to open or close it, double-click bare wall to plant a new one. Any unit turns into a glazed door or a gelosia breeze-block from its row. Drag it onto another facade to move it there, or step it across with the arrows on its row.":
     "Szklenie, okapy i lamele dla każdej fasady, zwymiarowane względem planu ustalonego w Terenie i dachu ustalonego w Dachu — ta zakładka nie może zmienić żadnego z nich. Wybór fasady obraca model ku niej, więc możesz przeciągać jej okno bezpośrednio; kompas pokazuje, co jest czym. Kliknij okno, aby je zaznaczyć — przeciągnij jego czarny punkt, aby popchnąć je wzdłuż ściany oraz w górę i w dół, przeciągnij kropkę lameli, aby postawić ją tam, gdzie należy cień, kliknij dwukrotnie, aby je otworzyć lub zamknąć, kliknij dwukrotnie gołą ścianę, aby posadzić nowe. Każda jednostka zamienia się w przeszklone drzwi lub pustak ażurowy z jej wiersza. Przeciągnij je na inną fasadę, aby je tam przenieść, albo przestaw strzałkami w jego wierszu.",
   "South": "Południe", "North": "Północ", "East": "Wschód", "West": "Zachód",
@@ -14983,6 +15935,8 @@ Object.assign(PT_HINT, {
     'Jeden komin, rysowany tak, jak buduje je region — wybierz styl powyżej, gdzie buduje się więcej niż jeden. Stoi tam, gdzie go postawisz, i wznosi się, ile mówi suwak; ocena ciągu sądzi koronę według reguły, której odpowiada każdy komin: pół metra luzu nad kalenicą na stromym dachu, metr luzu na płaskim, żeby wiatr ciągnął, zamiast spychać w dół. „Według reguły” wznosi go dokładnie tam. Krótki komin na zawietrznym zboczu zadymia poddasze — najpierw wysokość, potem położenie.',
   'roof-divide':
     'Jeden budynek, kilka dachów — płaski stropodach obok stromego dachu: podziel dłuższy bok (do trzech części), daj każdej części własne połacie i nachylenie i przeciągnij podział na modelu albo powyżej. Odznaki czytają największą część.',
+  'render-how':
+    'Prompt ubiera bryłę narysowaną w Terenie, zadaszoną w Dachu i obsadzoną w Wentylacji — <b>ściany</b> (biel, cegła, kamień, drewno, beton, korek, szkło), <b>dach</b> (dachówka, łupek, blacha, strzecha, zielony dach), <b>światło</b> (od świtu do nocy) i <b>wykończenie</b> (foto, akwarela, makieta, szkic). Widok zależy od każdej zakładki: plan, załamania i dziedziniec z Terenu, nachylenie, attyka, okap, komin i kolektory z Dachu, szkło, drzwi, okapy, lamele i oranżeria z Okien i Zacieniania, zieleń, mury i sąsiedzi z Wentylacji — zmień cokolwiek, a model podąży przy następnej wizycie. Czego zakładka nie potrafi namalować, zgłasza pod promptem. Brief niesie tę samą scenę do studia graficznego dla swobodniejszych renderów.',
 
   'site-balc':
     '<b>Balkony</b>, do sześciu, każdy na ścianie obrysu. <b>Wystający</b>: płyta na poziomie podłogi swojego piętra z balustradą 1,0 m wokół wolnych krawędzi — od pierwszego piętra w górę, bo na parterze byłby tarasem; dla piętra poniżej jest okapem, a Okna i Zacienianie liczą go jako okap nad oknami, które przykrywa. <b>Cofnięty</b>: loggia, pudło piętra cofnięte od ściany — na parterze ganek. Jego okno przechodzi na ścianę tylną, a sufit i boki je cieniują: Okna i Zacienianie liczą okap na suficie i lamele przy każdym zamkniętym boku. Kubatura też się zmienia: loggia wychodzi z kubatury ogrzewanej, a jej boki, sufit i podłoga stają się obudową tam, gdzie budynek ciągnie się za nie, więc <b>Współczynnik kształtu</b> rośnie; wystający balkon nie rusza żadnego z nich, choć jego płyta jest mostkiem cieplnym, którego współczynnik kształtu nie widzi. Na modelu <b>okrągły punkt</b> balkonu przesuwa go wzdłuż ściany najbliższej kursora — za narożnikiem przechodzi na następną ścianę, a przy każdym końcu wskakuje równo w narożnik — a jego <b>kwadratowy punkt</b> ustala szerokość wzdłuż ściany i głębokość od niej. W narożniku, od którego ściana odchodzi, wystający balkon zawija go w L, równie głęboki na obu licach, a loggia otwiera się na oba. Belka po lewej ustala to samo: wystający albo cofnięty, jedno piętro albo wszystkie, ściana, ku której patrzy, bok albo któryś z narożników, szerokość i głębokość. Loggia zachowuje co najmniej 1,5 m budynku za sobą; wystający balkon trzyma 0,3 m wolnego od każdej ściany, ku której patrzy. Każdy widok 3D je rysuje, a eksport CAD je zapisuje — płyty, balustrady i każdą loggię wyciętą w ścianach, podłodze i dachu.',
