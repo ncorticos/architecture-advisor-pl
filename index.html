@@ -910,7 +910,7 @@ details.more[open] > summary{color:var(--ink)}
 const APP = {
   name:        'Architecture Advisor PL',
   tag:         'AA PL',
-  version:     '1.112.0',
+  version:     '1.113.0',
   author:      'Nuno Dinis Cortiços',
   institution: 'Lisbon School of Architecture, Universidade de Lisboa',
   builtWith:   'Claude Opus 5 (Anthropic)',
@@ -2330,7 +2330,7 @@ const chimTopH = (F, h) => (h === undefined ? F.h : h) + (F.cap || 0.15) + (F.po
 /** Triangles [{pts:[3], fill, n}] for a chimney of the region's family,
     standing on the roof surface at (x, y, z0): plinth, shaft, cap, pots or
     open flues, the openwork crown. Small enough to paint anywhere. */
-function chimneyFaces(famKey, x, y, z0, hEff, foot, taperDeg) {
+function chimneyFaces(famKey, x, y, z0, hEff, foot, taperDeg, zAtFn) {
   const F0 = CHIMNEY_FAM[famKey] || CHIMNEY_FAM.mazowiecki;
   const F = Object.assign({}, F0, { h:(hEff === undefined ? F0.h : hEff) });
   const tap = isFinite(+taperDeg) ? Math.max(0, +taperDeg) * RAD : 0;
@@ -2379,8 +2379,30 @@ function chimneyFaces(famKey, x, y, z0, hEff, foot, taperDeg) {
       quad([a0[0], a0[1], z1], [b0[0], b0[1], z1], [b1[0], b1[1], z2], [a1[0], a1[1], z2], fill);
     }
   };
-  box(x - sw / 2 - 0.12, y - w / 2 - 0.12, z0 - 0.1, x + sw / 2 + 0.12, y + w / 2 + 0.12, z0 + 0.3, shaftC);
-  frustum(x, y, sw / 2, w / 2, swt / 2, wt / 2, z0 - 0.35, z0 + h - skirt, shaftC);
+  /* The foot follows the roof: the lowest surface under the widened shaft
+     buries the shaft on any pitch, and a flashing collar hugs the slope
+     where a level plate would float downhill. Without a surface callback
+     both fall back to the old level foot. */
+  const rawZ = (qx, qy) => {
+    if (typeof zAtFn !== 'function') return null;
+    try { const v = zAtFn(qx, qy); return isFinite(v) ? v : null; } catch (e) { return null; }
+  };
+  const surfZ = (qx, qy) => { const v = rawZ(qx, qy); return v === null ? z0 : v; };
+  let zB = null;
+  [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sy]) => {
+    const v = rawZ(x + sx * (sw / 2 + 0.14), y + sy * (w / 2 + 0.14));
+    if (v !== null) zB = zB === null ? v : Math.min(zB, v);
+  });
+  if (zB === null) zB = z0 - 0.35;
+  frustum(x, y, sw / 2, w / 2, swt / 2, wt / 2, zB - 0.05, z0 + h - skirt, shaftC);
+  const collarSide = (ix0, iy0, ix1, iy1, ox0, oy0, ox1, oy1) => {
+    quad([ix0, iy0, surfZ(ix0, iy0) - 0.16], [ix1, iy1, surfZ(ix1, iy1) - 0.16],
+      [ox1, oy1, surfZ(ox1, oy1) + 0.05], [ox0, oy0, surfZ(ox0, oy0) + 0.05], shaftC);
+  };
+  collarSide(x + sw / 2, y - w / 2, x + sw / 2, y + w / 2, x + sw / 2 + 0.14, y - w / 2 - 0.14, x + sw / 2 + 0.14, y + w / 2 + 0.14);
+  collarSide(x - sw / 2, y + w / 2, x - sw / 2, y - w / 2, x - sw / 2 - 0.14, y + w / 2 + 0.14, x - sw / 2 - 0.14, y + w / 2 - 0.14);
+  collarSide(x + sw / 2, y + w / 2, x - sw / 2, y + w / 2, x + sw / 2 + 0.14, y + w / 2 + 0.14, x - sw / 2 - 0.14, y + w / 2 - 0.14);
+  collarSide(x - sw / 2, y - w / 2, x + sw / 2, y - w / 2, x - sw / 2 - 0.14, y - w / 2 - 0.14, x + sw / 2 + 0.14, y - w / 2 - 0.14);
   if (F.cone) {
     const cb = z0 + h, ch = F.cone.h, hwt = Math.min(swt, wt) / 2, cr0 = Math.min(F.cone.r, hwt + 0.05), dr = Math.min(F.drum.r, hwt), cr1 = Math.min(dr + 0.07, cr0);
     coneFrustum(x, y, cr0, cr1, cb, cb + ch, shaftC);
@@ -3867,7 +3889,7 @@ function pushChimPar(arr, M, map) {
   const ch = ROOF.chim;
   if (ch && ch.on && isFinite(+ch.x) && isFinite(+ch.y) && M.pl.inside(+ch.x, +ch.y)) {
     const z = M.zAt(+ch.x, +ch.y);
-    if (z !== null) chimneyFaces(ch.fam, +ch.x, +ch.y, z, chimEffH(ch), chimFoot(ch), chimTaper(ch)).forEach(f => arr.push({ pts:map ? f.pts.map(map) : f.pts, fill:f.fill, chim:1 }));
+    if (z !== null) chimneyFaces(ch.fam, +ch.x, +ch.y, z, chimEffH(ch), chimFoot(ch), chimTaper(ch), (qx, qy) => M.zAt(qx, qy)).forEach(f => arr.push({ pts:map ? f.pts.map(map) : f.pts, fill:f.fill, chim:1 }));
   }
 }
 
@@ -7089,6 +7111,8 @@ function buildRoof(host) {
     const M = roofModel(G, RF), bb = M.pl.bbox;
     return { x0:bb[0] + 0.3, x1:bb[2] - 0.3, y0:bb[1] + 0.3, y1:bb[3] - 0.3 };
   };
+  /** Roof under a chimney position: inside the walls and with a surface. */
+  const chimDrawable = (M, x, y) => M.pl.inside(x, y) && M.zAt(x, y) !== null;
   function buildChimUI() {
     chimBox.innerHTML = '';
     chimXCtl = chimYCtl = null;
@@ -7101,6 +7125,16 @@ function buildRoof(host) {
           buildChimUI(); roofDraw();
         } }));
       return;
+    }
+    /* Heal a stranded chimney (plan edited under it, void under the
+       sliders): with no roof under it the chimney is never drawn — move
+       it back to the highest roof instead of leaving it invisible. */
+    {
+      const Mh = roofModel(G, RF);
+      if (!chimDrawable(Mh, +ch.x, +ch.y)) {
+        const at = placeChimney(Mh);
+        if (at) { RF.chim.x = at.x; RF.chim.y = at.y; }
+      }
     }
     const styles = chimneyList(STATE.site.nuts);
     if (styles.length > 1) {
@@ -7147,9 +7181,9 @@ function buildRoof(host) {
       } }));
     const sp = chimSpan();
     chimXCtl = rangeCtl('Metres from the west face', Math.min(sp.x0, sp.x1), Math.max(sp.x0, sp.x1), 0.1, clamp(ch.x, sp.x0, sp.x1),
-      v => { RF.chim.x = +v.toFixed(2); roofDraw(); }, v => fmt(v, 1) + ' m');
+      v => { const nx = +v.toFixed(2); if (!chimDrawable(roofModel(G, RF), nx, +RF.chim.y)) { chimXCtl.range.value = RF.chim.x; chimXCtl.out.textContent = fmt(RF.chim.x, 1) + ' m'; toast(t('No roof there \u2014 the chimney stays where it stands')); return; } RF.chim.x = nx; roofDraw(); }, v => fmt(v, 1) + ' m');
     chimYCtl = rangeCtl('Metres from the south face', Math.min(sp.y0, sp.y1), Math.max(sp.y0, sp.y1), 0.1, clamp(ch.y, sp.y0, sp.y1),
-      v => { RF.chim.y = +v.toFixed(2); roofDraw(); }, v => fmt(v, 1) + ' m');
+      v => { const ny = +v.toFixed(2); if (!chimDrawable(roofModel(G, RF), +RF.chim.x, ny)) { chimYCtl.range.value = RF.chim.y; chimYCtl.out.textContent = fmt(RF.chim.y, 1) + ' m'; toast(t('No roof there \u2014 the chimney stays where it stands')); return; } RF.chim.y = ny; roofDraw(); }, v => fmt(v, 1) + ' m');
     chimBox.appendChild(chimXCtl); chimBox.appendChild(chimYCtl);
     chimBox.appendChild(el('button', { class:'btn small', text:'× ' + t('Remove'), title:t('Take the chimney away'),
       onclick:() => { RF.chim = null; buildChimUI(); roofDraw(); } }));
@@ -9020,6 +9054,7 @@ function buildVentilation(host) {
      from the same open-Meteo elevation service as the altitude lookup —
      only the coordinates leave the browser. Null until derived. */
   let terrainGrid = K0 && K0.terrainGrid ? K0.terrainGrid : null;
+  if (terrainGrid) EXPORT_TERRAIN = terrainGrid;
   /** Bilinear ground height under a plan point, m above the site; 0 where
       there is no grid yet, or the point lies beyond it. The grid is stored
       in world metres east/north of the site; the plan frame turns with the
@@ -10414,6 +10449,7 @@ function buildVentilation(host) {
       if (!Array.isArray(tv) || tv.length !== TN * TN || tv.some(v => typeof v !== 'number' || !isFinite(v))) throw new Error('terrain');
       const datum = tv[TC * TN + TC];
       terrainGrid = { n:TN, step:TSTEP, h:tv.map(v => +(v - datum).toFixed(1)) };
+      EXPORT_TERRAIN = terrainGrid;
       const mm = terraMinMax();
       notes.push(t('terrain 240 m grid: low ' + fmt(mm.lo, 0) + ' m, high +' + fmt(mm.hi, 0) + ' m (Copernicus DEM via Open-Meteo)'));
       ok = true;
@@ -12150,6 +12186,25 @@ const renderRegionFor = nuts => {
   const r = RENDER_REGION[key];
   return { key, wall:RENDER_WALLS.find(o => o.key === r[0]), roof:RENDER_ROOFS.find(o => o.key === r[1]), note:r[2] };
 };
+/* Building-material physics: generic λ and ρ facts per material family,
+   carried for the brief and CSV; the limewash thermal slots are unset. */
+const AC_BM = {
+  brick:{ bm:'Brick', lam:0.58, rho:1500 },
+  concrete:{ bm:'Concrete', lam:1.15, rho:1800 },
+  timber:{ bm:'Timber - Structural', lam:0.18, rho:700 },
+  plaster:{ bm:'Plaster - Lime Sand', lam:0.8, rho:1600 },
+  whitewash:{ bm:'Limewash', lam:null, rho:null },
+  stone:{ bm:'Stone - Structural', lam:1.7, rho:2200 },
+  glass:{ bm:'Glass', lam:1.0, rho:2500 },
+  metal:{ bm:'Titanium Zinc', lam:110, rho:7200 }
+};
+/* This tab's finishes against a material library: without a web library
+   consulted, every finish resolves unchecked — colours and twins below. */
+const RENDER_CA = {
+  whitewash:null, plaster:null, brick:null, stone:null, timber:null,
+  concrete:null, cork:null, glass:null,
+  tile:null, slate:null, metal:null, thatch:null, green:null, white:null
+};
 /* ------------------------------------------------------------- 7. RENDER --
    The model in its terrain, rendered from a prompt. The student describes
    the finish they want — materials, light, finish — and the tab assesses
@@ -12159,22 +12214,22 @@ const renderRegionFor = nuts => {
    paint: one press copies the view, the model and the prompt as a render
    brief for an image studio of the student's choosing. */
 const RENDER_WALLS = [
-  { key:'whitewash', c:'#EFE7D5', words:['whitewash', 'whitewashed', 'white', 'biel', 'bielony', 'bielona', 'bielone', 'wapno'] },
-  { key:'plaster', c:'#E2D5BE', words:['plaster', 'stucco', 'tynk', 'tynkowany', 'tynkowana', 'tynkowane'] },
-  { key:'brick', c:'#A2593B', words:['brick', 'cegla', 'cegła', 'ceglany', 'ceglana', 'ceglane', 'klinkier'] },
-  { key:'stone', c:'#99928A', words:['stone', 'granite', 'kamien', 'kamień', 'kamienny', 'kamienna', 'kamienne', 'granit'] },
-  { key:'timber', c:'#8A6844', words:['timber', 'wood', 'wooden', 'drewno', 'drewniany', 'drewniana', 'drewniane'] },
-  { key:'concrete', c:'#B7BABD', words:['concrete', 'beton', 'betonowy', 'betonowa', 'betonowe'] },
+  { key:'whitewash', c:'#FFFFFF', ac:'Stucco - White Rough', words:['whitewash', 'whitewashed', 'white', 'biel', 'bielony', 'bielona', 'bielone', 'wapno'] },
+  { key:'plaster', c:'#E7CFAB', ac:'Stucco - Beige Rough', words:['plaster', 'stucco', 'tynk', 'tynkowany', 'tynkowana', 'tynkowane'] },
+  { key:'brick', c:'#B48778', ac:'Brick - Running Bond', words:['brick', 'cegla', 'cegła', 'ceglany', 'ceglana', 'ceglane', 'klinkier'] },
+  { key:'stone', c:'#B4B4B4', ac:'Stone - Granite Gray', words:['stone', 'granite', 'kamien', 'kamień', 'kamienny', 'kamienna', 'kamienne', 'granit'] },
+  { key:'timber', c:'#CCBEAC', ac:'Wood - Oak Light', words:['timber', 'wood', 'wooden', 'drewno', 'drewniany', 'drewniana', 'drewniane'] },
+  { key:'concrete', c:'#7F7F7F', ac:'Concrete - 02', words:['concrete', 'beton', 'betonowy', 'betonowa', 'betonowe'] },
   { key:'cork', c:'#B5894F', words:['cork', 'korek', 'korkowy'] },
-  { key:'glass', c:'#9FC4DE', words:['glass', 'glazed', 'szklo', 'szkło', 'szklany', 'szklana', 'szklane'] }
+  { key:'glass', c:'#84ADF9', ac:'Glass - Blue', words:['glass', 'glazed', 'szklo', 'szkło', 'szklany', 'szklana', 'szklane'] }
 ];
 const RENDER_ROOFS = [
-  { key:'tile', c:'#A34A2E', words:['tile', 'tiled', 'terracotta', 'dachowka', 'dachówka', 'karpiowka', 'ceramiczna'] },
+  { key:'tile', c:'#CD9881', ac:'Roof Tiles - Spanish 01', words:['tile', 'tiled', 'terracotta', 'dachowka', 'dachówka', 'karpiowka', 'ceramiczna'] },
   { key:'slate', c:'#4B5158', words:['slate', 'lupek', 'łupek', 'lupkowy'] },
-  { key:'metal', c:'#8F979E', words:['metal', 'zinc', 'blacha', 'blaszany', 'blaszana', 'blaszane'] },
+  { key:'metal', c:'#A9ACAD', ac:'Metal - Zinc', words:['metal', 'zinc', 'blacha', 'blaszany', 'blaszana', 'blaszane'] },
   { key:'thatch', c:'#C2A15C', words:['thatch', 'strzecha', 'strzechowy', 'sloma', 'słoma'] },
-  { key:'green', c:'#5F7F4A', words:['green roof', 'zielony dach', 'dach zielony'] },
-  { key:'white', c:'#E6E3DA', words:['white roof', 'bialy dach', 'biały dach'] }
+  { key:'green', c:'#56A92E', ac:'Grass - Green', words:['green roof', 'zielony dach', 'dach zielony'] },
+  { key:'white', c:'#FFFFFF', ac:'Paint - Titanium White', words:['white roof', 'bialy dach', 'biały dach'] }
 ];
 const RENDER_TIMES = [
   { key:'dawn', h:6.5, words:['dawn', 'sunrise', 'swit', 'świt', 'wschod slonca'] },
@@ -12191,10 +12246,9 @@ const RENDER_SKIES = [
   { key:'overcast', words:['overcast', 'grey sky', 'szare niebo', 'pochmurno'] }
 ];
 const RENDER_STYLES = [
-  { key:'photo', words:['photo', 'photorealistic', 'foto', 'fotorealistyczny', 'fotorealistycznie', 'realistyczny'] },
-  { key:'watercolor', words:['watercolor', 'watercolour', 'akwarela', 'akwarelowy'] },
-  { key:'clay', words:['clay', 'makieta', 'glina', 'gliniany', 'model'] },
-  { key:'sketch', words:['sketch', 'szkic', 'rysunek', 'odreczny', 'odręczny'] }
+  { key:'photo', words:['photo', 'photorealistic', 'foto', 'fotorealistyczny', 'fotorealistycznie', 'realistyczny', 'color', 'kolor', 'render'] },
+  { key:'study', words:['study', 'studium', 'makieta', 'model', 'biała karta', 'biala karta'] },
+  { key:'bw', words:['bw', 'czarno-biały', 'czarno-biale', 'mono', 'monochromatyczny', 'skala szarości'] }
 ];
 const RENDER_STOP = ('the a an de da do das dos em no na nos nas com uma umas uns para por como is are and or with without with of to in on at ' + 'i w z na do od o a nie tak jak sie to co lub oraz albo czy jest sa przez dla ale tez').split(' ');
 const RENDER_NOUN = ['wall', 'walls', 'roof', 'roofs', 'sun', 'house', 'building', 'model', 'prompt', 'render', 'sciana', 'sciany', 'mur', 'mury', 'dach', 'dachy', 'slonce', 'dom', 'budynek', 'wizualizacja', 'elewacja'];
@@ -12240,10 +12294,10 @@ function buildRender(host) {
   const S = STATE.site, C = STATE.clim;
   const lat = S.lat, lon = S.lon, tz = lon / 15;
   const G = MASS, RF = ROOF;
-  pageHead(host, 'Render',
-    'The model in its terrain, finished from a prompt. Describe materials, light and finish — the tab reads the request, dresses the massing, and renders it here. Freer scenes go by brief: copy it into an image studio.');
+  pageHead(host, 'Visualization',
+    'The model in its terrain, finished from the material buttons. Pick wall and roof finishes — the tab dresses the massing and renders it here. Freer scenes go by brief: copy it into an image studio.');
   if (!G) { host.appendChild(el('p', { text:t('Define the site first — go to the Site tab.') })); return; }
-  const K0 = KEEP.render || null;
+  const K0 = KEEP.visualization || null;
   /* Fresh students start dressed for their region: the popular architecture
      where the house stands becomes the opening prompt, freely overwritten. */
   const reg0 = renderRegionFor(S.nuts);
@@ -12255,7 +12309,8 @@ function buildRender(host) {
   let look = parseRenderPrompt(prompt);
   let hour = K0 && isFinite(+K0.hour) ? clamp(+K0.hour, 5, 22) : (look.time ? look.time.h : 15);
   let hourTouched = !!(K0 && K0.hourTouched);
-  let styleLock = K0 && K0.styleLock ? K0.styleLock : 'auto';
+  let styleLock = K0 && ['study', 'photo', 'bw'].indexOf(K0.styleLock) >= 0 ? K0.styleLock : 'photo';
+  let styleTouched = !!(K0 && K0.styleTouched);
   let showShadow = !K0 || K0.showShadow !== false, showTrees = !K0 || K0.showTrees !== false;
   let showGround = !K0 || K0.showGround !== false;
   /* Surrounding buildings as a transparent tip: the Environment tab's
@@ -12265,6 +12320,7 @@ function buildRender(host) {
   /* terrain: the ventilation grid where this browser already derived it,
      else a grid of our own over the same service — only coordinates leave */
   let rGrid = KEEP.vent && KEEP.vent.terrainGrid ? KEEP.vent.terrainGrid : null;
+  if (rGrid) EXPORT_TERRAIN = rGrid;
   let rGridNote = rGrid ? '' : t('Flat for now — open Ventilation once, or fetch below, for the real ground.');
   const betaR = () => (G.rot - 180) * RAD;
   const rTerraAt = (x, y) => {
@@ -12322,6 +12378,7 @@ function buildRender(host) {
       if (!Array.isArray(tv) || tv.length !== TN * TN || tv.some(v => typeof v !== 'number' || !isFinite(v))) throw new Error('terrain');
       const datum = tv[TC * TN + TC];
       rGrid = { n:TN, step:TSTEP, h:tv.map(v => +(v - datum).toFixed(1)) };
+      EXPORT_TERRAIN = rGrid;
       const mm = rMinMax();
       rGridNote = t('Ground in view: low ' + fmt(mm.lo, 0) + ' m, high +' + fmt(mm.hi, 0) + ' m (240 m grid).');
     } catch (e) {
@@ -12341,7 +12398,7 @@ function buildRender(host) {
     const f = finishOf(ROOF.col);
     return f ? f.hex : '#8F7A68';
   };
-  const styleNow = () => styleLock !== 'auto' ? styleLock : (look.style ? look.style.key : 'photo');
+  const styleNow = () => styleLock;
   const nightNow = () => hour >= 20 || hour < 6.5;
   const sunNow = () => sunPos(172, hour, lat, lon, tz);
   const sunDirPlan = () => {
@@ -12355,6 +12412,7 @@ function buildRender(host) {
     return 'rgb(' + v[0] + ',' + v[1] + ',' + v[2] + ')';
   };
   /* Name a parsed material in the interface language for the reading line. */
+  const acName = o => (o && o.ac) || null;
   const matName = o => {
     if (!o) return null;
     return LANG === 'pl' ? (RENDER_PLNAME[o.key] || o.words[0]) : o.words[0];
@@ -12365,35 +12423,39 @@ function buildRender(host) {
   const rail = bench.appendChild(el('div', { class:'rail' }));
   const stage = bench.appendChild(el('div', { class:'stage' }));
   const props = bench.appendChild(el('div', { class:'props' }));
-  rail.appendChild(el('div', { class:'gh', text:'Prompt' }));
-  const promptBox = rail.appendChild(el('div', { class:'controls' }));
-  const ta = el('textarea', { rows:'3', maxlength:'500',
-    style:'font:inherit;font-size:12.5px;width:100%;min-height:64px;resize:vertical;padding:7px 9px;border:1px solid var(--line);border-radius:6px' });
-  ta.value = prompt;
-  ta.placeholder = t('whitewashed walls, clay tile roof, afternoon sun, photorealistic');
-  promptBox.appendChild(ta);
   const readSlot = rail.appendChild(el('div', { class:'effect' }));
   /* Finish presets, render-house style: every wall and roof finish as a
      pick box, photorealistically dressed onto the surfaces. The region's
      popular finish wears a star. Picking rewrites the prompt, so the study
-     file, the brief and the reading all stay truthful; typing clears back
-     to the prompt's own words. */
+     file, the brief and the reading all stay truthful. */
   const presetSyncs = [];
   function setPromptMaterial(cat, entry) {
     const lists = cat === 'wall' ? RENDER_WALLS : RENDER_ROOFS;
     const vocab = {};
     lists.forEach(o => o.words.forEach(w => { vocab[plainName(w)] = 1; }));
-    const parts = String(ta.value).split(/(\s+|[,;]+)/);
+    const parts = String(prompt).split(/(\s+|[,;]+)/);
     let done = false;
     const out = parts.map(p => {
       if (!done && vocab[plainName(p)]) { done = true; return entry.words[0]; }
       return p;
     });
     const tag = /\s/.test(entry.words[0]) ? entry.words[0] : entry.words[0] + (cat === 'wall' ? ' walls' : ' roof');
-    ta.value = (done ? out.join('') : (ta.value.replace(/\s+$/, '') + ', ' + tag)).slice(0, 500);
-    prompt = ta.value; RENDER_PROMPT = prompt; promptTouched = true;
+    prompt = (done ? out.join('') : (prompt.replace(/\s+$/, '') + ', ' + tag)).slice(0, 500);
+    RENDER_PROMPT = prompt; promptTouched = true;
     applyPrompt(true); refreshRender();
   }
+  const caZone = () => (CA_MATS && CA_MATS.siteZones[S.nuts] ? CA_MATS.siteZones[S.nuts][0] : null);
+  const caEntryFor = rkey => {
+    const m = RENDER_CA[rkey];
+    if (m === null || m === undefined) return { kind:'absent', keys:[] };
+    if (typeof m === 'string') return { kind:m, keys:[] };
+    if (Array.isArray(m)) return { kind:'fixed', keys:m };
+    const z = caZone();
+    return { kind:'zoned', keys:(z && m[z]) || [] };
+  };
+  const caAvailable = e => null;
+  const caPhotoFor = rkey => null;
+  const caNameFor = rkey => null;
   function presetGroup(label, list, cat) {
     rail.appendChild(el('div', { class:'gh', text:label }));
     const box = rail.appendChild(el('div', { class:'controls' }));
@@ -12422,8 +12484,12 @@ function buildRender(host) {
   sunBox.appendChild(hourCtl);
   props.appendChild(el('div', { class:'gh', text:'Finish' }));
   const finBox = props.appendChild(el('div', { class:'controls' }));
-  const styleCtl = segCtl(null, [{ value:'auto', label:t('Auto') }, { value:'photo', label:t('Photo') }, { value:'watercolor', label:t('Watercolor') }, { value:'clay', label:t('Clay') }, { value:'sketch', label:t('Sketch') }],
-    styleLock, v => { styleLock = v; refreshRender(); });
+  const styleCtl = segCtl(null, [{ value:'study', label:t('Study') }, { value:'photo', label:t('Render') }, { value:'bw', label:t('B&W Render') }],
+    styleLock, v => { styleLock = v; styleTouched = true; refreshRender(); });
+  function syncStyleCtl() {
+    const btns = styleCtl.querySelectorAll('button'), order = ['study', 'photo', 'bw'];
+    btns.forEach((b, i) => b.setAttribute('aria-pressed', String(order[i] === styleLock)));
+  }
   finBox.appendChild(styleCtl);
   props.appendChild(el('div', { class:'gh', text:'View' }));
   const viewBox = props.appendChild(el('div', { class:'controls' }));
@@ -12452,7 +12518,7 @@ function buildRender(host) {
     onclick: () => fetchRenderTerrain() }));
   const terrSlot = props.appendChild(el('div', { class:'hint' }));
   host.appendChild(hint('render-how',
-    'The prompt dresses the massing drawn on Site, roofed on Roof and planted on Ventilation — <b>walls</b> (whitewash, brick, stone, timber, concrete, cork, glass), <b>roof</b> (tile, slate, metal, thatch, green), <b>light</b> (dawn to night) and <b>finish</b> (photo, watercolor, clay, sketch). The view is downstream of every tab: the plan, breaks and patio from Site, pitch, parapet, eaves, chimney and collectors from Roof, glass, doors, overhangs, fins and sunspace from Windows & Shading, planting, walls and neighbours from Ventilation — change any of them and this model follows on the next visit. What the tab cannot paint it says back under the prompt. The brief carries the same scene to an image studio for the freer renders.'));
+    'Pick wall and roof finishes from the boxes — every finish dresses the massing photorealistically, each in the exact colours of its Archicad 29 surface twin (named in the Look panel, so the same surface can be applied over in Archicad), and the reading confirms what the model wears. The offer is three finishes: <b>Study</b> (the white card model), <b>Render</b> (full colour) and <b>B&W Render</b> (black and white). The view is downstream of every tab: the plan, breaks and patio from Site, pitch, parapet, eaves, chimney and collectors from Roof, glass, doors, overhangs, fins and sunspace from Windows & Shading, planting, walls and neighbours from Ventilation — change any of them and this model follows on the next visit. What the tab cannot paint it says back under the prompt. The brief carries the same scene to an image studio for the freer renders.'));
   function fallbackCopy(txt, done) {
     const f = el('textarea', { style:'position:fixed;opacity:0' });
     f.value = txt; document.body.appendChild(f); f.select();
@@ -12489,7 +12555,7 @@ function buildRender(host) {
     const top = 34, bottom = H - 26, availV = Math.max(40, bottom - top);
     const sByW = (W / 2 - 16) / (CAM_K * uMax);
     const sByH = availV / (CAM_K * ((vMax - vMin) + maxH * ax.ce));
-    const s = Math.max(3, Math.min(sByW, sByH)) * zoomOf('render');
+    const s = Math.max(3, Math.min(sByW, sByH)) * zoomOf('visualization');
     return { cx, cy:bottom + CAM_K * s * vMin, s, H0, ridge, M, ax };
   };
 
@@ -12512,9 +12578,9 @@ function buildRender(host) {
       if (strokeColor) { stroke(ctx, strokeColor, width || 1.2); ctx.stroke(); }
     };
     /* sky */
-    const skyTop = night ? '#10182E' : style === 'clay' ? '#D8D5CE' : style === 'watercolor' ? '#F4EFE2'
+    const skyTop = night ? '#10182E' : style === 'watercolor' ? '#F4EFE2'
       : sun.alt > 30 ? '#7FB2E5' : sun.alt > 5 ? '#9CC3E8' : '#3A4A6B';
-    const skyBot = night ? '#2A3350' : style === 'clay' ? '#EDEAE3' : style === 'watercolor' ? '#F9F5EA'
+    const skyBot = night ? '#2A3350' : style === 'watercolor' ? '#F9F5EA'
       : sun.alt > 30 ? '#DCEBF7' : sun.alt > 5 ? '#F2D9B8' : '#8A6A5A';
     const grd = ctx.createLinearGradient(0, 0, 0, H);
     grd.addColorStop(0, skyTop); grd.addColorStop(1, skyBot);
@@ -12541,12 +12607,14 @@ function buildRender(host) {
     const depthOf = (x, y, z) => (x * ax.d[0] + y * ax.d[1]) * ax.ce - (z || 0) * ax.se;
     /* ground */
     const terrCol = h => {
-      if (style === 'clay') return '#D5D2CA';
       if (style === 'sketch') return '#EFEBE0';
       const span = Math.max(1e-6, mm.hi - mm.lo), f = clamp((h - mm.lo) / span, 0, 1);
       const c0 = [226, 233, 219], c1 = [210, 196, 160], c2 = [180, 142, 104];
       const c = f < 0.5 ? c0.map((v, i) => Math.round(v + (c1[i] - v) * f * 2))
         : c1.map((v, i) => Math.round(v + (c2[i] - v) * (f - 0.5) * 2));
+      /* moonlit grade: crushed dark and cooled, so the ground sits back
+         instead of outshining the lit house */
+      if (night) return 'rgb(' + Math.round(c[0] * 0.22 + 6) + ',' + Math.round(c[1] * 0.24 + 8) + ',' + Math.round(c[2] * 0.30 + 18) + ')';
       return 'rgb(' + c[0] + ',' + c[1] + ',' + c[2] + ')';
     };
     if (terrOn) {
@@ -12578,7 +12646,8 @@ function buildRender(host) {
     } else {
       const bb = M.pl.bbox, gx = Math.max(-bb[0], bb[2]) + 10, gy = Math.max(-bb[1], bb[3]) + 10;
       poly([[-gx, -gy, 0], [gx, -gy, 0], [gx, gy, 0], [-gx, gy, 0]],
-        style === 'clay' ? '#D5D2CA' : style === 'sketch' ? '#EFEBE0' : 'rgba(120,140,105,.30)',
+        style === 'sketch' ? '#EFEBE0'
+        : night ? 'rgba(24,30,48,.85)' : 'rgba(120,140,105,.30)',
         style === 'sketch' ? CH.ink : CH.line, style === 'sketch' ? 1.6 : 1.2);
     }
     /* shadow blob: the footprint dropped along the sun ray */
@@ -12599,16 +12668,18 @@ function buildRender(host) {
       const sg = wl.sg;
       if (!wallSeen(sg.n)) return;
       const wpts = [onWall(sg, 0, 0), onWall(sg, sg.len, 0)].concat(wl.prof.slice().reverse().map(q => onWall(sg, q[0], q[1])));
-      const base = style === 'clay' ? '#E4E1D8' : wallBase();
-      items.push({ pts:wpts, fill:shadeHex(base, night ? 0.3 : faceK(sg.n) * (style === 'watercolor' ? 0.92 : 1)), d:wpts.reduce((a2, q) => a2 + depthOf(q[0], q[1], q[2]), 0) / wpts.length, mat:look.wall ? look.wall.key : 'site', wallSg:sg });
+      const base = wallBase();
+      const tu = [(sg.b[0] - sg.a[0]) / sg.len, (sg.b[1] - sg.a[1]) / sg.len];
+      items.push({ pts:wpts, fill:shadeHex(base, night ? 0.3 : faceK(sg.n) * (style === 'watercolor' ? 0.92 : 1)), sh:night ? 0.3 : faceK(sg.n), d:wpts.reduce((a2, q) => a2 + depthOf(q[0], q[1], q[2]), 0) / wpts.length, mat:look.wall ? look.wall.key : 'site', wallSg:sg,
+        uv:wpts.map(q => [(q[0] - sg.a[0]) * tu[0] + (q[1] - sg.a[1]) * tu[1], q[2]]) });
     });
     M.pieces.forEach(pc => {
       const f = pc.f;
       if ((-f.t * f.a * ax.c[0] - f.t * f.b * ax.c[1]) * ax.ce + ax.se <= 1e-6) return;
       const pts = pc.poly.map(q => [q[0], q[1], M.zOf(f, q[0], q[1])]);
-      const base = style === 'clay' ? '#D5D2CA' : roofBase();
+      const base = roofBase();
       const fk = 0.6 + 0.4 * Math.max(0, -f.a * sunL[0] - f.b * sunL[1]) * (0.3 + 0.7 * sinA);
-      items.push({ pts, fill:shadeHex(base, night ? 0.32 : fk), d:pts.reduce((a2, q) => a2 + depthOf(q[0], q[1], q[2]), 0) / pts.length, mat:look.roof ? look.roof.key : 'site' });
+      items.push({ pts, fill:shadeHex(base, night ? 0.32 : fk), sh:night ? 0.32 : fk, d:pts.reduce((a2, q) => a2 + depthOf(q[0], q[1], q[2]), 0) / pts.length, mat:look.roof ? look.roof.key : 'site', roof:true, uv:pts.map(q => [q[0], q[1]]) });
     });
     /* glass: each wall's windows, a breath off the face */
     const wins = M.pl.segs.map(sg => ({ sg, w:segWindow(sg, G) })).filter(o => o.w);
@@ -12622,7 +12693,7 @@ function buildRender(host) {
         gl.push({ q:[off(onWall(sg, u0, v0), 0.07), off(onWall(sg, u1, v0), 0.07), off(onWall(sg, u1, v1), 0.07), off(onWall(sg, u0, v1), 0.07)], u0, u1, v0, v1 });
       });
       gl.forEach(g => items.push({ pts:g.q, win:{ sg, u0:g.u0, u1:g.u1, v0:g.v0, v1:g.v1 },
-        fill:night ? '#FFD27A' : style === 'clay' ? '#C9CFD2' : style === 'watercolor' ? 'rgba(150,180,205,.55)' : '#BCD6E8',
+        fill:night ? '#FFD27A' : style === 'watercolor' ? 'rgba(150,180,205,.55)' : '#BCD6E8',
         glass:true, d:g.q.reduce((a2, q) => a2 + depthOf(q[0], q[1], q[2]), 0) / 4 }));
     });
     /* entrance doors: only where Openings sets a door unit — never invented.
@@ -12642,7 +12713,7 @@ function buildRender(host) {
       const q = [off(onWall(sg, uc - dw / 2, 0.02), 0.06), off(onWall(sg, uc + dw / 2, 0.02), 0.06),
         off(onWall(sg, uc + dw / 2, dh), 0.06), off(onWall(sg, uc - dw / 2, dh), 0.06)];
       items.push({ pts:q, door:{ sg, uc, dw, dh },
-        fill:style === 'clay' ? '#C2BFB5' : '#2E3236',
+        fill:'#2E3236',
         d:q.reduce((a2, p) => a2 + depthOf(p[0], p[1], p[2]), 0) / 4 });
     });
     /* sunspace as a glass box on its facade */
@@ -12664,7 +12735,7 @@ function buildRender(host) {
       const quad = w.along === 'y'
         ? [[w.x, w.y - hw, 0], [w.x, w.y + hw, 0], [w.x, w.y + hw, w.height], [w.x, w.y - hw, w.height]]
         : [[w.x - hw, w.y, 0], [w.x + hw, w.y, 0], [w.x + hw, w.y, w.height], [w.x - hw, w.y, w.height]];
-      items.push({ pts:quad, fill:shadeHex(style === 'clay' ? '#E4E1D8' : wallBase(), night ? 0.3 : 0.85),
+      items.push({ pts:quad, fill:shadeHex(wallBase(), night ? 0.3 : 0.85),
         d:quad.reduce((a2, q) => a2 + depthOf(q[0], q[1], q[2]), 0) / 4 });
     });
     /* planting as billboard crowns inside the same depth order */
@@ -12672,7 +12743,7 @@ function buildRender(host) {
       const gz = terrOn ? rTerraAt(v.x, v.y) : 0, H = Math.max(0.5, v.height);
       const trunkH = clamp(v.trunk != null ? v.trunk : H * 0.4, 0, H - 0.3);
       const r = Math.max(0.5, (v.canopy != null ? v.canopy : H * 0.4) * 0.55);
-      const col = style === 'clay' ? '#D5D2CA' : greenOf(v.type);
+      const col = greenOf(v.type);
       items.push({ blob:true, x:v.x, y:v.y, z:gz, trunkH, r, H, col, d:depthOf(v.x, v.y, gz + H / 2) });
     });
     /* surrounding buildings as a transparent tip: plain massing prisms in
@@ -12694,7 +12765,38 @@ function buildRender(host) {
        contact shade that grounds the walls */
     const hSeed = (x, y) => ((Math.round(x * 13.7) * 73856093) ^ (Math.round(y * 17.3) * 19349663)) >>> 0;
     const hRnd = s => () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
-    const dressFace = (c, key) => {
+    const dressFace = (c, key, fill, uvm) => {
+      /* face-aligned courses: a least-squares affine from the face's own
+         metres to the screen — exact for these planar faces, so brick
+         follows each wall instead of the screen, even round corners */
+      let Mx = null;
+      if (uvm && uvm.length === c.length && uvm.length >= 3) {
+        let Suu = 0, Suv = 0, Su = 0, Svv = 0, Sv = 0, n = uvm.length;
+        let Sxu = 0, Sxv = 0, Sx = 0, Syu = 0, Syv = 0, Sy = 0;
+        uvm.forEach((q, i) => { const u = q[0], v = q[1], p = c[i];
+          Suu += u * u; Suv += u * v; Su += u; Svv += v * v; Sv += v;
+          Sxu += p[0] * u; Sxv += p[0] * v; Sx += p[0]; Syu += p[1] * u; Syv += p[1] * v; Sy += p[1]; });
+        const det = Suu * (Svv * n - Sv * Sv) - Suv * (Suv * n - Su * Sv) + Su * (Suv * Sv - Svv * Su);
+        if (Math.abs(det) > 1e-9) {
+          const ax = (Sxu * (Svv * n - Sv * Sv) - Suv * (Sxv * n - Sx * Sv) + Su * (Sxv * Sv - Svv * Sx)) / det;
+          const bx = (Suu * (Sxv * n - Sx * Sv) - Sxu * (Suv * n - Su * Sv) + Su * (Suv * Sx - Sxv * Su)) / det;
+          const cx = (Suu * (Svv * Sx - Sxv * Sv) - Suv * (Suv * Sx - Sxv * Su) + Sxu * (Suv * Sv - Svv * Su)) / det;
+          const ay = (Syu * (Svv * n - Sv * Sv) - Suv * (Syv * n - Sy * Sv) + Su * (Syv * Sv - Svv * Sy)) / det;
+          const by = (Suu * (Syv * n - Sy * Sv) - Syu * (Suv * n - Su * Sv) + Su * (Suv * Sy - Syv * Su)) / det;
+          const cy = (Suu * (Svv * Sy - Syv * Sv) - Suv * (Suv * Sy - Syv * Su) + Syu * (Suv * Sv - Svv * Su)) / det;
+          Mx = (u, v) => [ax * u + bx * v + cx, ay * u + by * v + cy];
+        }
+      }
+      const segM = (u0, v0, u1, v1) => { const p = Mx(u0, v0), q = Mx(u1, v1); ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); ctx.stroke(); };
+      const quadM = (u0, v0, u1, v1, st) => { const p = [Mx(u0, v0), Mx(u1, v0), Mx(u1, v1), Mx(u0, v1)]; ctx.fillStyle = st; ctx.beginPath(); p.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])); ctx.closePath(); ctx.fill(); };
+      const ub = uvm ? [Math.min(...uvm.map(q => q[0])), Math.max(...uvm.map(q => q[0])), Math.min(...uvm.map(q => q[1])), Math.max(...uvm.map(q => q[1]))] : null;
+      const pxm = Mx ? Math.hypot(Mx(1, 0)[0] - Mx(0, 0)[0], Mx(1, 0)[1] - Mx(0, 0)[1]) : kpx;
+      /* blended finishes: every unit filled on its own tone, like the
+         Blender brick/mortar mix — no two bricks share a colour */
+      const fm = String(fill || '').match(/(\d+),\s*(\d+),\s*(\d+)/);
+      const fbase = fm ? [+fm[1], +fm[2], +fm[3]] : null;
+      const tone = f => fbase ? 'rgb(' + fbase.map(v => Math.round(clamp(v * f, 0, 255))).join(',') + ')' : 'rgba(20,23,26,.08)';
+      const toneA = (f, a) => fbase ? 'rgba(' + fbase.map(v => Math.round(clamp(v * f, 0, 255))).join(',') + ',' + a + ')' : 'rgba(20,23,26,' + a + ')';
       const xs = c.map(q => q[0]), ys = c.map(q => q[1]);
       const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
       if (x1 - x0 < 5 || y1 - y0 < 5) return;
@@ -12705,11 +12807,13 @@ function buildRender(host) {
       const rnd = hRnd(hSeed(x0 + y0, x1 - y1));
       const rows = (m, a) => {
         ctx.strokeStyle = 'rgba(20,23,26,' + a + ')'; ctx.lineWidth = 1;
-        for (let yy = y0 + m * kpx * rnd(); yy < y1; yy += m * kpx) { ctx.beginPath(); ctx.moveTo(x0, yy); ctx.lineTo(x1, yy); ctx.stroke(); }
+        if (!Mx || !ub) return;
+        for (let vv = ub[2] + m * rnd(); vv < ub[3]; vv += m) segM(ub[0], vv, ub[1], vv);
       };
       const cols = (m, a) => {
         ctx.strokeStyle = 'rgba(20,23,26,' + a + ')'; ctx.lineWidth = 1;
-        for (let xx = x0 + m * kpx * rnd(); xx < x1; xx += m * kpx) { ctx.beginPath(); ctx.moveTo(xx, y0); ctx.lineTo(xx, y1); ctx.stroke(); }
+        if (!Mx || !ub) return;
+        for (let uu = ub[0] + m * rnd(); uu < ub[1]; uu += m) segM(uu, ub[2], uu, ub[3]);
       };
       const speck = (n, a, col) => {
         ctx.fillStyle = col || 'rgba(20,23,26,' + a + ')';
@@ -12717,26 +12821,47 @@ function buildRender(host) {
       };
       const joints = (rm, vm, a) => {
         rows(rm, a);
+        if (!Mx || !ub) return;
         let ri = 0;
         ctx.strokeStyle = 'rgba(20,23,26,' + (a * 0.6) + ')';
-        for (let yy = y0; yy < y1; yy += rm * kpx, ri++) {
-          for (let xx = x0 + (ri % 2 ? vm / 2 : 0) * kpx; xx < x1; xx += vm * kpx) {
-            ctx.beginPath(); ctx.moveTo(xx, yy); ctx.lineTo(xx, Math.min(y1, yy + rm * kpx)); ctx.stroke();
+        for (let vv = ub[2]; vv < ub[3]; vv += rm, ri++) {
+          for (let uu = ub[0] + (ri % 2 ? vm / 2 : 0); uu < ub[1]; uu += vm) segM(uu, vv, uu, Math.min(ub[3], vv + rm));
+        }
+      };
+      const units = (rw, rh, jf) => {
+        if (!Mx || !ub || !fbase || rw * pxm < 4 || rh * pxm < 3) { joints(0.6, 0.6, 0.16); return; }
+        ctx.fillStyle = tone(0.55); ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
+        let ri = 0;
+        for (let vv = ub[2]; vv < ub[3]; vv += rh, ri++) {
+          for (let uu = ub[0] + (ri % 2 ? rw / 2 : 0); uu < ub[1]; uu += rw) {
+            quadM(uu + 0.01, vv + 0.01, Math.min(ub[1], uu + rw) - 0.01, Math.min(ub[3], vv + rh) - 0.01, tone(0.88 + rnd() * (jf || 0.28)));
           }
         }
       };
-      if (key === 'brick') joints(0.3, 0.6, 0.2);
-      else if (key === 'stone') { rows(0.45, 0.14); for (let i = 0; i < (x1 - x0) / (0.5 * kpx); i++) { const xx = x0 + rnd() * (x1 - x0), yy = y0 + rnd() * (y1 - y0); ctx.strokeStyle = 'rgba(20,23,26,.09)'; ctx.beginPath(); ctx.moveTo(xx, yy); ctx.lineTo(xx, yy + 0.4 * kpx); ctx.stroke(); } }
-      else if (key === 'timber') cols(0.18, 0.18);
-      else if (key === 'concrete') { rows(0.7, 0.07); speck(50, 0.05); }
-      else if (key === 'whitewash' || key === 'plaster') speck(70, 0.045);
-      else if (key === 'cork') speck(90, 0.08, 'rgba(60,35,15,.08)');
-      else if (key === 'tile') joints(0.35, 0.36, 0.2);
-      else if (key === 'slate') rows(0.3, 0.15);
-      else if (key === 'metal') cols(0.55, 0.1);
-      else if (key === 'thatch') { for (let i = 0; i < 70; i++) { const xx = x0 + rnd() * (x1 - x0), yy = y0 + rnd() * (y1 - y0); ctx.strokeStyle = 'rgba(60,40,15,.09)'; ctx.beginPath(); ctx.moveTo(xx, yy); ctx.lineTo(xx + (rnd() - 0.5) * 3, yy + 4 + rnd() * 8); ctx.stroke(); } }
-      else if (key === 'green') speck(120, 0.1, 'rgba(25,60,25,.12)');
-      else if (key === 'white') speck(40, 0.04);
+      const blotches = (n2, r0, r1, a) => {
+        for (let i = 0; i < n2; i++) {
+          ctx.fillStyle = toneA(0.9 + rnd() * 0.2, a);
+          const rr = r0 + rnd() * (r1 - r0);
+          ctx.beginPath(); ctx.ellipse(x0 + rnd() * (x1 - x0), y0 + rnd() * (y1 - y0), rr, rr * 0.7, rnd() * 3, 0, 6.284); ctx.fill();
+        }
+      };
+      const battens = (m, a) => {
+        if (!Mx || !ub || !fbase || m * pxm < 3) { cols(m, a); return; }
+        for (let uu = ub[0]; uu < ub[1]; uu += m) quadM(uu, ub[2], Math.min(ub[1], uu + m), ub[3], tone(0.9 + rnd() * 0.25));
+        cols(m, a);
+      };
+      if (key === 'brick') units(0.6, 0.3);
+      else if (key === 'stone') units(0.9, 0.45, 0.35);
+      else if (key === 'timber') battens(0.18, 0.16);
+      else if (key === 'concrete') { blotches(14, 6, 26, 0.1); speck(50, 0.05); }
+      else if (key === 'whitewash' || key === 'plaster') { blotches(10, 8, 30, 0.07); speck(70, 0.045); }
+      else if (key === 'cork') blotches(26, 3, 10, 0.12);
+      else if (key === 'tile') units(0.36, 0.35);
+      else if (key === 'slate') units(0.5, 0.3);
+      else if (key === 'metal') { cols(0.55, 0.1); blotches(6, 10, 30, 0.05); }
+      else if (key === 'thatch') { for (let i = 0; i < 90; i++) { const xx = x0 + rnd() * (x1 - x0), yy = y0 + rnd() * (y1 - y0); ctx.strokeStyle = toneA(0.7 + rnd() * 0.6, 0.14); ctx.lineWidth = 1 + rnd(); ctx.beginPath(); ctx.moveTo(xx, yy); ctx.lineTo(xx + (rnd() - 0.5) * 3, yy + 4 + rnd() * 8); ctx.stroke(); } ctx.lineWidth = 1; }
+      else if (key === 'green') { blotches(30, 2, 7, 0.14); speck(60, 0.08); }
+      else if (key === 'white') { blotches(8, 8, 24, 0.05); speck(40, 0.04); }
       ctx.restore();
     };
     const shadeFace = c => {
@@ -12758,7 +12883,7 @@ function buildRender(host) {
        chimney, balconies, collectors — the render is downstream of all of
        them, never a model of its own ---- */
     const dc = q => q.reduce((a2, r) => a2 + depthOf(r[0], r[1], r[2]), 0) / q.length;
-    const devCol = style === 'clay' ? '#CFCCC2' : '#9A938A';
+    const devCol = '#9A938A';
     wins.forEach(o => {
       const f = o.w.f, oo = OPEN[f];
       if (!oo || !wallSeen(o.sg.n)) return;
@@ -12791,7 +12916,7 @@ function buildRender(host) {
         const i1 = [a[0] - nx * 0.09, a[1] - ny * 0.09], i2 = [b[0] - nx * 0.09, b[1] - ny * 0.09];
         const q = [[o1[0], o1[1], H0], [o2[0], o2[1], H0], [o2[0], o2[1], H0 + ph], [o1[0], o1[1], H0 + ph]];
         const t2 = [[o1[0], o1[1], H0 + ph], [o2[0], o2[1], H0 + ph], [i2[0], i2[1], H0 + ph], [i1[0], i1[1], H0 + ph]];
-        const base = style === 'clay' ? '#E4E1D8' : wallBase();
+        const base = wallBase();
         items.push({ pts:q, fill:shadeHex(base, night ? 0.3 : 0.85), d:dc(q) });
         items.push({ pts:t2, fill:shadeHex(base, night ? 0.32 : 1), d:dc(t2) });
       });
@@ -12800,18 +12925,8 @@ function buildRender(host) {
       try {
         const zx = M.zAt(+RF.chim.x, +RF.chim.y);
         if (zx !== null && isFinite(zx)) {
-          const ft = chimFoot(RF.chim), hx = ft.x / 2, hy = ft.y / 2;
-          const hTop = zx + chimEffH(RF.chim), cx0 = +RF.chim.x, cy0 = +RF.chim.y;
-          const corners = [[cx0 - hx, cy0 - hy], [cx0 + hx, cy0 - hy], [cx0 + hx, cy0 + hy], [cx0 - hx, cy0 + hy]];
-          const chBase = style === 'clay' ? '#E4E1D8' : wallBase();
-          for (let i = 0; i < 4; i++) {
-            const a = corners[i], b = corners[(i + 1) % 4];
-            const q = [[a[0], a[1], zx - 0.1], [b[0], b[1], zx - 0.1], [b[0], b[1], hTop], [a[0], a[1], hTop]];
-            items.push({ pts:q, fill:shadeHex(chBase, night ? 0.3 : 0.85), d:dc(q) });
-          }
-          const cap = [[cx0 - hx - 0.08, cy0 - hy - 0.08, hTop], [cx0 + hx + 0.08, cy0 - hy - 0.08, hTop],
-            [cx0 + hx + 0.08, cy0 + hy + 0.08, hTop], [cx0 - hx - 0.08, cy0 + hy + 0.08, hTop]];
-          items.push({ pts:cap, fill:shadeHex(chBase, night ? 0.32 : 1), d:dc(cap) });
+          chimneyFaces(RF.chim.fam, +RF.chim.x, +RF.chim.y, zx, chimEffH(RF.chim), chimFoot(RF.chim), chimTaper(RF.chim), (qx, qy) => M.zAt(qx, qy))
+            .forEach(f => items.push({ pts:f.pts, fill:f.fill, d:dc(f.pts) }));
         }
       } catch (e) {}
     }
@@ -12819,7 +12934,7 @@ function buildRender(host) {
       const BS = balcScene(G);
       (BS.solids || []).forEach(sl => {
         if (!sl.pts || sl.pts.length < 3) return;
-        items.push({ pts:sl.pts, fill:style === 'clay' ? '#D5D2CA' : 'rgba(190,185,175,.92)', d:dc(sl.pts) });
+        items.push({ pts:sl.pts, fill:'rgba(190,185,175,.92)', d:dc(sl.pts) });
       });
     } catch (e) {}
     ['pv', 'thermal'].forEach(t => {
@@ -12828,7 +12943,7 @@ function buildRender(host) {
         const opt = solarOptimum(S, t, G.rot, C.t);
         const fld = solarField(G, RF, S.lat, opt.tilt);
         if (!fld || !fld.fits) return;
-        fld.mods.forEach(mo => items.push({ pts:mo.q, fill:style === 'clay' ? '#C9CFD2' : t === 'pv' ? '#1E3A8A' : '#22262B', d:dc(mo.q) }));
+        fld.mods.forEach(mo => items.push({ pts:mo.q, fill:t === 'pv' ? '#1E3A8A' : '#22262B', d:dc(mo.q) }));
       } catch (e) {}
     });
     items.sort((a, b) => b.d - a.d);
@@ -12836,7 +12951,7 @@ function buildRender(host) {
     items.forEach(it => {
       if (it.blob) {
         const gnd = proj(FR, it.x, it.y, it.z), top = proj(FR, it.x, it.y, it.z + it.trunkH + (it.H - it.trunkH) / 2);
-        if (it.trunkH > 0.2) { stroke(ctx, style === 'clay' ? '#B9B5AA' : '#6B4A3A', Math.max(1, kpx * 0.09)); seg(ctx, gnd[0], gnd[1], top[0], top[1]); }
+        if (it.trunkH > 0.2) { stroke(ctx, '#6B4A3A', Math.max(1, kpx * 0.09)); seg(ctx, gnd[0], gnd[1], top[0], top[1]); }
         const cz = it.z + it.trunkH + (it.H - it.trunkH) * 0.55;
         [[0, 0, 1], [-0.45, 0.15, 0.7], [0.45, -0.1, 0.7]].forEach(([ox, oy, sc]) => {
           const c = proj(FR, it.x + ox * it.r, it.y + oy * it.r, cz);
@@ -12850,7 +12965,7 @@ function buildRender(host) {
       }
       poly(it.pts, it.fill, style === 'sketch' ? CH.ink : (it.glass ? 'rgba(20,23,26,.45)' : it.nbTip ? 'rgba(90,110,130,.55)' : CH.ink), style === 'sketch' ? 1.6 : it.glass ? 1 : 1.2);
       if (style === 'photo' && !night && !it.glass && !it.blob && !it.nbTip && !it.door && it.mat && it.mat !== 'site') {
-        dressFace(it.pts.map(q => proj(FR, q[0], q[1], q[2])), it.mat);
+        dressFace(it.pts.map(q => proj(FR, q[0], q[1], q[2])), it.mat, it.fill, it.uv);
         if (it.wallSg) shadeFace(it.pts.map(q => proj(FR, q[0], q[1], q[2])));
       }
       if (style === 'photo' && it.win) {
@@ -12878,7 +12993,7 @@ function buildRender(host) {
         const leaf = [[dr.uc - dr.dw / 2 + 0.07, 0.06], [dr.uc + dr.dw / 2 - 0.07, 0.06], [dr.uc + dr.dw / 2 - 0.07, dr.dh - 0.05], [dr.uc - dr.dw / 2 + 0.07, dr.dh - 0.05]]
           .map(([u, v]) => { const p = onWall(sg, u, v); return proj(FR, p[0] + n[0] * 0.12, p[1] + n[1] * 0.12, p[2]); });
         ctx.beginPath(); leaf.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])); ctx.closePath();
-        ctx.fillStyle = night ? '#3A3E42' : style === 'clay' ? '#C2BFB5' : '#44584E'; ctx.fill();
+        ctx.fillStyle = night ? '#3A3E42' : '#44584E'; ctx.fill();
         if (style === 'photo' && !night) {
           stroke(ctx, 'rgba(0,0,0,.35)', 1);
           [0.35, 0.65].forEach(f => {
@@ -12914,32 +13029,45 @@ function buildRender(host) {
     ctx.fillStyle = night ? '#E8EAF0' : CH.ink2; ctx.font = F(10); ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
     ctx.fillText(prompt.slice(0, 90), 8, H - 22);
     label(ctx, t('sun') + ' ' + fmt(sun.alt, 0) + '° · ' + t(styleNow()) + (night ? ' · ' + t('night') : ''), 8, H - 9, night ? '#AEB6C8' : CH.muted, F(9), 'left', 'middle');
+    /* B&W Render: drain the saturation last, so the study model, the lit
+       windows and the caption all print in black and white */
+    if (style === 'bw') { ctx.save(); ctx.globalCompositeOperation = 'saturation'; ctx.fillStyle = '#808080'; ctx.fillRect(0, 0, W, H); ctx.restore(); }
   };
-  function renderBrief() {
-    const sun = sunNow(), style = styleNow();
-    const L = [];
-    L.push(APP.name + ' — render brief (v' + APP.version + ')');
-    L.push('site: ' + (S.place || S.nuts) + ', ' + fmt(Math.abs(lat), 3) + '° ' + (lat < 0 ? 'S' : 'N') + ' ' + fmt(Math.abs(lon), 3) + '° ' + (lon < 0 ? 'W' : 'E') + ', alt ' + fmt(S.alt, 0) + ' m · Köppen ' + STATE.clim.k.code);
-    L.push('model: bar ' + fmt(G.L, 1) + ' × ' + fmt(G.D, 1) + ' m, ' + G.fl + ' storey(s) × ' + fmt(G.fh, 1) + ' m, main facade ' + fmt(G.rot, 0) + '°, form ' + (G.form || 'rect')
-      + ' · roof ' + ['flat', 'shed', 'gable', 'hip'][RF.n] + (RF.n === 0 ? '' : ' ' + RF.th + '°'));
-    L.push('openings WWR: S ' + fmt(OPEN.S.wwr, 2) + ' N ' + fmt(OPEN.N.wwr, 2) + ' E ' + fmt(OPEN.E.wwr, 2) + ' W ' + fmt(OPEN.W.wwr, 2)
-      + (SUNSP && SUNSP.on ? ' · sunspace on ' + SUNSP.face : '') + ' · planting ' + SCENE.veg.length + ', walls ' + SCENE.walls.length);
-    const mm = rMinMax();
-    L.push('ground: ' + (rGrid && mm ? '240 m grid, low ' + fmt(mm.lo, 0) + ' m, high +' + fmt(mm.hi, 0) + ' m vs site' : 'flat (no grid derived)'));
-    L.push('look: walls ' + (look.wall ? look.wall.key : 'site finish') + ', roof ' + (look.roof ? look.roof.key : 'site finish')
-      + ', 21 Jun ' + fmt(hour, 1) + ' h solar (alt ' + fmt(sun.alt, 0) + '°, azi ' + fmt(sun.azi, 0) + '°), sky ' + (look.sky ? look.sky.key : 'site') + ', finish ' + style + (nightNow() ? ', night' : ''));
-    L.push('prompt: ' + prompt);
-    if (showNb) L.push('surroundings: ' + nbRender().length + ' neighbour prisms as transparent tip (OpenStreetMap)');
-    if (look.unknown.length) L.push('unparsed: ' + look.unknown.join(', '));
-    L.push('camera: azimuth ' + fmt(CAM.az, 0) + '°, elevation ' + fmt(CAM.el, 0) + '°');
-    return L.join('\n');
-  }
+  /* The v2 brief: one versioned JSON contract for the canvas engine, the
+     Blender bundle and the Spark advisor — same model, same sun, same
+     materials, no contradictions. */
+  function renderBriefData() {
+      const sun = sunNow(), mm = rMinMax(), style = styleNow();
+      const matOf = which => {
+        const o = which === 'wall' ? look.wall : look.roof;
+        if (!o) return { source:'site finish' };
+        const m = which === 'wall' ? RENDER_MATS.wall : RENDER_MATS.roof;
+        return { key:o.key, color:m ? m.color : null, archicad:acName(o), constructionAdvisor:m ? m.ca : [] };
+      };
+      return {
+        app:APP.name, briefVersion:2, exported:new Date().toISOString(),
+        site:{ place:S.place || S.nuts, nuts:S.nuts, lat:+S.lat.toFixed(4), lon:+S.lon.toFixed(4), alt:+S.alt, koppen:STATE.clim.k.code },
+        model:{ length:G.L, depth:G.D, rotation:G.rot, floors:G.fl, floorHeight:G.fh, form:G.form || 'rect',
+          roof:{ type:['flat', 'shed', 'gable', 'hip'][RF.n], pitch:RF.n === 0 ? 0 : RF.th },
+          openings:{ S:+OPEN.S.wwr.toFixed(2), N:+OPEN.N.wwr.toFixed(2), E:+OPEN.E.wwr.toFixed(2), W:+OPEN.W.wwr.toFixed(2) },
+          sunspace:SUNSP && SUNSP.on ? SUNSP.face : null, planting:SCENE.veg.length, gardenWalls:SCENE.walls.length },
+        look:{ walls:matOf('wall'), roof:matOf('roof'), sky:look.sky ? look.sky.key : 'site', finish:style, night:nightNow() },
+        sun:{ day:'21 Jun', hour:+hour.toFixed(1), altitude:+sun.alt.toFixed(1), azimuth:+sun.azi.toFixed(1) },
+        camera:RENDER_MATS.cam || null,
+        ground:rGrid && mm ? { grid:rGrid.n + 'x' + rGrid.n + ' at ' + rGrid.step + ' m', low:+mm.lo.toFixed(1), high:+mm.hi.toFixed(1) } : { grid:null },
+        surroundings:showNb ? nbRender().length : 0,
+        prompt
+      };
+    }
+  function renderBrief() { return JSON.stringify(renderBriefData(), null, 2); }
   function renderCSV() {
     const sun = sunNow(), mm = rMinMax();
     const rows = [['Parameter', 'Value'],
       ['Prompt', prompt],
-      ['Wall material', look.wall ? look.wall.key : 'site finish (' + (MASS.col || 'none') + ')'],
-      ['Roof material', look.roof ? look.roof.key : 'site finish (' + (ROOF.col || 'none') + ')'],
+      ['Wall material', look.wall ? look.wall.key + (acName(look.wall) ? ' [Archicad: ' + acName(look.wall) + ']' : '') : 'site finish (' + (MASS.col || 'none') + ')'],
+      ['Roof material', look.roof ? look.roof.key + (acName(look.roof) ? ' [Archicad: ' + acName(look.roof) + ']' : '') : 'site finish (' + (ROOF.col || 'none') + ')'],
+      ['Wall physics (Archicad 29, Tapir)', look.wall && AC_BM[look.wall.key] ? AC_BM[look.wall.key].bm + (AC_BM[look.wall.key].lam === null ? ' (unset)' : ' \u03bb' + AC_BM[look.wall.key].lam + ' \u03c1' + AC_BM[look.wall.key].rho) : ''],
+      ['Roof physics (Archicad 29, Tapir)', look.roof && AC_BM[look.roof.key] ? AC_BM[look.roof.key].bm + (AC_BM[look.roof.key].lam === null ? ' (unset)' : ' \u03bb' + AC_BM[look.roof.key].lam + ' \u03c1' + AC_BM[look.roof.key].rho) : ''],
       ['Solar hour', +hour.toFixed(1)], ['Sun altitude (°)', +sun.alt.toFixed(1)], ['Sun azimuth (°)', +sun.azi.toFixed(1)],
       ['Sky', look.sky ? look.sky.key : 'site'], ['Finish', styleNow()], ['Night', nightNow() ? 'yes' : 'no'],
       ['Terrain grid', rGrid ? rGrid.n + '×' + rGrid.n + ' at ' + rGrid.step + ' m' : 'none'],
@@ -12949,7 +13077,7 @@ function buildRender(host) {
       ['Köppen–Geiger', STATE.clim.k.code]];
     return csvRows(rows);
   }
-  SCORES.render = () => ({ 'Render look':(look.wall ? look.wall.key : 'site') + ' + ' + (look.roof ? look.roof.key : 'site'),
+  SCORES.visualization = () => ({ 'Render look':(look.wall ? look.wall.key : 'site') + ' + ' + (look.roof ? look.roof.key : 'site'),
     'Render sun':fmt(hour, 1) + ' h', 'Render finish':styleNow() });
 
   /* ---- prompt assessment line ---- */
@@ -12966,8 +13094,8 @@ function buildRender(host) {
     chip(t('Finish') + ': ' + t(styleNow()), !!(look.style || styleLock !== 'auto'));
     if (look.unknown.length) chip(t('Not painted') + ': ' + look.unknown.join(', '), false);
     lookSlot.innerHTML = '';
-    const rows = [[t('Wall material'), look.wall ? matName(look.wall) : t('site finish') + ' (' + (MASS.col || '—') + ')'],
-      [t('Roof material'), look.roof ? matName(look.roof) : t('site finish') + ' (' + (ROOF.col || '—') + ')'],
+    const rows = [[t('Wall material'), look.wall ? matName(look.wall) + (acName(look.wall) ? ' — Archicad: ' + acName(look.wall) : '') : t('site finish') + ' (' + (MASS.col || '—') + ')'],
+       [t('Roof material'), look.roof ? matName(look.roof) + (acName(look.roof) ? ' — Archicad: ' + acName(look.roof) : '') : t('site finish') + ' (' + (ROOF.col || '—') + ')'],
       [t('Solar hour'), fmt(hour, 1) + ' h'], [t('Finish'), t(styleNow())]];
     rows.forEach(([k, v]) => {
       const d = el('div', { class:'fact' }, [el('span', { text:k })]);
@@ -12978,30 +13106,33 @@ function buildRender(host) {
   function applyPrompt(resetHour) {
     look = parseRenderPrompt(prompt);
     if (resetHour && look.time && !hourTouched) { hour = look.time.h; hourCtl.range.value = hour; hourCtl.out.textContent = fmt(hour, 1) + ' h'; }
+    if (look.style && !styleTouched) { styleLock = look.style.key; syncStyleCtl(); }
     refreshReading();
   }
-  let deb = 0;
-  ta.addEventListener('input', () => {
-    prompt = ta.value.slice(0, 500);
-    RENDER_PROMPT = prompt; promptTouched = true;
-    clearTimeout(deb);
-    deb = setTimeout(() => { applyPrompt(true); refreshRender(); }, 350);
-  });
 
   /* ---- stage ---- */
   const stageBar = stage.appendChild(el('div', { class:'viewbar' }));
-  renderPanel = makePanel(stage, { title:t('Render view'), note:t('The dressed massing in its ground, under the prompted sun.'),
+  renderPanel = makePanel(stage, { title:t('Visualization view'), note:t('The dressed massing in its ground, under the chosen sun.'),
     render:renderRender, csv:renderCSV,
     heightFn: w => Math.round(clamp(Math.min(w * 0.74, (window.innerHeight || 900) - 190), 320, 900)) });
   const pillLine = stage.appendChild(el('div', { class:'limitrow readings' }));
   const pillLook = el('span', { class:'pill ok', text:'' });
   pillLine.appendChild(pillLook);
-  const renderCam = camBar(stage, CAM, () => G.rot, () => renderPanel.draw(), 'render', set => [
+  const renderCam = camBar(stage, CAM, () => G.rot, () => renderPanel.draw(), 'visualization', set => [
     ['From S', 'Stand to the true south of the building', () => set(camAzFrom(G.rot, 180), camMidEl(CAM))],
     ['Reset', 'Back to the south-west corner', () => set(225, ISO_EL)]], 0);
   function refreshRender() {
     applyPrompt(false);
     const sun = sunNow();
+    /* publish the dressed materials for the exporters: keys and colours */
+    RENDER_MATS = {
+      wall:look.wall ? { key:look.wall.key, color:wallBase(), ca:caEntryFor(look.wall.key).keys } : null,
+      roof:look.roof ? { key:look.roof.key, color:roofBase(), ca:caEntryFor(look.roof.key).keys } : null,
+      zone:caZone(), wallKey:look.wall ? look.wall.key : null, roofKey:look.roof ? look.roof.key : null,
+      sky:look.sky ? look.sky.key : null, finish:styleNow(), night:nightNow(),
+      sun:{ hour:+hour.toFixed(1), alt:+sun.alt.toFixed(1), azi:+sun.azi.toFixed(1) },
+      cam:{ az:+CAM.az.toFixed(1), el:+CAM.el.toFixed(1) }
+    };
     pillLook.textContent = (look.wall ? matName(look.wall) : t('site finish')) + ' · ' + (look.roof ? matName(look.roof) : t('site finish'))
       + ' · ' + t('sun') + ' ' + fmt(sun.alt, 0) + '° · ' + t(styleNow())
       + (look.unknown.length ? ' · ' + t('not painted') + ': ' + look.unknown.join(', ') : '');
@@ -13009,7 +13140,81 @@ function buildRender(host) {
     if (renderPanel) renderPanel.draw();
     benchStage(stage);
   }
-  KEEPERS.push(() => { KEEP.render = { prompt, promptTouched, hour, hourTouched, styleLock, showShadow, showTrees, showGround, showNb, cam:{ az:CAM.az, el:CAM.el } }; });
+/* ---- Spark advisor (optional, key-held): Muse Spark reads the current
+     view plus the v2 brief and answers STRICT JSON with a score and
+     parameter moves — text in, text out, the model never leaves the
+     student's key control. Nothing runs without a key. */
+  props.appendChild(el('div', { class:'gh', text:'Spark advisor' }));
+  const sparkBox = props.appendChild(el('div', { class:'controls' }));
+  const sparkKey = el('input', { type:'password' });
+  sparkKey.placeholder = t('OpenRouter key (stays in this browser)');
+  sparkKey.style.cssText = 'font:inherit;font-size:12px;width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:6px';
+  try { sparkKey.value = localStorage.getItem('arca-spark-key') || ''; } catch (e) {}
+  const sparkBtn = el('button', { class:'btn', text:'Ask Spark for a better look' });
+  const sparkNote = el('div', { class:'hint', text:'' });
+  const sparkAdvice = el('div', { class:'facts' });
+  const sparkApply = el('button', { class:'btn solid', text:'Apply the moves', title:'Apply the advised sun, materials and finish' });
+  sparkApply.style.display = 'none';
+  sparkBox.appendChild(sparkKey); sparkBox.appendChild(sparkBtn);
+  props.appendChild(sparkNote); props.appendChild(sparkAdvice); props.appendChild(sparkApply);
+  let sparkMoves = null;
+  sparkBtn.onclick = async () => {
+    const key = sparkKey.value.trim();
+    if (!key) { sparkNote.textContent = t('Paste an OpenRouter key first — billed to you, nothing else leaves the browser.'); return; }
+    try { localStorage.setItem('arca-spark-key', key); } catch (e) {}
+    sparkBtn.disabled = true; sparkApply.style.display = 'none'; sparkAdvice.innerHTML = '';
+    sparkNote.textContent = t('Asking Spark…');
+    refreshRender();
+    try {
+      const png = renderPanel.canvas.toDataURL('image/png');
+      const brief = renderBriefData();
+      const wallKeys = RENDER_WALLS.map(o => o.key).join('/'), roofKeys = RENDER_ROOFS.map(o => o.key).join('/');
+      const sys = 'You are a rendering art-director for a bioclimatic teaching app. The image shows its current 3D view; the JSON carries the exact model, materials, sun and camera. Reply with NOTHING but strict JSON: {"score_0_10":n,"moves":[{"op":op,"value":v}],"note":"one sentence"}. Allowed ops only: {"op":"sun_hour","value":5-22}, {"op":"wall","value":"one of ' + wallKeys + '"}, {"op":"roof","value":"one of ' + roofKeys + '"}, {"op":"style","value":"study/photo/bw"}. At most 4 moves, each genuinely improving light or materials for this house and climate.';
+      const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + key },
+        body:JSON.stringify({ model:'meta/muse-spark-1.3', max_tokens:500,
+          messages:[{ role:'system', content:sys },
+            { role:'user', content:[{ type:'text', text:'Model JSON: ' + JSON.stringify(brief) }, { type:'image_url', image_url:{ url:png } }] }] })
+      });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const js = await r.json();
+      const txt = (js.choices && js.choices[0] && js.choices[0].message && js.choices[0].message.content) || '';
+      const adv = JSON.parse(String(txt).replace(/^```(?:json)?/i, '').replace(/```\s*$/, '').trim());
+      if (!adv || !Array.isArray(adv.moves)) throw new Error('shape');
+      sparkMoves = adv.moves.filter(m => m && typeof m.op === 'string').slice(0, 4);
+      sparkAdvice.innerHTML = '';
+      const row = (k, v) => { const d = el('div', { class:'fact' }, [el('span', { text:k })]); const b = el('b', {}); b.textContent = v; d.appendChild(b); sparkAdvice.appendChild(d); };
+      row(t('Score') + ' /10', String(adv.score_0_10 != null ? adv.score_0_10 : '–'));
+      sparkMoves.forEach(m => row(String(m.op), String(m.value)));
+      if (adv.note) sparkNote.textContent = String(adv.note);
+      else sparkNote.textContent = t('Advice ready — apply it or keep judging by eye.');
+      sparkApply.style.display = sparkMoves.length ? '' : 'none';
+    } catch (e) {
+      sparkNote.textContent = t('Spark did not answer — check the key and the connection, then retry.');
+    }
+    sparkBtn.disabled = false;
+  };
+  sparkApply.onclick = () => {
+    if (!sparkMoves) return;
+    sparkMoves.forEach(m => {
+      try {
+        if (m.op === 'sun_hour' && isFinite(+m.value)) {
+          hour = clamp(+m.value, 5, 22); hourTouched = true;
+          hourCtl.range.value = hour; hourCtl.out.textContent = fmt(hour, 1) + ' h';
+        } else if (m.op === 'wall' || m.op === 'roof') {
+          const list = m.op === 'wall' ? RENDER_WALLS : RENDER_ROOFS;
+          const o = list.find(q => q.key === String(m.value));
+          if (o) setPromptMaterial(m.op, o);
+        } else if (m.op === 'style' && ['study', 'photo', 'bw'].indexOf(String(m.value)) >= 0) {
+          styleLock = String(m.value); styleTouched = true; syncStyleCtl();
+        }
+      } catch (e) {}
+    });
+    refreshRender();
+    toast('Applied — judge the new look by eye');
+  };
+
+  KEEPERS.push(() => { KEEP.visualization = { prompt, promptTouched, hour, hourTouched, styleLock, styleTouched, showShadow, showTrees, showGround, showNb, cam:{ az:CAM.az, el:CAM.el } }; });
   host._refresh = () => { renderCam.sync(); refreshRender(); };
   const rcv = renderPanel.canvas;
   rcv.style.touchAction = 'none';
@@ -13027,13 +13232,13 @@ function buildRender(host) {
   const endOrbit = () => { orbit.end(); rcv.style.cursor = 'grab'; };
   rcv.addEventListener('pointerup', endOrbit);
   rcv.addEventListener('pointercancel', endOrbit);
-  zoomGesture(rcv, 'render');
+  zoomGesture(rcv, 'visualization');
   /* + and − zoom the model for a closer oversight, as on Ventilation */
   document.addEventListener('keydown', ev => {
-    if (STATE.tab !== 'render' || !host.isConnected) return;
+    if (STATE.tab !== 'visualization' || !host.isConnected) return;
     if (/INPUT|SELECT|TEXTAREA/.test((ev.target && ev.target.tagName) || '')) return;
-    if (ev.key === '+' || ev.key === '=') modelZoom('render', 1.25);
-    else if (ev.key === '-' || ev.key === '_') modelZoom('render', 1 / 1.25);
+    if (ev.key === '+' || ev.key === '=') modelZoom('visualization', 1.25);
+    else if (ev.key === '-' || ev.key === '_') modelZoom('visualization', 1 / 1.25);
   });
   refreshReading();
   refreshRender();
@@ -13050,7 +13255,7 @@ const TABS = [
   { key:'roof', label:'Roof', build:buildRoof },
   { key:'openings', label:'Windows & Shading', build:buildOpenings },
   { key:'ventilation', label:'Ventilation', build:buildVentilation },
-  { key:'render', label:'Render', build:buildRender }
+  { key:'visualization', label:'Visualization', build:buildRender }
 ];
 
 /* --- the references, built from one list so the footer and the pages agree - */
@@ -13192,12 +13397,12 @@ function exportModel() {
     const uLeftIsB = (along[0] * n[1] + along[1] * -n[0]) > 0;
     const x0 = Math.max(0, u0 - (uLeftIsB ? (o.ovR || 0) : (o.ovL || 0))), x1 = Math.min(segLen === undefined ? u1 + 1 : segLen, u1 + (uLeftIsB ? (o.ovL || 0) : (o.ovR || 0)));
     const off = (p, d) => [p[0] + n[0] * d, p[1] + n[1] * d, p[2]];
-    add('window', tag + ' window' + (gk ? ' ' + gk : ''), gk === 'gelosia' ? 'AA-GELOSIA' : 'AA-GLAZING', [[[P(u0, v0), P(u1, v0), P(u1, v1), P(u0, v1)], n]], { width:ww, height:v1 - v0, wwr:o.wwr, facade:f });
+    add('window', tag + ' window' + (gk ? ' ' + gk : ''), gk === 'gelosia' ? 'AA-GELOSIA' : 'AA-GLAZING', [[[P(u0, v0), P(u1, v0), P(u1, v1), P(u0, v1)], n]], { width:ww, height:v1 - v0, wwr:o.wwr, facade:f, mat:'AA_Glass' });
     if (o.ovD > 0) {
       const vs = o.ovN <= 1 ? [v1] : Array.from({ length:o.ovN }, (_, i) => v0 + (v1 - v0) * (i / (o.ovN - 1)));
       vs.forEach((vt, i) => add('shading', tag + (o.ovN > 1 ? ' louvre ' + (i + 1) : ' overhang'), 'AA-SHADING',
         [[[P(x0, vt), P(x1, vt), off(P(x1, vt), o.ovD), off(P(x0, vt), o.ovD)], up]],
-        { device:o.ovN > 1 ? 'Louvre' : 'Overhang', depth:o.ovD }));
+        { device:o.ovN > 1 ? 'Louvre' : 'Overhang', depth:o.ovD, mat:'AA_Shade' }));
     }
 
   };
@@ -13271,7 +13476,7 @@ function exportModel() {
             if (mouths.some(m => m[2] <= v0 + 1e-6 && m[3] >= v1 - 1e-6 && uF > m[0] - 0.05 && uF < m[1] + 0.05)) return;
             add('shading', tag + ' fin ' + (i + 1), 'AA-SHADING',
               [[[P(uF, fv0), off(P(uF, fv0), OPEN[f].finD), off(P(uF, fv1), OPEN[f].finD), P(uF, fv1)], along]],
-              { device:'Fin', depth:OPEN[f].finD });
+              { device:'Fin', depth:OPEN[f].finD, mat:'AA_Shade' });
           });
         }
       });
@@ -13284,7 +13489,7 @@ function exportModel() {
       if (q0[1] - H0 > 1e-4 || q1[1] - H0 > 1e-4) faces.push([[P(q0[0], H0), P(q1[0], H0), P(q1[0], q1[1]), P(q0[0], q0[1])], n]);
     }
     const facing = COMPASS8_EN[Math.round(((G.rot + { S:0, N:180, E:270, W:90 }[f]) % 360) / 45) % 8];
-    add('wall', tag + ' wall (faces ' + facing + ')', 'AA-WALLS', faces, { facade:f, finish:finishOf(G.col) });
+    add('wall', tag + ' wall (faces ' + facing + ')', 'AA-WALLS', faces, { facade:f, finish:finishOf(G.col), mat:'AA_Wall' });
   });
   if (RM.steps.length) add('wall', 'Roof step walls', 'AA-WALLS', RM.steps.reduce((acc, st) => {
     const P = (u, z) => st.ax === 'x' ? [st.a[0], st.a[1] + u, z] : [st.a[0] + u, st.a[1], z], n = [st.n[0], st.n[1], 0];
@@ -13293,7 +13498,7 @@ function exportModel() {
       acc.push([[P(q0[0], q0[1]), P(q1[0], q1[1]), P(q1[0], q1[2]), P(q0[0], q0[2])], n]);
     }
     return acc;
-  }, []), { finish:finishOf(G.col) });
+  }, []), { finish:finishOf(G.col), mat:'AA_Wall' });
   /** A convex polygon in plan less rectangles, as convex pieces. */
   const lessRects = (P0, rects) => rects.reduce((parts, r) => parts.reduce((acc, Q) => acc.concat(subtractConvex(Q,
     [{ a:1, b:0, c:-r[0], th:0 }, { a:-1, b:0, c:r[2], th:0 }, { a:0, b:1, c:-r[1], th:0 }, { a:0, b:-1, c:r[3], th:0 }])), []), [P0]);
@@ -13307,10 +13512,10 @@ function exportModel() {
     const th = pcs.reduce((a, q) => q.area > a.area ? q : a, pcs[0]).f.th;
     add('roof', nm + ' roof', 'AA-ROOF',
       pcs.reduce((acc, pc) => acc.concat(lessRects(pc.poly, openTop).map(Q => [Q.map(q => [q[0], q[1], RM.zOf(pc.f, q[0], q[1])]), [-pc.f.t * pc.f.a, -pc.f.t * pc.f.b, 1]])), []),
-      { roofType:rt, pitch:nn === 0 ? 0 : th });
+      { roofType:rt, pitch:nn === 0 ? 0 : th, mat:'AA_Roof' });
   });
   add('slab', 'Ground floor', 'AA-FLOOR', pl.cells.reduce((acc, c) => acc.concat(lessRects([[c[0], c[1]], [c[2], c[1]], [c[2], c[3]], [c[0], c[3]]], openFoot)
-    .map(Q => [Q.map(q => [q[0], q[1], 0]), [0, 0, -1]])), []));
+    .map(Q => [Q.map(q => [q[0], q[1], 0]), [0, 0, -1]])), []), { mat:'AA_Slab' });
 
   /* the loggias: each storey's back wall with its window cut out, its
      sides, and the ceiling and floor that close the heated volume — the
@@ -13328,12 +13533,12 @@ function exportModel() {
         const gh = L.glass.map(g => [Math.min(ub(g[0]), ub(g[1])), Math.max(ub(g[0]), ub(g[1])), g[0][2], g[2][2]]);
         holedRect((a0, a1, b0, b1) => [[Pb(a0, b0), Pb(a1, b0), Pb(a1, b1), Pb(a0, b1)], fc.n], B.u0, B.u1, c.z0, c.z1, gh).forEach(q => faces.push(q));
         L.glass.forEach((g, j) => add('window', 'Loggia ' + no + ' window, floor ' + c.k, 'AA-GLAZING', [[g, fc.n]],
-          { width:gh[j][1] - gh[j][0], height:gh[j][3] - gh[j][2], wwr:OPEN[segFace(B.sg)].wwr, facade:segFace(B.sg) }));
+          { width:gh[j][1] - gh[j][0], height:gh[j][3] - gh[j][2], wwr:OPEN[segFace(B.sg)].wwr, facade:segFace(B.sg), mat:'AA_Glass' }));
         return;
       }
       faces.push([fc.pts, fc.n]);
     });
-    add('wall', 'Loggia ' + no + ', floor ' + c.k, 'AA-WALLS', faces, { facade:segFace(B.sg), finish:finishOf(G.col), depth:B.d, width:B.w });
+    add('wall', 'Loggia ' + no + ', floor ' + c.k, 'AA-WALLS', faces, { facade:segFace(B.sg), finish:finishOf(G.col), depth:B.d, width:B.w, mat:'AA_Wall' });
   });
   /* each projecting balcony: its slab, and the parapet round its free
      edges; a loggia above the ground floor, the parapet across its mouth */
@@ -13342,7 +13547,7 @@ function exportModel() {
     const no = bgx.all.indexOf(B) + 1;
     B.levels.forEach(k => {
       const z = (k - 1) * G.fh;
-      add('balcony', 'Balcony ' + no + ' slab, floor ' + k, 'AA-BALCONY', B.rects.reduce((acc, r) => acc.concat(box(r[0], r[1], z - BALC_SLAB, r[2], r[3], z)), []), { depth:B.d, width:B.w });
+      add('balcony', 'Balcony ' + no + ' slab, floor ' + k, 'AA-BALCONY', B.rects.reduce((acc, r) => acc.concat(box(r[0], r[1], z - BALC_SLAB, r[2], r[3], z)), []), { depth:B.d, width:B.w, mat:'AA_Slab' });
       add('railing', 'Balcony ' + no + ' parapet, floor ' + k, 'AA-BALCONY', BSx.solids.filter(sl => sl.B === B && sl.k === k && sl.kind === 'par').map(sl => [sl.pts, sl.n]));
     });
   });
@@ -13375,7 +13580,7 @@ function exportModel() {
       const a = [m[0] - side[0] * W / 2, m[1] - side[1] * W / 2, 0], c = [m[0] + side[0] * W / 2, m[1] + side[1] * W / 2, 0];
       const off = p => [p[0] + n[0] * d, p[1] + n[1] * d, p[2]], a2 = off(a), c2 = off(c), z = p => [p[0], p[1], hS];
       add('sunspace', 'Sunspace', 'AA-SUNSPACE', [[[a2, c2, z(c2), z(a2)], n], [[a, a2, z(a2), z(a)], side.map(x => -x)],
-        [[c, c2, z(c2), z(c)], side], [[z(a), z(c), z(c2), z(a2)], up]], { depth:d });
+        [[c, c2, z(c2), z(c)], side], [[z(a), z(c), z(c2), z(a2)], up]], { depth:d, mat:'AA_Glass' });
     }
   }
 
@@ -13384,14 +13589,34 @@ function exportModel() {
     const t2 = 0.1, hl = w.length / 2;
     add('sitewall', 'Detached wall ' + (i + 1), 'AA-SITE-WALLS', w.along === 'y'
       ? box(w.x - t2, w.y - hl, 0, w.x + t2, w.y + hl, w.height) : box(w.x - hl, w.y - t2, 0, w.x + hl, w.y + t2, w.height),
-      { height:w.height, length:w.length });
+      { height:w.height, length:w.length, mat:'AA_Wall' });
   });
-  if (SCENE.plant) SCENE.veg.forEach((v, i) => {
-    const q = SCENE.plant(v), wt = q.wTrunk / 2;
-    const faces = q.trunkTop > 0.05 ? box(v.x - wt, v.y - wt, 0, v.x + wt, v.y + wt, q.trunkTop) : [];
-    add('plant', (i + 1) + ' ' + q.name + ' (' + q.sci + ')', 'AA-PLANTING', faces.concat(ellipsoid(v.x, v.y, q.zc, q.R, q.RZ)),
-      { species:q.name, sci:q.sci, plantKind:q.kind, height:v.height, trunk:q.T, crownRadius:+q.R.toFixed(2), density:v.density });
+  SCENE.veg.forEach((v, i) => {
+    const q = SCENE.plant ? SCENE.plant(v) : null;
+    const nm = (i + 1) + ' ' + (q ? q.name + ' (' + q.sci + ')' : String(v.type || 'tree'));
+    const trunk = q ? (q.trunkTop > 0.05 ? box(v.x - q.wTrunk / 2, v.y - q.wTrunk / 2, 0, v.x + q.wTrunk / 2, v.y + q.wTrunk / 2, q.trunkTop) : [])
+      : box(v.x - 0.09, v.y - 0.09, 0, v.x + 0.09, v.y + 0.09, Math.max(0.5, (v.height || 3) * 0.4));
+    const crown = q ? ellipsoid(v.x, v.y, q.zc, q.R, q.RZ)
+      : ellipsoid(v.x, v.y, Math.max(0.5, (v.height || 3)) * 0.7, Math.max(0.5, (v.height || 3) * 0.25), Math.max(0.4, (v.height || 3) * 0.2));
+    const extra = q ? { species:q.name, sci:q.sci, plantKind:q.kind, height:v.height, trunk:q.T, crownRadius:+q.R.toFixed(2), density:v.density }
+      : { species:String(v.type || 'tree'), height:v.height || 3 };
+    if (trunk.length) add('plant', nm + ' trunk', 'AA-PLANTING', trunk, Object.assign({ mat:'AA_Trunk' }, extra));
+    add('plant', nm + ' crown', 'AA-PLANTING', crown, Object.assign({ mat:'AA_Leaf' }, extra));
   });
+  /* the real ground under the model: the Copernicus grid where derived */
+  if (EXPORT_TERRAIN && EXPORT_TERRAIN.h && EXPORT_TERRAIN.h.length) {
+    const TN = EXPORT_TERRAIN.n, TS = EXPORT_TERRAIN.step, TE = (TN - 1) * TS / 2;
+    const bb = (G.rot - 180) * RAD, cb = Math.cos(bb), sb = Math.sin(bb);
+    const PW = (E, N) => [E * cb - N * sb, E * sb + N * cb];
+    const HH = (a, c) => EXPORT_TERRAIN.h[c * TN + a];
+    const tf = [];
+    for (let jj = 0; jj < TN - 1; jj++) for (let ii = 0; ii < TN - 1; ii++) {
+      const E0 = -TE + ii * TS, N0 = -TE + jj * TS;
+      const p00 = PW(E0, N0), p10 = PW(E0 + TS, N0), p11 = PW(E0 + TS, N0 + TS), p01 = PW(E0, N0 + TS);
+      tf.push([[[p00[0], p00[1], HH(ii, jj)], [p10[0], p10[1], HH(ii + 1, jj)], [p11[0], p11[1], HH(ii + 1, jj + 1)], [p01[0], p01[1], HH(ii, jj + 1)]], [0, 0, 1]]);
+    }
+    add('terrain', 'Terrain (Copernicus DEM grid)', 'AA-TERRAIN', tf, { mat:'AA_Terrain', grid:TN + 'x' + TN + ' at ' + TS + ' m' });
+  }
 
   /* a north arrow on the ground, for the tools that do not read north */
   const R0 = Math.hypot(L, D) / 2 + 3;
@@ -13406,7 +13631,7 @@ const cadStem = () => slugify(sitePrefix() + 'architecture-advisor-pl') || 'arch
 /** DXF, AutoCAD R12 flavour: one 3DFACE per triangle or quad, on layers. */
 function toDXF(els) {
   const layers = { 'AA-WALLS':8, 'AA-GLAZING':5, 'AA-ROOF':1, 'AA-FLOOR':9, 'AA-SHADING':30, 'AA-SUNSPACE':4, 'AA-SOLAR':150,
-    'AA-SITE-WALLS':6, 'AA-PLANTING':3, 'AA-NORTH':7 };
+    'AA-SITE-WALLS':6, 'AA-PLANTING':3, 'AA-TERRAIN':2, 'AA-NORTH':7 };
   const o = ['0', 'SECTION', '2', 'HEADER', '9', '$ACADVER', '1', 'AC1009', '9', '$INSUNITS', '70', '6', '0', 'ENDSEC',
     '0', 'SECTION', '2', 'TABLES', '0', 'TABLE', '2', 'LAYER', '70', String(Object.keys(layers).length)];
   Object.keys(layers).forEach(n => o.push('0', 'LAYER', '2', n, '70', '0', '62', String(layers[n]), '6', 'CONTINUOUS'));
@@ -13424,16 +13649,50 @@ function toDXF(els) {
   return o.join('\r\n') + '\r\n';
 }
 
-/** Wavefront OBJ: one object per element, grouped by layer, n-gon faces. */
-function toOBJ(els) {
+/** The material library the exporters share: the Render tab's dressed
+    finishes where it dressed them, site finishes elsewhere. */
+const hexRgb = h => { const s = String(h || '').replace('#', ''); const v = [0, 2, 4].map(i => parseInt(s.slice(i, i + 2), 16)); return v.map(x => isFinite(x) ? +(x / 255).toFixed(3) : 0.8); };
+const MAT_BY_LAYER = { 'AA-WALLS':'AA_Wall', 'AA-ROOF':'AA_Roof', 'AA-GLAZING':'AA_Glass', 'AA-GELOSIA':'AA_Glass', 'AA-SOLAR':'AA_Solar', 'AA-TERRAIN':'AA_Terrain', 'AA-PLANTING':'AA_Leaf', 'AA-FLOOR':'AA_Slab', 'AA-SHADING':'AA_Shade', 'AA-SUNSPACE':'AA_Glass', 'AA-SITE-WALLS':'AA_Wall', 'AA-BALCONY':'AA_Slab', 'AA-NORTH':'AA_Default' };
+function exportMats() {
+  const W = RENDER_MATS.wall, R = RENDER_MATS.roof;
+  const wf = (typeof finishOf === 'function' && MASS) ? finishOf(MASS.col) : null;
+  const rf = (typeof finishOf === 'function' && ROOF) ? finishOf(ROOF.col) : null;
+  const desc = (m, fb) => m ? (m.key + (m.ca && m.ca.length ? ' (' + m.ca.join('/') + ')' : '')) : fb;
+  return [
+    { name:'AA_Wall', color:hexRgb(W ? W.color : wf ? wf.hex : '#D9D2C2'), desc:'walls — ' + desc(W, 'site finish') },
+    { name:'AA_Roof', color:hexRgb(R ? R.color : rf ? rf.hex : '#8F7A68'), desc:'roof — ' + desc(R, 'site finish') },
+    { name:'AA_Glass', color:[0.74, 0.84, 0.91], trans:0.45, desc:'glazing + sunspace' },
+    { name:'AA_Solar', color:[0.12, 0.23, 0.54], desc:'PV + thermal collectors' },
+    { name:'AA_Terrain', color:[0.79, 0.71, 0.55], desc:'Copernicus DEM grid' },
+    { name:'AA_Leaf', color:[0.29, 0.42, 0.23], desc:'crowns' },
+    { name:'AA_Trunk', color:[0.42, 0.29, 0.23], desc:'trunks' },
+    { name:'AA_Slab', color:[0.78, 0.78, 0.78], desc:'floors + balcony slabs' },
+    { name:'AA_Shade', color:[0.6, 0.58, 0.54], desc:'overhangs, fins, devices' },
+    { name:'AA_Default', color:[0.8, 0.8, 0.8], desc:'all other elements' }
+  ];
+}
+/** Wavefront OBJ: one object per element, grouped by layer, n-gon faces,
+    each under its material from the shared library. */
+function toOBJ(els, mtlName) {
   const o = ['# ' + APP.name + ' ' + APP.version + ' — ' + (STATE.site.place || STATE.site.nuts),
     '# metres, Z up, Y north; plan turned as set on Site'];
-  let base = 1;
+  if (mtlName) o.push('mtllib ' + mtlName);
+  let base = 1, cur = '';
   els.forEach(e => {
+    const m = e.mat || MAT_BY_LAYER[e.layer] || 'AA_Default';
+    if (m !== cur) { cur = m; o.push('usemtl ' + m); }
     o.push('o ' + e.name.replace(/\s+/g, '_'), 'g ' + e.layer);
     const idx = [];
     e.faces.forEach(poly => { idx.push(poly.map((p, k) => base + k)); poly.forEach(p => o.push('v ' + cadNum(p[0]) + ' ' + cadNum(p[1]) + ' ' + cadNum(p[2]))); base += poly.length; });
     idx.forEach(f => o.push('f ' + f.join(' ')));
+  });
+  return o.join('\n') + '\n';
+}
+function toMTL() {
+  const o = ['# ' + APP.name + ' material library'];
+  exportMats().forEach(m => {
+    o.push('newmtl ' + m.name, '# ' + m.desc, 'Kd ' + m.color.join(' '));
+    if (m.trans) o.push('d ' + +(1 - m.trans).toFixed(3));
   });
   return o.join('\n') + '\n';
 }
@@ -13468,7 +13727,7 @@ function toIFC(els) {
   e('IFCRELAGGREGATES(' + guid() + ',$,$,$,' + project + ',(' + site + '))');
   e('IFCRELAGGREGATES(' + guid() + ',$,$,$,' + site + ',(' + bld + '))');
   e('IFCRELAGGREGATES(' + guid() + ',$,$,$,' + bld + ',(' + storey + '))');
-  const inStorey = [], onSite = [];
+  const inStorey = [], onSite = [], matAssoc = [];
   els.forEach(x => {
     if (x.kind === 'north') return;   // IFC carries north in its context
     const pts = [], tris = [];
@@ -13491,9 +13750,13 @@ function toIFC(els) {
       : x.kind === 'solar' ? e('IFCSOLARDEVICE(' + head + '$,' + pl2 + ',' + shape + ',$,.' + x.solarType + '.)')
       : e('IFCBUILDINGELEMENTPROXY(' + head + "'Sunspace'," + pl2 + ',' + shape + ',$,.USERDEFINED.)');
     (onSiteKind ? onSite : inStorey).push(ent);
+    matAssoc.push([x.mat || MAT_BY_LAYER[x.layer] || 'AA_Default', ent]);
   });
   if (inStorey.length) e('IFCRELCONTAINEDINSPATIALSTRUCTURE(' + guid() + ',$,$,$,(' + inStorey.join(',') + '),' + storey + ')');
   if (onSite.length) e('IFCRELCONTAINEDINSPATIALSTRUCTURE(' + guid() + ',$,$,$,(' + onSite.join(',') + '),' + site + ')');
+  const matIds = {};
+  exportMats().forEach(m => { matIds[m.name] = e('IFCMATERIAL(' + guid() + ',$,' + str(m.name) + ',' + str(m.desc) + ')'); });
+  matAssoc.forEach(([m, ent]) => { if (matIds[m]) e('IFCRELASSOCIATESMATERIAL(' + guid() + ',$,$,$,(' + ent + '),' + matIds[m] + ')'); });
   const stamp = new Date().toISOString().slice(0, 19);
   return ['ISO-10303-21;', 'HEADER;', "FILE_DESCRIPTION(('ViewDefinition [ReferenceView]'),'2;1');",
     'FILE_NAME(' + str(cadStem() + '.ifc') + ",'" + stamp + "',(''),(''),'','" + APP.name + ' ' + APP.version + "','');",
@@ -13532,13 +13795,186 @@ function toDecisionsJSON() {
   }, null, 2);
 }
 
+const jsPyStr = s => "r'''" + String(s).replace(/'''/g, "\\'\\'\\'") + "'''";
+function blenderBundle() {
+  const els = exportModel(), stem = cadStem();
+  const obj = toOBJ(els);
+  const mats = exportMats();
+  const PROC = { brick:'brick', tile:'brick', plaster:'noise', whitewash:'noise', concrete:'noise', stone:'noise', timber:'bands', metal:'metal', glass:'glass', cork:'noise', slate:'noise', thatch:'bands', green:'noise', white:'noise' };
+  const wallKey = RENDER_MATS.wall ? RENDER_MATS.wall.key : null, roofKey = RENDER_MATS.roof ? RENDER_MATS.roof.key : null;
+  const procs = { AA_Wall:PROC[wallKey] || 'noise', AA_Roof:PROC[roofKey] || 'noise',
+    AA_Glass:'glass', AA_Terrain:'noise', AA_Leaf:'flat', AA_Trunk:'flat', AA_Slab:'noise', AA_Shade:'flat', AA_Solar:'flat', AA_Default:'flat' };
+  const S = STATE.site;
+  const sun = (RENDER_MATS.sun && isFinite(RENDER_MATS.sun.alt)) ? RENDER_MATS.sun
+    : (() => { try { const sp = sunPos(172, 15, S.lat, S.lon, S.lon / 15); return { hour:15, alt:sp.alt, azi:sp.azi }; } catch (e) { return { hour:15, alt:45, azi:180 }; } })();
+  const PY = [
+    "# AA Blender bundle - open Blender 3 or 4, run this script, press F12.",
+    "# Exact model, sun, sky, camera and photo materials arrive set up.",
+    "import bpy, base64, os, tempfile, math",
+    "OBJ = " + jsPyStr(obj),
+    "PROCS = " + jsPyStr(JSON.stringify(procs)),
+    "MATS = " + jsPyStr(JSON.stringify(mats)),
+    "SUN = " + jsPyStr(JSON.stringify(sun)),
+    "SIZE = " + jsPyStr(JSON.stringify({ L:MASS.L, D:MASS.D, H:+(MASS.fl * MASS.fh).toFixed(2) })),
+    "def main():",
+    "    import mathutils, json",
+    "    mats = {m['name']: m for m in json.loads(MATS)}",
+    "    sun = json.loads(SUN)",
+    "    size = json.loads(SIZE)",
+    "    tmp = tempfile.mkdtemp(prefix='arca_')",
+    "    obj_path = os.path.join(tmp, 'model.obj')",
+    "    open(obj_path, 'w', encoding='utf-8').write(OBJ)",
+    "    before = set(bpy.data.objects)",
+    "    bpy.ops.object.select_all(action='SELECT')",
+    "    bpy.ops.object.delete(use_global=False)",
+    "    try:",
+    "        bpy.ops.wm.obj_import(filepath=obj_path)",
+    "    except Exception:",
+    "        bpy.ops.import_scene.obj(filepath=obj_path)",
+    "    new_obs = [o for o in bpy.data.objects if o not in before and o.type == 'MESH']",
+    "    procs = __import__('json').loads(PROCS)",
+    "    def get_mat(mname):",
+    "        kind = procs.get(mname, 'flat')",
+    "        mat = bpy.data.materials.new(mname)",
+    "        mat.use_nodes = True",
+    "        nt = mat.node_tree",
+    "        bsdf = nt.nodes.get('Principled BSDF')",
+    "        col = mats.get(mname, {}).get('color', [0.8, 0.8, 0.8])",
+    "        dark = [max(0.0, c * 0.55) for c in col]",
+    "        try: bsdf.inputs['Base Color'].default_value = (col[0], col[1], col[2], 1.0)",
+    "        except Exception: pass",
+    "        if kind == 'brick':",
+    "            bt = nt.nodes.new('ShaderNodeTexBrick')",
+    "            try: bt.inputs['Color1'].default_value = (col[0], col[1], col[2], 1.0)",
+    "            except Exception: pass",
+    "            try: bt.inputs['Color2'].default_value = (dark[0], dark[1], dark[2], 1.0)",
+    "            except Exception: pass",
+    "            try: bt.inputs['Mortar'].default_value = (dark[0] * 0.8, dark[1] * 0.8, dark[2] * 0.8, 1.0)",
+    "            except Exception: pass",
+    "            try: bt.inputs['Scale'].default_value = 3.0",
+    "            except Exception: pass",
+    "            try: nt.links.new(bt.outputs['Color'], bsdf.inputs['Base Color'])",
+    "            except Exception: pass",
+    "        elif kind in ('noise', 'bands'):",
+    "            wv = nt.nodes.new('ShaderNodeTexWave' if kind == 'bands' else 'ShaderNodeTexNoise')",
+    "            try: wv.inputs['Scale'].default_value = 4.0 if kind == 'bands' else 7.0",
+    "            except Exception: pass",
+    "            mx = nt.nodes.new('ShaderNodeMix')",
+    "            try: mx.inputs['Factor'].default_value = 0.22",
+    "            except Exception: pass",
+    "            try: mx.inputs['A'].default_value = (col[0], col[1], col[2], 1.0)",
+    "            except Exception: pass",
+    "            try: mx.inputs['B'].default_value = (dark[0], dark[1], dark[2], 1.0)",
+    "            except Exception: pass",
+    "            try: nt.links.new(wv.outputs['Fac'], mx.inputs['Factor'])",
+    "            except Exception: pass",
+    "            try: nt.links.new(mx.outputs['Result'], bsdf.inputs['Base Color'])",
+    "            except Exception: pass",
+    "        elif kind == 'metal':",
+    "            try: bsdf.inputs['Metallic'].default_value = 0.9",
+    "            except Exception: pass",
+    "            try: bsdf.inputs['Roughness'].default_value = 0.35",
+    "            except Exception: pass",
+    "        elif kind == 'glass':",
+    "            for sock, val in (('Transmission', 0.85), ('Transmission Weight', 0.85), ('Roughness', 0.05), ('IOR', 1.45)):",
+    "                try: bsdf.inputs[sock].default_value = val",
+    "                except Exception: pass",
+    "        else:",
+    "            try: bsdf.inputs['Roughness'].default_value = 0.8",
+    "            except Exception: pass",
+    "        return mat",
+    "    wallm = get_mat('AA_Wall')",
+    "    roofm = get_mat('AA_Roof')",
+    "    def mat_for(ob):",
+    "        n = ob.name.lower()",
+    "        if 'trunk' in n: return 'AA_Trunk'",
+    "        if 'crown' in n or 'plant' in n: return 'AA_Leaf'",
+    "        if 'window' in n or 'sunspace' in n or 'glass' in n: return 'AA_Glass'",
+    "        if 'roof' in n: return 'AA_Roof'",
+    "        if 'terrain' in n: return 'AA_Terrain'",
+    "        if 'solar' in n or 'collector' in n or ' pv' in n or n.startswith('pv'): return 'AA_Solar'",
+    "        if 'slab' in n or 'floor' in n or 'balcony' in n or 'parapet' in n: return 'AA_Slab'",
+    "        if 'shading' in n or 'overhang' in n or 'fin' in n or 'louvre' in n or 'device' in n: return 'AA_Shade'",
+    "        if 'wall' in n or 'chimney' in n: return 'AA_Wall'",
+    "        return 'AA_Default'",
+    "    lib = {'AA_Wall': wallm, 'AA_Roof': roofm}",
+    "    for ob in new_obs:",
+    "        mn = mat_for(ob)",
+    "        if mn not in lib: lib[mn] = get_mat(mn)",
+    "        try:",
+    "            ob.data.materials.clear()",
+    "            ob.data.materials.append(lib[mn])",
+    "        except Exception: pass",
+    "    alt = math.radians(sun.get('alt', 45)); azi = math.radians(sun.get('azi', 180))",
+    "    d = mathutils.Vector((math.sin(azi) * math.cos(alt), math.cos(azi) * math.cos(alt), math.sin(alt)))",
+    "    sun_data = bpy.data.lights.new('Arca Sun', 'SUN')",
+    "    try: sun_data.energy = 8.0",
+    "    except Exception: pass",
+    "    try: sun_data.angle = math.radians(2.0)",
+    "    except Exception: pass",
+    "    sun_ob = bpy.data.objects.new('Arca Sun', sun_data)",
+    "    bpy.context.collection.objects.link(sun_ob)",
+    "    sun_ob.rotation_euler = (-d).to_track_quat('-Z', 'Y').to_euler()",
+    "    world = bpy.context.scene.world",
+    "    if not world:",
+    "        world = bpy.data.worlds.new('Arca World')",
+    "        bpy.context.scene.world = world",
+    "    world.use_nodes = True",
+    "    bg = world.node_tree.nodes.get('Background')",
+    "    if not bg: bg = world.node_tree.nodes.new('ShaderNodeBackground')",
+    "    a = sun.get('alt', 45)",
+    "    sky = (0.45, 0.62, 0.85, 1) if a > 30 else (0.85, 0.72, 0.6, 1) if a > 5 else ((0.2, 0.22, 0.35, 1) if a > -2 else (0.03, 0.04, 0.08, 1))",
+    "    try: bg.inputs['Color'].default_value = sky",
+    "    except Exception: pass",
+    "    try: bg.inputs['Strength'].default_value = 1.0 if a > 0 else 0.4",
+    "    except Exception: pass",
+    "    dist = 3.4 * max(size['L'], size['D'], size['H'] * 2)",
+    "    tgt = (0, 0, size['H'] * 0.4)",
+    "    pos = (tgt[0] - dist * 0.7, tgt[1] - dist * 0.7, tgt[2] + dist * 0.55)",
+    "    cam_data = bpy.data.cameras.new('Arca Camera')",
+    "    try: cam_data.lens = 35",
+    "    except Exception: pass",
+    "    cam_ob = bpy.data.objects.new('Arca Camera', cam_data)",
+    "    bpy.context.collection.objects.link(cam_ob)",
+    "    cam_ob.location = pos",
+    "    cam_ob.rotation_euler = (mathutils.Vector((tgt[0] - pos[0], tgt[1] - pos[1], tgt[2] - pos[2]))).to_track_quat('-Z', 'Y').to_euler()",
+    "    try: bpy.context.scene.camera = cam_ob",
+    "    except Exception: pass",
+    "    sc = bpy.context.scene",
+    "    try: sc.render.engine = 'CYCLES'",
+    "    except Exception: pass",
+    "    try: sc.cycles.samples = 128",
+    "    except Exception: pass",
+    "    try: sc.cycles.device = 'CPU'",
+    "    except Exception: pass",
+    "    sc.render.resolution_x = 1920",
+    "    sc.render.resolution_y = 1080",
+    "    sc.render.resolution_percentage = 100",
+    "    try: sc.render.filepath = os.path.join(os.path.expanduser('~'), 'arca-render.png')",
+    "    except Exception: pass",
+    "    print('ARCA BUNDLE READY - press F12 to path-trace')",
+    "main()"
+  ];
+  return PY.join('\n') + '\n';
+}
+
 function cadDownload(kind) {
   if (!STATE.site || !MASS) return;
   const els = exportModel(), stem = cadStem();
+  if (kind === 'blendpy') {
+    download(new Blob([blenderBundle()], { type:'text/x-python;charset=utf-8' }), stem + '-blender.py');
+    toast(t('Exported') + ' ' + stem + '-blender.py');
+    return;
+  }
+  if (kind === 'obj') {
+    download(new Blob([toOBJ(els, stem + '.mtl')], { type:'text/plain;charset=utf-8' }), stem + '.obj');
+    download(new Blob([toMTL()], { type:'text/plain;charset=utf-8' }), stem + '.mtl');
+    toast(t('Exported') + ' ' + stem + '.obj + .mtl');
+    return;
+  }
   const pack = {
     ifc:() => [toIFC(els), 'application/x-step', '.ifc'],
     dxf:() => [toDXF(els), 'application/dxf', '.dxf'],
-    obj:() => [toOBJ(els), 'text/plain', '.obj'],
     json:() => [toDecisionsJSON(), 'application/json', '-decisions.json']
   }[kind]();
   download(new Blob([pack[0]], { type:pack[1] + ';charset=utf-8' }), stem + pack[2]);
@@ -13554,10 +13990,11 @@ function toggleCadMenu(ev) {
   if (sv) sv.remove();
   const m = el('div', { class:'cadmenu', id:'cadMenu' });
   m.appendChild(el('h5', { text:'Take the model into CAD' }));
-  [['IFC', 'ifc', 'Revit, ArchiCAD — open the file directly; walls, windows, roof, shading and trees arrive as typed elements'],
+  [['IFC', 'ifc', 'Revit, ArchiCAD — open the file directly; walls, windows, roof, shading, trees and terrain arrive as typed elements with materials'],
    ['DXF', 'dxf', 'SketchUp Pro, Rhino, Revit (Import CAD), ArchiCAD (Merge) — 3D faces on AA- layers'],
-   ['OBJ', 'obj', 'Rhino, then Grasshopper — one object per element, grouped by layer'],
-   ['JSON', 'json', 'Every decision and every score — the record for the studio, or parameters for Grasshopper']]
+   ['OBJ', 'obj', 'Rhino, then Grasshopper — one object per element, grouped by layer, with a material library'],
+   ['JSON', 'json', 'Every decision and every score — the record for the studio, or parameters for Grasshopper'],
+   ['Blender', 'blendpy', 'Blender 3–4 — a ready script: exact model, sun, sky, camera and materials; run it, press F12 (advanced: Blender\u2019s MCP server lets an LLM drive Blender conversationally instead — local setup with keys, blender.org/lab/mcp-server)']]
     .forEach(([lab, k, note]) => m.appendChild(el('div', { class:'row' }, [
       el('button', { class:'btn solid', type:'button', text:lab, onclick:() => cadDownload(k) }), el('span', { text:note })])));
   m.appendChild(el('p', { text:'Metres, Z up, Y north, the plan turned as set on Site. Massing surfaces — walls, window cuts, roof, overhangs, fins, sunspace, detached walls and planting — not wall assemblies. Planting and walls come from Ventilation.' }));
@@ -13574,6 +14011,12 @@ document.addEventListener('click', ev => { const m = $('#cadMenu'); if (m && !m.
    is noted, and the file is re-imported). Nothing is uploaded either way. */
 let STUDY = null;
 let RENDER_PROMPT = '';
+/* What the Render tab last dressed the model in, plain data for the exporters:
+   wall/roof keys, colours and Construction-Advisor keys, plus the zone read. */
+let RENDER_MATS = { wall:null, roof:null, zone:null };
+let CA_MATS = null;
+/* Real ground for the exporters, whichever tab derived it first. */
+let EXPORT_TERRAIN = null;
 function studyJSON() {
   const S = STATE.site, C = STATE.clim;
   return JSON.stringify({
@@ -13582,7 +14025,8 @@ function studyJSON() {
     clim:{ t:C.t.slice(), p:C.p.slice(), source:C.source || '', mode:C.mode || '' },
     env:{ plot:ENV.plot ? { lat:ENV.plot.lat, lon:ENV.plot.lon } : null, doy:ENV.doy, h:ENV.h,
       map:ENV.map, view:ENV.view, wide:!!ENV.wide, nb:ENV.nb !== false },
-    mass:MASS, roof:ROOF, open:OPEN, sunsp:SUNSP, rwin:RWIN, render:{ prompt:RENDER_PROMPT }, veg:SCENE.veg, walls:SCENE.walls,
+    mass:MASS, roof:ROOF, open:OPEN, sunsp:SUNSP, rwin:RWIN, render:{ prompt:RENDER_PROMPT,
+        materials:RENDER_MATS.wall || RENDER_MATS.roof ? { walls:RENDER_MATS.wall, roof:RENDER_MATS.roof, zone:RENDER_MATS.zone } : null }, veg:SCENE.veg, walls:SCENE.walls,
     mesh:IMPORT.active ? { name:IMPORT.name, L:+IMPORT.L.toFixed(2), D:+IMPORT.D.toFixed(2), H:+IMPORT.H.toFixed(2) } : null,
     readout:JSON.parse(toDecisionsJSON())
   }, null, 2);
@@ -15758,6 +16202,7 @@ Object.assign(PT, {
   "+ Add chimney": "+ Dodaj komin",
   "Raise the region’s chimney where the roof is highest": "Wynieś komin regionu tam, gdzie dach najwyższy",
   "Take the chimney away": "Zabierz komin",
+  "No roof there — the chimney stays where it stands": "Tam nie ma dachu — komin zostaje gdzie stoi",
   "Simple pot": "Prosty komin",
   "A plain washed stack with one pot — every region builds one.": "Zwykły bielony trzon z jednym wkładem — buduje go każdy region.",
   "To the rule": "Według reguły",
@@ -15808,17 +16253,27 @@ Object.assign(PT, {
     "Windows & Shading": "Okna i Zacienianie",
   /* render */
   "Render": "Renderowanie",
-  "Render view": "Widok renderu",
-  "The dressed massing in its ground, under the prompted sun.": "Gotowa bryła w terenie, pod słońcem z promptu.",
+  "Visualization": "Wizualizacja",
+  "The model in its terrain, finished from the material buttons. Pick wall and roof finishes — the tab dresses the massing and renders it here. Freer scenes go by brief: copy it into an image studio.": "Model w terenie, wyko\u0144czony przyciskami materia\u0142\u00f3w. Wybierz wyko\u0144czenia \u015bcian i dachu \u2014 zak\u0142adka ubiera bry\u0142\u0119 i renderuje j\u0105 tutaj. Swobodniejsze sceny id\u0105 briefem: skopiuj go do studia graficznego.",
+  "Study": "Studium",
+  "B&W Render": "Render B&W",
+  "Visualization view": "Widok \u2014 Wizualizacja",
+  "The dressed massing in its ground, under the chosen sun.": "Ubrana bry\u0142a w terenie, pod wybranym s\u0142o\u0144cem.",
+  "Spark advisor": "Doradca Spark",
+  "Ask Spark for a better look": "Popro\u015b Sparka o lepszy wygl\u0105d",
+  "Apply the moves": "Zastosuj ruchy",
+  "Apply the advised sun, materials and finish": "Zastosuj doradzone s\u0142o\u0144ce, materia\u0142y i wyko\u0144czenie",
+  "OpenRouter key (stays in this browser)": "Klucz OpenRouter (zostaje w tej przegl\u0105darce)",
+  "Paste an OpenRouter key first — billed to you, nothing else leaves the browser.": "Wklej najpierw klucz OpenRouter \u2014 p\u0142acisz ty, nic innego nie opuszcza przegl\u0105darki.",
+  "Asking Spark\u2026": "Pytanie Sparka\u2026",
+  "Score": "Ocena",
+  "Advice ready — apply it or keep judging by eye.": "Porada gotowa \u2014 zastosuj j\u0105 albo nadal oceniaj okiem.",
+  "Spark did not answer — check the key and the connection, then retry.": "Spark nie odpowiedzia\u0142 \u2014 sprawd\u017a klucz i po\u0142\u0105czenie, potem spr\u00f3buj ponownie.",
+  "Applied — judge the new look by eye": "Zastosowano \u2014 oce\u0144 nowy wygl\u0105d okiem.", 
   "Wall material": "Materiał ścian",
   "Roof material": "Materiał dachu",
   "Solar hour": "Godzina solarna",
   "Finish": "Wykończenie",
-  "Auto": "Auto",
-  "Photo": "Foto",
-  "Watercolor": "Akwarela",
-  "Clay": "Makieta",
-  "Sketch": "Szkic",
   "site finish": "materiał z Terenu",
   "not painted": "nierozpoznane",
   "Not painted": "Nierozpoznane",
@@ -15828,10 +16283,6 @@ Object.assign(PT, {
   "Flat for now — open Ventilation once, or fetch below, for the real ground.": "Na razie płaski teren — otwórz raz Wentylację albo pobierz prawdziwy teren poniżej.",
   "Ground in view: low {} m, high +{} m (240 m grid).": "Teren w widoku: nisko {} m, wysoko +{} m (siatka 240 m).",
   "The ground could not be fetched — flat stands in. Retry when online.": "Nie pobrano terenu — wstawiono płaski. Spróbuj ponownie, gdy będziesz online.",
-  "whitewashed walls, clay tile roof, afternoon sun, photorealistic": "mury bielone, dachówka, popołudnie, fotorealistycznie",
-  "The model in its terrain, finished from a prompt. Describe materials, light and finish — the tab reads the request, dresses the massing, and renders it here. Freer scenes go by brief: copy it into an image studio.": "Model w terenie, wykończony promptem. Opisz materiały, światło i wykończenie — zakładka odczytuje polecenie, ubiera bryłę i renderuje ją tutaj. Swobodniejsze sceny idą briefem: skopiuj go do studia graficznego.", 
-  "Glazing, overhangs and fins for each facade, sized against the plan fixed on Site and the roof fixed on Roof — this tab cannot change either. Choosing a facade turns the model to face it, so you can drag its window directly; the compass shows which way is which. Click a window to select it — drag its black node to push it along the wall and up or down, drag a fin dot to stand it where the shade belongs, double-click it to open or close it, double-click bare wall to plant a new one. Any unit turns into a glazed door or a gelosia breeze-block from its row. Drag it onto another facade to move it there, or step it across with the arrows on its row.":
-    "Szklenie, okapy i lamele dla każdej fasady, zwymiarowane względem planu ustalonego w Terenie i dachu ustalonego w Dachu — ta zakładka nie może zmienić żadnego z nich. Wybór fasady obraca model ku niej, więc możesz przeciągać jej okno bezpośrednio; kompas pokazuje, co jest czym. Kliknij okno, aby je zaznaczyć — przeciągnij jego czarny punkt, aby popchnąć je wzdłuż ściany oraz w górę i w dół, przeciągnij kropkę lameli, aby postawić ją tam, gdzie należy cień, kliknij dwukrotnie, aby je otworzyć lub zamknąć, kliknij dwukrotnie gołą ścianę, aby posadzić nowe. Każda jednostka zamienia się w przeszklone drzwi lub pustak ażurowy z jej wiersza. Przeciągnij je na inną fasadę, aby je tam przenieść, albo przestaw strzałkami w jego wierszu.",
   "South": "Południe", "North": "Północ", "East": "Wschód", "West": "Zachód",
   "Facade": "Fasada",
   "Window sizing — WWR": "Wymiarowanie okien — WWR",
@@ -16252,7 +16703,7 @@ Object.assign(PT_HINT, {
   'roof-divide':
     'Jeden budynek, kilka dachów — płaski stropodach obok stromego dachu: podziel dłuższy bok (do trzech części), daj każdej części własne połacie i nachylenie i przeciągnij podział na modelu albo powyżej. Odznaki czytają największą część.',
   'render-how':
-    'Prompt ubiera bryłę narysowaną w Terenie, zadaszoną w Dachu i obsadzoną w Wentylacji — <b>ściany</b> (biel, cegła, kamień, drewno, beton, korek, szkło), <b>dach</b> (dachówka, łupek, blacha, strzecha, zielony dach), <b>światło</b> (od świtu do nocy) i <b>wykończenie</b> (foto, akwarela, makieta, szkic). Widok zależy od każdej zakładki: plan, załamania i dziedziniec z Terenu, nachylenie, attyka, okap, komin i kolektory z Dachu, szkło, drzwi, okapy, lamele i oranżeria z Okien i Zacieniania, zieleń, mury i sąsiedzi z Wentylacji — zmień cokolwiek, a model podąży przy następnej wizycie. Czego zakładka nie potrafi namalować, zgłasza pod promptem. Brief niesie tę samą scenę do studia graficznego dla swobodniejszych renderów.',
+    'Wybierz wyko\u0144czenia \u015bcian i dachu z p\u00f3l \u2014 ka\u017cde wyko\u0144czenie ubiera bry\u0142\u0119 fotorealistycznie, dok\u0142adnie w kolorach swojego bli\u017aniaka powierzchni Archicada 29 (nazwanego w panelu Wygl\u0105d, aby t\u0119 sam\u0105 powierzchni\u0119 na\u0142o\u017cy\u0107 w Archicadzie), a odczyt potwierdza, co model nosi. Oferta to trzy wyko\u0144czenia: <b>Studium</b> (model z bia\u0142ej karty), <b>Render</b> (pe\u0142ny kolor) i <b>Render B&W</b> (czarno-bia\u0142y). Widok zale\u017cy od ka\u017cdej zak\u0142adki: plan, za\u0142amania i dziedziniec z Terenu, nachylenie, attyka, okap, komin i kolektory z Dachu, szk\u0142o, drzwi, okapy, lamele i oran\u017ceria z Okien i Zacieniania, ziele\u0144, mury i s\u0105siedzi z Wentylacji \u2014 zmie\u0144 cokolwiek, a model pod\u0105\u017cy przy nast\u0119pnej wizycie. Czego zak\u0142adka nie potrafi namalowa\u0107, zg\u0142asza pod promptem. Brief niesie t\u0119 sam\u0105 scen\u0119 do studia graficznego dla swobodniejszych render\u00f3w.',
 
   'site-balc':
     '<b>Balkony</b>, do sześciu, każdy na ścianie obrysu. <b>Wystający</b>: płyta na poziomie podłogi swojego piętra z balustradą 1,0 m wokół wolnych krawędzi — od pierwszego piętra w górę, bo na parterze byłby tarasem; dla piętra poniżej jest okapem, a Okna i Zacienianie liczą go jako okap nad oknami, które przykrywa. <b>Cofnięty</b>: loggia, pudło piętra cofnięte od ściany — na parterze ganek. Jego okno przechodzi na ścianę tylną, a sufit i boki je cieniują: Okna i Zacienianie liczą okap na suficie i lamele przy każdym zamkniętym boku. Kubatura też się zmienia: loggia wychodzi z kubatury ogrzewanej, a jej boki, sufit i podłoga stają się obudową tam, gdzie budynek ciągnie się za nie, więc <b>Współczynnik kształtu</b> rośnie; wystający balkon nie rusza żadnego z nich, choć jego płyta jest mostkiem cieplnym, którego współczynnik kształtu nie widzi. Na modelu <b>okrągły punkt</b> balkonu przesuwa go wzdłuż ściany najbliższej kursora — za narożnikiem przechodzi na następną ścianę, a przy każdym końcu wskakuje równo w narożnik — a jego <b>kwadratowy punkt</b> ustala szerokość wzdłuż ściany i głębokość od niej. W narożniku, od którego ściana odchodzi, wystający balkon zawija go w L, równie głęboki na obu licach, a loggia otwiera się na oba. Belka po lewej ustala to samo: wystający albo cofnięty, jedno piętro albo wszystkie, ściana, ku której patrzy, bok albo któryś z narożników, szerokość i głębokość. Loggia zachowuje co najmniej 1,5 m budynku za sobą; wystający balkon trzyma 0,3 m wolnego od każdej ściany, ku której patrzy. Każdy widok 3D je rysuje, a eksport CAD je zapisuje — płyty, balustrady i każdą loggię wyciętą w ścianach, podłodze i dachu.',
