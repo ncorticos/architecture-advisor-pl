@@ -910,7 +910,7 @@ details.more[open] > summary{color:var(--ink)}
 const APP = {
   name:        'Architecture Advisor PL',
   tag:         'AA PL',
-  version:     '1.113.0',
+  version:     '1.114.0',
   author:      'Nuno Dinis Cortiços',
   institution: 'Lisbon School of Architecture, Universidade de Lisboa',
   builtWith:   'Claude Opus 5 (Anthropic)',
@@ -2335,37 +2335,54 @@ function chimneyFaces(famKey, x, y, z0, hEff, foot, taperDeg, zAtFn) {
   const F = Object.assign({}, F0, { h:(hEff === undefined ? F0.h : hEff) });
   const tap = isFinite(+taperDeg) ? Math.max(0, +taperDeg) * RAD : 0;
   const out = [];
-  const tri = (a, b, c, fill) => {
+  /* One face for one flat surface, not a pair of triangles. Every painter
+     inks each face it fills, so a quad cut in two drew its own diagonal as
+     well as its edges, and the stack read as a web of triangles instead of
+     a box. */
+  const face = (pts, fill) => {
+    const a = pts[0], b = pts[1], c = pts[2];
     const ux = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], vx = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
     const n = [ux[1] * vx[2] - ux[2] * vx[1], ux[2] * vx[0] - ux[0] * vx[2], ux[0] * vx[1] - ux[1] * vx[0]];
     const L = Math.hypot(n[0], n[1], n[2]) || 1, nn = [n[0] / L, n[1] / L, n[2] / L];
-    out.push({ pts:[a, b, c], fill:shadeFill(fill, nn), n:nn });
+    out.push({ pts, fill:shadeFill(fill, nn), n:nn });
   };
-  const quad = (a, b, c, d, fill) => { tri(a, b, c, fill); tri(a, c, d, fill); };
+  const tri = (a, b, c, fill) => face([a, b, c], fill);
+  const quad = (a, b, c, d, fill) => face([a, b, c, d], fill);
+  /* Six faces, each wound so its normal points out of the solid: the shading
+     reads one light over the whole box instead of flipping side to side. */
   const box = (x0, y0, z1, x1, y1, z2, fill) => {
-    quad([x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1], fill);
-    quad([x0, y0, z2], [x1, y0, z2], [x1, y1, z2], [x0, y1, z2], fill);
-    quad([x0, y0, z1], [x1, y0, z1], [x1, y0, z2], [x0, y0, z2], fill);
-    quad([x0, y1, z1], [x1, y1, z1], [x1, y1, z2], [x0, y1, z2], fill);
-    quad([x0, y0, z1], [x0, y1, z1], [x0, y1, z2], [x0, y0, z2], fill);
-    quad([x1, y0, z1], [x1, y1, z1], [x1, y1, z2], [x1, y0, z2], fill);
+    quad([x0, y0, z1], [x0, y1, z1], [x1, y1, z1], [x1, y0, z1], fill);   // under
+    quad([x0, y0, z2], [x1, y0, z2], [x1, y1, z2], [x0, y1, z2], fill);   // over
+    quad([x0, y0, z1], [x1, y0, z1], [x1, y0, z2], [x0, y0, z2], fill);   // south
+    quad([x1, y1, z1], [x0, y1, z1], [x0, y1, z2], [x1, y1, z2], fill);   // north
+    quad([x0, y1, z1], [x0, y0, z1], [x0, y0, z2], [x0, y1, z2], fill);   // west
+    quad([x1, y0, z1], [x1, y1, z1], [x1, y1, z2], [x1, y0, z2], fill);   // east
   };
-  const frustum = (cx, cy, bx, by, tx, ty, z1, z2, fill) => {
-    quad([cx - bx, cy - by, z1], [cx + bx, cy - by, z1], [cx + tx, cy - ty, z2], [cx - tx, cy - ty, z2], fill);
-    quad([cx - bx, cy + by, z1], [cx + bx, cy + by, z1], [cx + tx, cy + ty, z2], [cx - tx, cy + ty, z2], fill);
-    quad([cx - bx, cy - by, z1], [cx - bx, cy + by, z1], [cx - tx, cy + ty, z2], [cx - tx, cy - ty, z2], fill);
-    quad([cx + bx, cy - by, z1], [cx + bx, cy + by, z1], [cx + tx, cy + ty, z2], [cx - tx, cy + ty, z2], fill);
-    quad([cx - bx, cy - by, z1], [cx + bx, cy - by, z1], [cx + bx, cy + by, z1], [cx - bx, cy + by, z1], fill);
-    quad([cx - tx, cy - ty, z2], [cx + tx, cy - ty, z2], [cx + tx, cy + ty, z2], [cx - tx, cy + ty, z2], fill);
+  /* The tapered shaft: each face takes its own two base corners and the two
+     top corners above them, wound outward. The east face used to close on
+     the far top corner, which drew a bow tie across the stack and left that
+     side open — the shaft read as loose triangles and you could see through
+     it from the east. */
+  const frustum = (cx, cy, bx, by, tx, ty, z1, z2, fill, noBase) => {
+    const zb = typeof z1 === 'function' ? z1 : () => z1;
+    const B = (sx, sy) => [cx + sx * bx, cy + sy * by, zb(sx, sy)], T = (sx, sy) => [cx + sx * tx, cy + sy * ty, z2];
+    quad(B(-1, -1), B(1, -1), T(1, -1), T(-1, -1), fill);   // south
+    quad(B(1, 1), B(-1, 1), T(-1, 1), T(1, 1), fill);       // north
+    quad(B(-1, 1), B(-1, -1), T(-1, -1), T(-1, 1), fill);   // west
+    quad(B(1, -1), B(1, 1), T(1, 1), T(1, -1), fill);       // east
+    if (!noBase) quad(B(-1, -1), B(-1, 1), B(1, 1), B(1, -1), fill);   // under
+    quad(T(-1, -1), T(1, -1), T(1, 1), T(-1, 1), fill);     // over
   };
   const prism = (cx, cy, r, z1, z2, fill, n) => {
     n = n || 8;
     const P = k => { const a = k / n * Math.PI * 2; return [cx + r * Math.cos(a), cy + r * Math.sin(a)]; };
+    const cap = [];
     for (let k = 0; k < n; k++) {
       const a = P(k), b = P((k + 1) % n);
       quad([a[0], a[1], z1], [b[0], b[1], z1], [b[0], b[1], z2], [a[0], a[1], z2], fill);
+      cap.push([a[0], a[1], z2]);
     }
-    for (let k = 1; k < n - 1; k++) tri([P(0)[0], P(0)[1], z2], [P(k)[0], P(k)[1], z2], [P(k + 1)[0], P(k + 1)[1], z2], fill);
+    face(cap, fill);   // the top as one polygon, so only its rim is inked
   };
   const shaftC = F.colours[0], capC = (famKey === 'podhalanski') ? F.colours[0] : '#EFE9DC', potC = '#C98A5E';
   const w = (foot && isFinite(+foot.y)) ? +foot.y : F.shaft, h = F.h, sw = (foot && isFinite(+foot.x)) ? +foot.x : F.shaft * (F.long || 1), skirt = F.skirt ? 0.6 : 0, capT = Math.max(0.15, F.cap || 0.15);
@@ -2379,30 +2396,19 @@ function chimneyFaces(famKey, x, y, z0, hEff, foot, taperDeg, zAtFn) {
       quad([a0[0], a0[1], z1], [b0[0], b0[1], z1], [b1[0], b1[1], z2], [a1[0], a1[1], z2], fill);
     }
   };
-  /* The foot follows the roof: the lowest surface under the widened shaft
-     buries the shaft on any pitch, and a flashing collar hugs the slope
-     where a level plate would float downhill. Without a surface callback
-     both fall back to the old level foot. */
+  /* The foot stands on the roof corner by corner. A level foot cut to the
+     lowest corner left most of a metre of shaft under the slope on a steep
+     pitch, and a painter can hide a face only whole, so that buried length
+     showed through the roof as dark wings — as did the flashing collar that
+     was tucked beneath it. Meeting the surface exactly needs neither: the
+     shaft lands on the slope and nothing of it is left underneath. Without
+     a surface callback the old level foot stands in. */
   const rawZ = (qx, qy) => {
     if (typeof zAtFn !== 'function') return null;
     try { const v = zAtFn(qx, qy); return isFinite(v) ? v : null; } catch (e) { return null; }
   };
-  const surfZ = (qx, qy) => { const v = rawZ(qx, qy); return v === null ? z0 : v; };
-  let zB = null;
-  [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sy]) => {
-    const v = rawZ(x + sx * (sw / 2 + 0.14), y + sy * (w / 2 + 0.14));
-    if (v !== null) zB = zB === null ? v : Math.min(zB, v);
-  });
-  if (zB === null) zB = z0 - 0.35;
-  frustum(x, y, sw / 2, w / 2, swt / 2, wt / 2, zB - 0.05, z0 + h - skirt, shaftC);
-  const collarSide = (ix0, iy0, ix1, iy1, ox0, oy0, ox1, oy1) => {
-    quad([ix0, iy0, surfZ(ix0, iy0) - 0.16], [ix1, iy1, surfZ(ix1, iy1) - 0.16],
-      [ox1, oy1, surfZ(ox1, oy1) + 0.05], [ox0, oy0, surfZ(ox0, oy0) + 0.05], shaftC);
-  };
-  collarSide(x + sw / 2, y - w / 2, x + sw / 2, y + w / 2, x + sw / 2 + 0.14, y - w / 2 - 0.14, x + sw / 2 + 0.14, y + w / 2 + 0.14);
-  collarSide(x - sw / 2, y + w / 2, x - sw / 2, y - w / 2, x - sw / 2 - 0.14, y + w / 2 + 0.14, x - sw / 2 - 0.14, y + w / 2 - 0.14);
-  collarSide(x + sw / 2, y + w / 2, x - sw / 2, y + w / 2, x + sw / 2 + 0.14, y + w / 2 + 0.14, x - sw / 2 - 0.14, y + w / 2 - 0.14);
-  collarSide(x - sw / 2, y - w / 2, x + sw / 2, y - w / 2, x - sw / 2 - 0.14, y - w / 2 - 0.14, x + sw / 2 + 0.14, y - w / 2 - 0.14);
+  const footZ = (sx, sy) => { const v = rawZ(x + sx * sw / 2, y + sy * w / 2); return v === null ? z0 - 0.35 : v; };
+  frustum(x, y, sw / 2, w / 2, swt / 2, wt / 2, footZ, z0 + h - skirt, shaftC, typeof zAtFn === 'function');
   if (F.cone) {
     const cb = z0 + h, ch = F.cone.h, hwt = Math.min(swt, wt) / 2, cr0 = Math.min(F.cone.r, hwt + 0.05), dr = Math.min(F.drum.r, hwt), cr1 = Math.min(dr + 0.07, cr0);
     coneFrustum(x, y, cr0, cr1, cb, cb + ch, shaftC);
@@ -2426,8 +2432,8 @@ function chimneyFaces(famKey, x, y, z0, hEff, foot, taperDeg, zAtFn) {
         const c = -fw / 2 + (k + 0.5) * (fw / nF), a0 = c - tw / 2, b0 = c + tw / 2;
         if (s === 0) tri([x + sw / 2 + e, y + a0, fz1], [x + sw / 2 + e, y + b0, fz1], [x + sw / 2 + e, y + c, fz2], '#33302c');
         else if (s === 1) tri([x - sw / 2 - e, y + b0, fz1], [x - sw / 2 - e, y + a0, fz1], [x - sw / 2 - e, y + c, fz2], '#33302c');
-        else if (s === 2) tri([x + a0, y + w / 2 + e, fz1], [x + b0, y + w / 2 + e, fz1], [x + c, y + w / 2 + e, fz2], '#33302c');
-        else tri([x + b0, y - w / 2 - e, fz1], [x + a0, y - w / 2 - e, fz1], [x + c, y - w / 2 - e, fz2], '#33302c');
+        else if (s === 2) tri([x + b0, y + w / 2 + e, fz1], [x + a0, y + w / 2 + e, fz1], [x + c, y + w / 2 + e, fz2], '#33302c');
+        else tri([x + a0, y - w / 2 - e, fz1], [x + b0, y - w / 2 - e, fz1], [x + c, y - w / 2 - e, fz2], '#33302c');
       }
     }
   }
@@ -2437,8 +2443,7 @@ function chimneyFaces(famKey, x, y, z0, hEff, foot, taperDeg, zAtFn) {
     for (let k = 0; k < F.pots; k++) {
       const px = F.pots === 1 ? x : x - swt / 2 + 0.15 + k * (swt - 0.3) / Math.max(1, F.pots - 1);
       prism(px, y, 0.09, zt, zt + 0.5, potC, 8);
-      tri([px - 0.09, y, zt + 0.5], [px + 0.09, y, zt + 0.5], [px, y + 0.09, zt + 0.5], '#2b2b2e');
-      tri([px - 0.09, y, zt + 0.5], [px, y - 0.09, zt + 0.5], [px + 0.09, y, zt + 0.5], '#2b2b2e');
+      quad([px - 0.09, y, zt + 0.5], [px, y - 0.09, zt + 0.5], [px + 0.09, y, zt + 0.5], [px, y + 0.09, zt + 0.5], '#2b2b2e');
     }
   } else {
     box(x - wt / 4, y - wt / 4, zt, x + wt / 4, y + wt / 4, zt + 0.02, '#2b2b2e');
@@ -4032,11 +4037,48 @@ const camUV = (A, x, y, z) => [CAM_K * (x * A.r[0] + y * A.r[1]), CAM_K * ((x * 
 /** How far from the camera: larger is farther, for painting back to front. */
 const camDepth = (A, x, y, z) => (x * A.d[0] + y * A.d[1]) * A.ce - (z || 0) * A.se; /** A roof plane ends where its walls begin — they only ever touch —
       so with the camera above them the plane always covers the wall.
-      A fixed order for that one pair; everything else (balconies,
-      chimneys, parapets, risers, neighbours) keeps its depth order. */
+      A fixed order for that pair, and for a chimney standing on a roof
+      plane; everything else (balconies, parapets, risers, neighbours)
+      keeps its depth order. */
   function isRoofFace(f) { return !!(f.pc && !f.balc && !f.chim && !f.par && !f.import); }
   function isWallFace(f) { return !!(f.sg && !f.pc && !f.balc && !f.chim && !f.par && !f.import); }
-  function roofWallOrder(p, q) { return (isRoofFace(p) && isWallFace(q)) ? 1 : (isWallFace(p) && isRoofFace(q)) ? -1 : 0; }
+  /** The plane through a face's own points, as [a, b, c, d] meaning
+      a·x + b·y + c·z = d with c ≥ 0, so a point stands above the surface
+      where a·x + b·y + c·z > d. Read from the points themselves, so it
+      holds just as well in a turned frame, and kept on the face, which
+      lives only as long as the one painting. */
+  function facePlane(f) {
+    if (f.plane === undefined) {
+      const P = f.pts; f.plane = null;
+      for (let i = 2; i < P.length && !f.plane; i++) {
+        const u = [P[1][0] - P[0][0], P[1][1] - P[0][1], P[1][2] - P[0][2]];
+        const v = [P[i][0] - P[0][0], P[i][1] - P[0][1], P[i][2] - P[0][2]];
+        const n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+        const L = Math.hypot(n[0], n[1], n[2]);
+        if (L > 1e-9) { const k = (n[2] < 0 ? -1 : 1) / L; f.plane = [n[0] * k, n[1] * k, n[2] * k, (n[0] * P[0][0] + n[1] * P[0][1] + n[2] * P[0][2]) * k]; }
+      }
+    }
+    return f.plane;
+  }
+  /** A chimney is a small solid standing on a wide roof plane, and depth
+      compares their centroids: a slope running down toward the camera reads
+      as nearer than the stack upon it, paints over it, and the chimney
+      disappears at those angles of the turn. The plane decides instead — a
+      roof surface the camera looks down on can hide nothing that stands
+      above it, so it paints first and the stack over it. A face of the
+      stack that dips below the plane (behind the ridge, under a taller
+      wing) keeps its depth order and is covered, as it should be. */
+  function chimRoofOrder(p, q) {
+    const c = p.chim ? p : q.chim ? q : null;
+    if (!c) return 0;
+    const s = c === p ? q : p;
+    if (!isRoofFace(s)) return 0;
+    const pl = facePlane(s);
+    if (!pl || pl[2] < 1e-6) return 0;                // seen edge-on: nothing to tell
+    const over = c.pts.every(v => v[0] * pl[0] + v[1] * pl[1] + v[2] * pl[2] > pl[3] - 0.02);   // a foot resting on the surface still stands on it
+    return over ? (c === p ? 1 : -1) : 0;
+  }
+  function roofWallOrder(p, q) { return (isRoofFace(p) && isWallFace(q)) ? 1 : (isWallFace(p) && isRoofFace(q)) ? -1 : chimRoofOrder(p, q); }
 /** Does a face with outward normal (nx, ny, nz) turn toward the camera? */
 const camSees = (A, nx, ny, nz) => (nx * A.c[0] + ny * A.c[1]) * A.ce + (nz || 0) * A.se > 1e-6;
 /** The point of the plane O + u·U + v·V under a screen point, as [u, v],
@@ -8069,7 +8111,7 @@ function buildOpenings(host) {
   const rwLine = el('span', { class:'pill empty' });
 
   host.appendChild(hint('open-shading',
-    'A horizontal overhang cuts the high summer sun on equator-facing glass, using the same profile-angle geometry as the roof pitch on the previous tab (Olgyay, pp.79–80; Lechner, pp.249–253). East and west glass gets low, near-level morning and evening sun that an overhang barely touches — vertical fins address it instead: Olgyay’s own shading-coefficient table gives fixed vertical fins on east/west walls about 0.31 (i.e. cutting roughly two-thirds of the unshaded gain), against about 0.20–0.25 for a continuous south overhang and 0.10–0.15 for movable horizontal louvres (pp.70–71) — fins genuinely earn their keep on the low, oblique east and west sun, west more than east once afternoon heat is added on top. Lechner still notes horizontal devices outperform fins even there, and that fins mainly suit the equator-side of an oblique facade (pp.255–259); on a due-south wall a fin fails only at the single moment the sun sits exactly perpendicular to the glass — solar noon — and keeps cutting the oblique morning and afternoon sun the rest of the day, so its contribution there can be substantial too, just covering different hours than an overhang does. Several shallower louvres or several narrower fins cut the same angle as one deep device while blocking less of the view — an eggcrate is the two stacked together, not added twice (DeKay &amp; Brown, Strategy 91, pp.248–249). Both sit directly on the opening: a single overhang rides the head, several louvres spread down across the full glazing top to bottom, and fins run left to right across whichever width is chosen — never floating clear of the window itself. In a heating-led climate a good overhang discriminates by season — cutting the high June sun while still admitting the low December sun that offsets the heating bill — so the shading score below rewards that gap rather than sheer depth: a device deep enough to block summer and winter equally scores no better than none at all.'));
+    'A horizontal overhang cuts the high summer sun on equator-facing glass, using the same profile-angle geometry as the roof pitch on the previous tab (Olgyay, pp.79–80; Lechner, pp.249–253). East and west glass gets low, near-level morning and evening sun that an overhang barely touches — vertical fins address it instead: Olgyay’s own shading-coefficient table gives fixed vertical fins on east/west walls about 0.31 (i.e. cutting roughly two-thirds of the unshaded gain), against about 0.20–0.25 for a continuous south overhang and 0.10–0.15 for movable horizontal louvres (pp.70–71) — fins genuinely earn their keep on the low, oblique east and west sun, west more than east once afternoon heat is added on top. Lechner still notes horizontal devices outperform fins even there, and that fins mainly suit the equator-side of an oblique facade (pp.255–259); on a due-south wall a fin fails only at the single moment the sun sits exactly perpendicular to the glass — solar noon — and keeps cutting the oblique morning and afternoon sun the rest of the day, so its contribution there can be substantial too, just covering different hours than an overhang does. Several shallower louvres or several narrower fins cut the same angle as one deep device while blocking less of the view — an eggcrate is the two stacked together, not added twice (DeKay &amp; Brown, Strategy 91, pp.248–249). Both sit directly on the opening: a single overhang rides the head, several louvres spread down across the full glazing top to bottom, and fins run left to right across whichever width is chosen — never floating clear of the window itself. The roof eave counts from the start as an overhang at the wall top, measured past each window — extend it too far and it also blocks the low winter sun, which the score below counts against it. In a heating-led climate a good overhang discriminates by season — cutting the high June sun while still admitting the low December sun that offsets the heating bill — so the shading score below rewards that gap rather than sheer depth: a device deep enough to block summer and winter equally scores no better than none at all.'));
 
   /* --- the sunspace, right of the model, under the shading --------------- */
   const cSunOn = checkCtl('Attach a sunspace', SUNSP.on, v => { SUNSP.on = v; refreshOpenings(); });
@@ -8315,6 +8357,28 @@ const gelCount = f => { const nU = faceUnits(f).filter(u => u.on && u.gel).lengt
       0.10–0.15 for movable horizontal louvres (pp.70–71). Called at 21 June
       (172) for the summer test and 21 December (355) for the winter one. */
   const SHADE_SAMPLE_OFFSETS = [-5,-4,-3,-2,-1,0,1,2,3,4,5];   // hours either side of solar noon
+  /** The roof eave measured past one window: march outward from the glass
+      until the roof lets go, keeping only eave-high cover — a low wing roof
+      under an upper wall is not shade. Zero where the wall stands flush, so
+      gable ends off, junctions and wings measure themselves. */
+  function eaveDepth(Mm, H0, bei, sg, a, b) {
+    if (!Mm || !Mm.zAt || !(bei > 0)) return 0;
+    const dx = (sg.b[0] - sg.a[0]) / sg.len, dy = (sg.b[1] - sg.a[1]) / sg.len, n = sg.n;
+    const span = Math.max(0, b - a);
+    const us = span < 0.6 ? [(a + b) / 2] : [a + span * 0.25, (a + b) / 2, a + span * 0.75];
+    let best = Infinity;
+    for (const u of us) {
+      const wx = sg.a[0] + dx * u, wy = sg.a[1] + dy * u;
+      let edge = 0;
+      for (let t = 0.05; t <= 1.35; t += 0.05) {
+        const z = Mm.zAt(wx + n[0] * t, wy + n[1] * t);
+        if (z === null || z === undefined || z < H0 - 1.5) break;
+        edge = t;
+      }
+      if (edge < best) best = edge;
+    }
+    return best === Infinity ? 0 : Math.max(0, best - 0.025);
+  }
   function shadeEffectiveness(f, doy) {
     const o = OPEN[f], wallAz = faceAz(f), bg = balcGeo(G);
     /* each window storey by storey, with the balconies set on Site over it:
@@ -8322,11 +8386,14 @@ const gelCount = f => { const nU = faceUnits(f).filter(u => u.on && u.gel).lengt
        window it spans, as far above the head as its slab; a loggia round the
        window is an overhang at its ceiling and a fin at each closed side */
     const rects = [], us = faceUnits(f);
+    const MmE = Mod(), H0E = MmE.H0, beiE = (RF.bei && RF.bei.on) ? clamp(+RF.bei.d || 0, 0, 1) : 0;
     winsOf(f).forEach(x => x.w.rows.forEach((r, k) => {
       const head = Math.min(r.head, h0()), u0 = x.w.uc - x.w.w / 2, u1 = x.w.uc + x.w.w / 2;
       glassSpans(f, u0, u1, x.sg.len).filter(sp => sp.on && sp.b - sp.a > 0.05).forEach(sp => {
         const u = us[sp.ui], vv = u.door ? [k * G.fh + 0.05, head] : shiftRow(r.sill, head, k, G.fh, u.up);
         const rc = { w:sp.b - sp.a, h:Math.max(0.01, vv[1] - vv[0]), ov:[], fin:[], a:sp.a, b:sp.b, sg:x.sg, u0, u1 };
+        const evD = eaveDepth(MmE, H0E, beiE, x.sg, sp.a, sp.b);
+        if (evD > 0.05) rc.ov.push({ d:evD, gap:Math.max(0, H0E - vv[1]), cover:1 });
         bg.ok.forEach(B => {
           if (B.sg !== x.sg) return;
           const a = Math.max(sp.a, B.u0 - (B.wrap < 0 ? B.d : 0)), b2 = Math.min(sp.b, B.u1 + (B.wrap > 0 ? B.d : 0));
@@ -8403,9 +8470,21 @@ const gelCount = f => { const nU = faceUnits(f).filter(u => u.on && u.gel).lengt
       only. */
   /** Do balconies set on Site stand on this side? */
   const balcOnFace = f => balcGeo(G).ok.some(B => segFace(B.sg) === f);
+  function eaveOnFace(f) {
+    if (!(RF.bei && RF.bei.on)) return false;
+    const MmE = Mod(), bei = clamp(+RF.bei.d || 0, 0, 1);
+    if (!(bei > 0)) return false;
+    const ws = winsOf(f);
+    for (const x of ws) {
+      const u0 = x.w.uc - x.w.w / 2, u1 = x.w.uc + x.w.w / 2;
+      const sps = glassSpans(f, u0, u1, x.sg.len).filter(sp => sp.on && sp.b - sp.a > 0.05);
+      for (const sp of sps) if (eaveDepth(MmE, MmE.H0, bei, x.sg, sp.a, sp.b) > 0.05) return true;
+    }
+    return false;
+  }
   function shadingScore(f) {
     const o = OPEN[f];
-    if ((o.ovD === 0 && o.finD === 0 && !balcOnFace(f)) || !faceUnits(f).some(u => u.on)) return null;
+    if ((o.ovD === 0 && o.finD === 0 && !balcOnFace(f) && !eaveOnFace(f)) || !faceUnits(f).some(u => u.on)) return null;
     const summer = shadeEffectiveness(f, 172).pct;
     if (!heating) return summer;
     const winter = shadeEffectiveness(f, 355).pct;
@@ -8624,7 +8703,7 @@ const gelCount = f => { const nU = faceUnits(f).filter(u => u.on && u.gel).lengt
 
       // the readout, and the two badges, as on Site
       const o = OPEN[curFace];
-      const sh = ((o.ovD > 0 || o.finD > 0 || balcOnFace(curFace)) && faceUnits(curFace).some(u => u.on)) ? shadeEffectiveness(curFace, 172).pct : null;
+      const sh = ((o.ovD > 0 || o.finD > 0 || balcOnFace(curFace) || eaveOnFace(curFace)) && faceUnits(curFace).some(u => u.on)) ? shadeEffectiveness(curFace, 172).pct : null;
       const nW = winCount(curFace);
       label(ctx, t(faceName[curFace]) + ' · ' + t('faces') + ' ' + faceDir(curFace) + ' · WWR ' + fmt(facadeNumbers(curFace).eff * 100, 0) + '% · ' + nW + ' ' + t(nW === 1 ? 'window' : 'windows') + (gelCount(curFace) > 0 ? ' · ' + gelCount(curFace) + ' ' + t('gelosia') : '')
         + (sh !== null ? ' · ' + t('shading') + ' ' + fmt(sh, 0) + '%' : ''),
@@ -8670,6 +8749,8 @@ const gelCount = f => { const nU = faceUnits(f).filter(u => u.on && u.gel).lengt
     ['Elevation', 'Square to the side under study, level: its elevation', () => set(SQ[curFace], 0)],
     ['From S', 'Stand to the true south of the building', () => set(camAzFrom(G.rot, 180), camMidEl(OCAM))],
     ['From N', 'Stand to the true north of the building', () => set(camAzFrom(G.rot, 0), camMidEl(OCAM))],
+    ['From E', 'Stand to the true east of the building', () => set(camAzFrom(G.rot, 90), camMidEl(OCAM))],
+    ['From W', 'Stand to the true west of the building', () => set(camAzFrom(G.rot, 270), camMidEl(OCAM))],
     ['Reset', 'Back to the corner view of the side under study', () => set(CORNER[curFace], ISO_EL)]], 0);
   refreshOpenings();
   /* the tab is built once; coming back to it after Site or Roof changed,
@@ -13603,19 +13684,40 @@ function exportModel() {
     if (trunk.length) add('plant', nm + ' trunk', 'AA-PLANTING', trunk, Object.assign({ mat:'AA_Trunk' }, extra));
     add('plant', nm + ' crown', 'AA-PLANTING', crown, Object.assign({ mat:'AA_Leaf' }, extra));
   });
-  /* the real ground under the model: the Copernicus grid where derived */
+  /* the real ground under the model: the Copernicus grid where derived, resampled to a 0.25 m near-field
+     mesh — the service resolves ~30 m, so this smooths rather than surveys;
+     the name below says resampled whenever it is. */
+  function resampleGrid(g, step, half) {
+    const E = (g.n - 1) * g.step / 2;
+    const n = Math.max(2, Math.min(241, Math.floor(2 * half / step) + 1));
+    const s = (2 * half) / (n - 1);
+    const at = (e, nn) => {
+      const fx = (e + E) / g.step, fy = (nn + E) / g.step;
+      if (!(fx >= 0 && fy >= 0 && fx <= g.n - 1 && fy <= g.n - 1)) return 0;
+      const ix = Math.min(g.n - 2, Math.floor(fx)), jy = Math.min(g.n - 2, Math.floor(fy));
+      const ax = fx - ix, ay = fy - jy, H = g.h;
+      return H[jy * g.n + ix] * (1 - ax) * (1 - ay) + H[jy * g.n + ix + 1] * ax * (1 - ay)
+        + H[(jy + 1) * g.n + ix] * (1 - ax) * ay + H[(jy + 1) * g.n + ix + 1] * ax * ay;
+    };
+    const h = [];
+    for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) h.push(+at(-half + i * s, -half + j * s).toFixed(2));
+    return { n, step:s, h };
+  }
   if (EXPORT_TERRAIN && EXPORT_TERRAIN.h && EXPORT_TERRAIN.h.length) {
-    const TN = EXPORT_TERRAIN.n, TS = EXPORT_TERRAIN.step, TE = (TN - 1) * TS / 2;
+    const pbb = planModel(G).bbox;
+    const half = Math.min(60, Math.max(20, Math.max(Math.abs(pbb[0]), Math.abs(pbb[1]), Math.abs(pbb[2]), Math.abs(pbb[3])) + 15));
+    const FG = resampleGrid(EXPORT_TERRAIN, 0.25, half);
+    const TN = FG.n, TS = FG.step, TE = (TN - 1) * TS / 2;
     const bb = (G.rot - 180) * RAD, cb = Math.cos(bb), sb = Math.sin(bb);
     const PW = (E, N) => [E * cb - N * sb, E * sb + N * cb];
-    const HH = (a, c) => EXPORT_TERRAIN.h[c * TN + a];
+    const HH = (a, c) => FG.h[c * TN + a];
     const tf = [];
     for (let jj = 0; jj < TN - 1; jj++) for (let ii = 0; ii < TN - 1; ii++) {
       const E0 = -TE + ii * TS, N0 = -TE + jj * TS;
       const p00 = PW(E0, N0), p10 = PW(E0 + TS, N0), p11 = PW(E0 + TS, N0 + TS), p01 = PW(E0, N0 + TS);
       tf.push([[[p00[0], p00[1], HH(ii, jj)], [p10[0], p10[1], HH(ii + 1, jj)], [p11[0], p11[1], HH(ii + 1, jj + 1)], [p01[0], p01[1], HH(ii, jj + 1)]], [0, 0, 1]]);
     }
-    add('terrain', 'Terrain (Copernicus DEM grid)', 'AA-TERRAIN', tf, { mat:'AA_Terrain', grid:TN + 'x' + TN + ' at ' + TS + ' m' });
+    add('terrain', 'Terrain (Copernicus DEM, resampled ' + TS.toFixed(2) + ' m near field)', 'AA-TERRAIN', tf, { mat:'AA_Terrain', grid:TN + 'x' + TN + ' at ' + TS.toFixed(2) + ' m' });
   }
 
   /* a north arrow on the ground, for the tools that do not read north */
@@ -14349,9 +14451,9 @@ function sceBlock(o) {
     + '</div></div>'
     + '<p class="sce-ch">' + t(S.ch) + '</p><p class="sce-where">' + whereTxt + '</p></div>'
     + '<figure class="sce-lad">' + sceTable(Z) + '<figcaption>' + t('Design zones by voivodeship (majorities); the site reads the nearest synoptic station.') + '</figcaption></figure></div>'
+    + grp('The surroundings', null, 'The same intentions at the scale of the plot: sun, wind, canopy, water and ground.', S.site, 'S')
     + grp('Winter \u00b7 the building', S.w[0], S.w[1], S.w[2], 'B')
     + grp('Summer \u00b7 the building', S.s[0], S.s[1], S.s[2], 'B')
-    + grp('The surroundings', null, 'The same intentions at the scale of the plot: sun, wind, canopy, water and ground.', S.site, 'S')
     + '</div>';
   wrap.querySelector('.panel-body').appendChild(hint('sce-src',
     'The winter zone and its design temperature come from PN-EN 12831-1:2017 (Table NB); the summer pair from PN-76/B-03420 (withdrawn 2011, unreplaced). '
@@ -15477,7 +15579,9 @@ function applyStatic() {
     const pt = STATIC_PT[k];
     n.innerHTML = (LANG === 'pl' && pt !== undefined) ? pt : n.dataset.en;
   });
-  $('#footVer').textContent = 'v' + APP.version;
+  { const d = new Date(), M = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const p2 = v => String(v).padStart(2, '0');
+    $('#footVer').textContent = 'v' + APP.version + ' · ' + d.getDate() + ' ' + M[d.getMonth()] + ' ' + d.getFullYear() + ' ' + p2(d.getHours()) + ':' + p2(d.getMinutes()); }
   buildRefs();
 }
 
@@ -16153,6 +16257,8 @@ Object.assign(PT, {
   "Exposed": "Odsłonięty",
   "Terrain": "Teren",
   "Wind exposure": "Ekspozycja na wiatr",
+  "Stand to the true east of the building": "Sta\u0144 na prawdziwy wsch\u00f3d budynku",
+  "Stand to the true west of the building": "Sta\u0144 na prawdziwy zach\u00f3d budynku",
   "exposure": "ekspozycja",
   "Neighbours off \u2014 switch them on for the wind to meet them.": "S\u0105siedzi wy\u0142\u0105czeni \u2014 w\u0142\u0105cz ich, aby wiatr ich spotyka\u0142.",
   "No mapped neighbours here \u2014 the wind meets the garden alone.": "Brak zmapowanych s\u0105siad\u00f3w tutaj \u2014 wiatr spotyka sam ogr\u00f3d.",
