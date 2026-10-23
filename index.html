@@ -2359,7 +2359,7 @@ const SCE_SVG = (() => {
       + '<rect x="29.5" y="9" width="7" height="7" rx="1" fill="#B8653F" stroke="' + INK + '" stroke-width="1"/>'
       + '<ellipse cx="33" cy="9" rx="3.5" ry="1.1" fill="#2b2b2e"/>',
     arkadowy: () => g('<path d="M6 48L32 40L58 48"/>')
-      + tower(14, 36, 26, 46, WASH) + slab(12.5, 39, 23.8, '#E4DED0')
+      + tower(14, 36, 26, 46, BRICK) + slab(12.5, 39, 23.8, '#8A4A2E')
       + '<rect x="19" y="22.6" width="6" height="1.2" fill="#2b2b2e"/><rect x="39" y="22.6" width="6" height="1.2" fill="#2b2b2e"/>',
     kamienny: () => g('<path d="M6 48L32 40L58 48"/>')
       + tower(24, 16, 22, 46, STONE)
@@ -2419,8 +2419,12 @@ const CHIMNEY_SRC = {
   SIA:['Skansen w Szymbarku — chałupa dymna z Siar', 'https://visitmalopolska.pl/en_GB/-/skansen-wsi-pogorzanskiej-w-szymbarku-chalupa-dymna-z-siar'],
   KAW:['Chata Kawuloka, Istebna', 'https://pl.wikipedia.org/wiki/Izba_Regionalna_%E2%80%9EChata_Kawuloka%E2%80%9D_w_Istebnej'],
   KUR:['Kuczyńska 2007 — Skansen Kurpiowski', 'https://pcr.uwb.edu.pl/SL/files/SL_2007_18_019.pdf'],
-  KRA:['Ludowa architektura Krajny', 'https://regionwielkopolskawsch.blogspot.com/2020/09/ludowa-architektura-krajny.html'],
-  ZUL:['Komin „baba”, Żuławy', 'https://www.werandacountry.pl/domy/domy-w-polsce/dom-z-dusz%C4%85-w-kominie'],
+  KRA:['Ludowa architektura Krajny (after Wróblewski)', 'https://regionwielkopolskawsch.blogspot.com/2020/09/ludowa-architektura-krajny.html'],
+  ZUL:['Weranda Country — „żuławska baba”', 'https://www.werandacountry.pl/domy/domy-w-polsce/dom-z-dusz%C4%85-w-kominie'],
+  BS24:['Buczyńska & Szewczyk 2024', 'https://reference-global.com/article/10.24427/aea-2024-vol16-04'],
+  MIE24:['Szewczyk, Szubzda & Środa 2024', 'https://reference-global.com/article/10.24427/aea-2024-vol16-02'],
+  FIL24:['Filipy farmhouse, AeA 2024', 'https://sciendo.com/article/10.24427/aea-2024-vol16-03'],
+  PHP:['Peasants’ houses in Podlachia', 'https://en.wikipedia.org/wiki/Peasants%27_houses_in_Podlachia'],
   KAR:['Kargol 2024 — wieś galicyjska', 'https://nikidw.edu.pl/wp-content/uploads/2024/12/Wies-galicyjska-w-XIX-wieku-ARTYKUL.pdf'],
   ZYN:['Chyża w Zyndranowej (1860, komin 1901)', 'https://pl.wikipedia.org/wiki/Skansen_Kultury_%C5%81emkowskiej_w_Zyndranowej'],
   PPZ:['Krótkie dzieje przepisów pożarowych', 'https://www.ppoz.pl/czytelnia/historia-i-tradycje/Krotkie-dzieje-przepisow-pozarowych-cz-7/idn:804']
@@ -2445,14 +2449,14 @@ const CHIMNEY_FAM = {
     desc:'The oldest chimney of the plains: four poles (sztagi) standing on the ground and converging upward, tied by rails, nailed with upright rods, wrapped tight in straw braids and daubed with clay against fire; above the roof the straw wrapping runs on into the thatch. Its foot is the black kitchen, entered from the hall by a low door.',
     src:['MWK', 'KLU', 'TNN', 'SZE11'], shaft:1.0, h:1.5, crown:'sztagowy', shaftH:0.02, colours:['#C9B08A', '#B89A5E'] },
   komorowy:  { name:'Chamber chimney of the black kitchen (komin komorowy)', where:'Warmia and Masuria, Kurpie, Podlasie, the Lublin land',
-    desc:'A broad masonry chamber in the middle of the house — the black kitchen, its walls sooted — at first open to the attic; later its walls were raised and drawn in under the ridge into one broad stack. The household cooked and smoked meat inside it, and the oven of the room opened into it.',
-    src:['EWM', 'KUR', 'SZE11', 'CYB06', 'TNN'], shaft:0.9, long:1.4, h:1.2, crown:'komorowy', colours:['#EDE8DD', '#C98A5E'] },
+    desc:'A broad masonry chamber in the middle of the house — the black kitchen, its walls sooted — at first open to the attic; later its walls were raised and drawn in under the ridge into one broad stack. The household cooked and smoked meat inside it, and the oven of the room opened into it. In southern and western Podlasie the rooms stand round a central stove with such a chamber chimney; the clay stove and chimney of the 19th century replaced the smoke holes in the gables.',
+    src:['EWM', 'KUR', 'SZE11', 'CYB06', 'BS24', 'MIE24', 'FIL24', 'PHP', 'TNN'], shaft:0.9, long:1.4, h:1.2, crown:'komorowy', colours:['#EDE8DD', '#C98A5E'] },
   baba:      { name:'“Baba” bottle chimney of Żuławy', where:'Żuławy Wiślane — the arcaded houses of the Vistula delta',
-    desc:'Over the square black kitchen in the middle of the house, an elongated pyramid with unequal slopes ending in a round outlet — the “baba” or “bottle” chimney (Marynowy, 1803). When cast-iron ranges came, it was vaulted over and its upper part became the smokehouse.',
+    desc:'Over the square black kitchen in the middle of the house, a brick chimney that fills the centre of the attic — so large that a bathroom fits in one today — and leaves the roof as an elongated pyramid with unequal slopes ending in a round outlet: the “baba” or “bottle” chimney of the Mennonite houses (Marynowy, 1803). When cast-iron ranges came, it was vaulted over and its upper part became the smokehouse; locals called it the heart of every house.',
     src:['ZUL', 'EWM'], shaft:1.2, h:1.9, crown:'baba', shaftH:0.02, colours:['#A9583B', '#8A4A2E'] },
   arkadowy:  { name:'Arcade chimney over the hall (komin arkadowy)', where:'Greater Poland — Krajna and the broad-fronted houses',
-    desc:'A broad chimney standing astride the hall on an arch, its foot closed by a door, niche hearths in its walls; above the roof it shows as a long, broad stack along the ridge. Vertical (“German”) brick chimneys replaced it around 1900.',
-    src:['KRA', 'SZE11'], shaft:0.6, long:2.3, h:1.1, crown:'arkadowy', colours:['#EDE8DD', '#C98A5E'] },
+    desc:'A broad brick chimney standing astride the hall on an arch, its foot in the hall closed by a door; in the first half of the 19th century the cooking hearths were niches in its walls, and the bread oven opened into it. Above the roof it shows as a long, broad stack along the ridge. Vertical (“German”) brick chimneys replaced it around 1900.',
+    src:['KRA', 'SZE11'], shaft:0.6, long:2.3, h:1.1, crown:'arkadowy', colours:['#A9583B', '#8A4A2E'] },
   kamienny:  { name:'Stone chimney on clay mortar', where:'The Opole land and the Carpathian foothills; the stone country',
     desc:'Built of field or stream stone laid in clay, in the hall, doubling as the smokehouse (Wichrów, c. 1830); in the mountains the chimney came late — the Zyndranowa chyża, a smoke hut built in 1860, got its kitchen and chimney in 1901.',
     src:['MWO', 'ZYN', 'KAR'], shaft:0.8, h:1.2, crown:'kamienny', colours:['#9E978A', '#7E786D'] },
@@ -21466,7 +21470,7 @@ function buildArchDist(box, refsBox) {
   show(STATE.site && by[STATE.site.nuts] ? STATE.site.nuts : 'Małopolskie');
 }
 (() => {
-  const css = '.distwrap{display:grid;grid-template-columns:minmax(220px,300px) 1fr;gap:14px;align-items:start;margin:6px 0 14px}'
+  const css = '.distwrap{display:grid;grid-template-columns:minmax(320px,400px) 1fr;gap:14px;align-items:start;margin:6px 0 14px}'
     + '@media (max-width:640px){.distwrap{grid-template-columns:1fr}}'
     + '.distmap{display:grid;grid-template-columns:repeat(4,1fr);grid-auto-rows:34px;gap:3px}'
     + '.distmap .dist{display:flex;flex-direction:column;justify-content:center;align-items:flex-start;padding:2px 6px;border:1px solid var(--line);border-radius:4px;background:#FBF3E2;font-size:10.5px;line-height:1.15;text-align:left;cursor:pointer;color:inherit}'
@@ -26491,6 +26495,7 @@ function applyStatic() {
     const p2 = v => String(v).padStart(2, '0');
     $('#footVer').textContent = 'v' + APP.version + ' · ' + d.getDate() + ' ' + M[d.getMonth()] + ' ' + d.getFullYear() + ' ' + p2(d.getHours()) + ':' + p2(d.getMinutes()); }
   buildRefs();
+  buildArchBib();
 }
 
 function setLanguage(lang) {
@@ -30105,6 +30110,9 @@ vDistTxt = k => { const d = vDist(k); if (!d.length) return ''; return (d.length
 "The brick chimney every region built in the end — not the form the sources give to this place.": "Komin ceglany, który ostatecznie zbudował każdy region — nie forma, którą źródła przypisują temu miejscu.",
 "Neighbours and the brick chimney": "Sąsiednie i komin ceglany",
 "Neighbours and the brick chimney — none of its own": "Sąsiednie i komin ceglany — brak własnego",
+"Over the square black kitchen in the middle of the house, a brick chimney that fills the centre of the attic — so large that a bathroom fits in one today — and leaves the roof as an elongated pyramid with unequal slopes ending in a round outlet: the “baba” or “bottle” chimney of the Mennonite houses (Marynowy, 1803). When cast-iron ranges came, it was vaulted over and its upper part became the smokehouse; locals called it the heart of every house.": "Nad kwadratową czarną kuchnią pośrodku domu — ceglany komin wypełniający środek poddasza, tak duży, że dziś mieści się w nim łazienka, który wychodzi ponad dach jako wydłużony ostrosłup o nierównych nachyleniach ścian z okrągłym wylotem: komin „baba” lub „butelkowy” domów mennonickich (Marynowy, 1803). Po wprowadzeniu kuchni płytowych zamknięto go murowanym sklepieniem, a w górnej części urządzono wędzarnię; miejscowi nazywali go sercem każdej chałupy.",
+"A broad brick chimney standing astride the hall on an arch, its foot in the hall closed by a door; in the first half of the 19th century the cooking hearths were niches in its walls, and the bread oven opened into it. Above the roof it shows as a long, broad stack along the ridge. Vertical (“German”) brick chimneys replaced it around 1900.": "Szeroki ceglany komin stojący „okrakiem” nad sienią na łuku, z podstawą w sieni zamykaną drzwiami; w pierwszej połowie XIX wieku paleniska były wnękami w jego ścianach, a do niego otwierał się piec chlebowy. Nad dachem widać go jako długi, szeroki trzon wzdłuż kalenicy. Około 1900 roku zastąpiły go pionowe („niemieckie”) kominy ceglane.",
+"A broad masonry chamber in the middle of the house — the black kitchen, its walls sooted — at first open to the attic; later its walls were raised and drawn in under the ridge into one broad stack. The household cooked and smoked meat inside it, and the oven of the room opened into it. In southern and western Podlasie the rooms stand round a central stove with such a chamber chimney; the clay stove and chimney of the 19th century replaced the smoke holes in the gables.": "Szeroka murowana komora pośrodku domu — czarna kuchnia o osmolonych ścianach — początkowo otwarta na poddasze; później jej ściany podwyższono i zwężono pod kalenicą w jeden szeroki komin. Gotowano w niej i wędzono mięso, a do niej otwierał się piec z izby. Na południu i zachodzie Podlasia izby skupiają się wokół centralnego pieca z takim kominem komorowym; gliniane piece i kominy XIX wieku zastąpiły otwory dymowe w szczytach.",
 "Main body": "Bryła główna",
 "Drag the corner of the yard wall": "Przeciągnij narożnik muru podwórza",
 "Drag down or up: storeys of this body": "Przeciągnij w dół lub w górę: kondygnacje tej bryły",
