@@ -960,7 +960,7 @@ details.more[open] > summary{color:var(--ink)}
 const APP = {
   name:        'Architecture Advisor PL',
   tag:         'AA PL',
-  version:     '1.158.5',
+  version:     '1.159.0',
   author:      'Nuno Dinis Cortiços',
   institution: 'Lisbon School of Architecture, Universidade de Lisboa',
   builtWith:   'Claude Opus 5 (Anthropic)',
@@ -22939,6 +22939,8 @@ function vmOlgyay(R, vm) {
 }
 /** The rooms a house of this kind usually holds, laid out in its main body. */
 function vmDefaultRooms(vm) {
+  /* a type that divides itself otherwise (the town houses) gives its own rooms */
+  if (vm.rooms0) return vm.rooms0.map(q => Object.assign({}, q, { n:Object.assign({}, q.n) }));
   /* the main body as the popular house divides it — stores and byre below, kitchen, sala and bedroom above — and the
      other bodies a room on each of their floors; a third floor and above under the roof as bedrooms and the loft */
   const R = [];
@@ -28686,6 +28688,236 @@ const PL_BIB = [
   Object.keys(VM_CHIM_OWN).forEach(k => { delete VM_CHIM_OWN[k]; });
   VICON_URBAN.length = 0;
   VICON_NOCHIM.length = 0; ['pl-orawska', 'pl-podhalanska', 'pl-lemkowska', 'pl-sadecka'].forEach(k => VICON_NOCHIM.push(k));
+})();
+/* ============================================ THE TOWN HOUSES (popular method) ==
+   The rural chałupy above stood in the villages; the towns kept houses of their
+   own: the gabled burgher house of the Hanseatic ports, the arcaded house with its
+   attic parapet of the Lublin and Kraków lands, the wooden market house of the small
+   towns, the weaver's house of the Łódź industry, the miners' familok of Upper
+   Silesia, the summer villa of the Otwock line and the Zakopane villa. A site in one
+   of these towns is offered its own types first, and the region's farmhouse after.
+   ================================================================================ */
+(function plUrban() {
+  Object.assign(VERN_SRC, {
+    GDM:{ tag:'Od piwnic po strych', cite:'«Od piwnic po strych. Dom mieszczański w dawnym Gdańsku w świetle inwentarzy mienia» (the burgher house of early-modern Gdańsk after the household inventories). RCIN — Instytut Archeologii i Etnologii PAN.', url:'https://www.rcin.org.pl/iae//Content/62842/PDF/WA308_82545_P331_Od-piwnic-po-strych_.pdf' },
+    PRZ2:{ tag:'Pudło, Ossowski & Trawicka 2018', cite:'Pudło, A., Ossowski, W., &amp; Trawicka, E. (red.) (2018). <i>Jatki mięsne w Gdańsku od XIV do XX wieku</i>. Res Gedanenses. Gdańsk: Muzeum Gdańska (incl. the przedproże slabs of the façades).', url:'https://pub.pg.edu.pl/en/download/160441-plyty-przedprozowe-z-elewacji-dawnego-budynku-jatek-miesnych-w-gdansku' },
+    ZAM:{ tag:'UNESCO 1992 — Zamość', cite:'UNESCO World Heritage Centre. «Old City of Zamość» (inscribed 1992), no. 564.', url:'https://whc.unesco.org/en/list/564' },
+    ORM:{ tag:'Jakobiec 2017', cite:'Jakobiec, K. (2017). «Beyond Form and Fancy: The Merchant Palaces of Kazimierz Dolny in Poland». <i>Architectural History</i>, 60, 37–69.', url:'https://resolve.cambridge.org/core/journals/architectural-history/article/beyond-form-and-fancy-the-merchant-palaces-of-kazimierz-dolny-in-poland/9C5B06C32403EE40211A6265D6194DB7' },
+    GOR:{ tag:'Górak 1996', cite:'Górak, J. (1996). <i>Podcieniowa zabudowa miasteczek Lubelszczyzny</i>. Zamość.', url:'https://biblioteka.teatrnn.pl//Content/8753/Podcieniowa_zabudowa_miasteczek_Lubelszczyzny.pdf' },
+    KAL:{ tag:'Kalinowski 1952', cite:'Kalinowski, W. (1952). On the wooden arcaded market houses of the southern Lublin land. <i>Ochrona Zabytków</i>, 5, 2(17), 111–116.', url:'https://cejsh.icm.edu.pl/cejsh/element/bwmeta1.element.desklight-01008071-ab81-4dd8-beeb-e78cd8dea7ca/c/Ochrona_Zabytkow-r1952-t5-n2__17_-s111-116.pdf' },
+    WOL:{ tag:'Wolski 1953', cite:'Wolski, K. (1953). On the wooden gable-arcaded houses of the market of Pruchnik. <i>Ochrona Zabytków</i>, 6, 4(23), 206–210.', url:'https://bazhum.muzhp.pl/media/texts/ochrona-zabytkow/1953-tom-6-numer-4-23/ochrona_zabytkow-r1953-t6-n4_23-s206-210.pdf' },
+    LAN:{ tag:'Godula-Węcławowicz — Lanckorona', cite:'Godula-Węcławowicz, R. «Lanckoroński pejzaż» (the wooden market town of Lanckorona, rebuilt after the fire of 1869).', url:'https://yadda.icm.edu.pl/baztech/element/bwmeta1.element.baztech-e1fb9a17-01a2-46b6-b5a8-bc55e18ce9a0/c/GodulaWeclawowiczR_LanckoronskiPejzaz.pdf' },
+    ZGI:{ tag:'Zgierz — Nowa Osada', cite:'Urząd Miasta Zgierza. «Spacer historyczny: Nowa Osada w Zgierzu» — the weavers’ settlement of 1821 and the Park Kulturowy Miasto Tkaczy (2003).', url:'https://miasto.zgierz.pl/sites/default/files/pliki/miasto/spacer-historyczny_nowa-osada-w-zgierzu_opis.pdf' },
+    ZGA:{ tag:'Zgierz — craftsmen’s houses', cite:'«19th-Century Wooden Houses of Craftsmen from Zgierz – Precious Heritage or Troublesome Inheritance?». Wydawnictwo Uniwersytetu Łódzkiego.', url:'https://czasopisma.uni.lodz.pl/archaeo/article/view/6719' },
+    NIK:{ tag:'Nikiszowiec', cite:'Śląska Organizacja Turystyczna — Szlak Zabytków Techniki. «Osiedle Nikiszowiec» (G. &amp; E. Zillmann, 1908–1919; Pomnik Historii).', url:'https://zabytkitechniki.pl/Poi/Pokaz/1715/78/osiedle-nikiszowiec' },
+    ERI:{ tag:'ERIH — Nikiszowiec', cite:'European Route of Industrial Heritage. «Nikiszowiec Settlement».', url:'https://www.erih.net/i-want-to-go-there/site/nikiszowiec-settlement' },
+    KSM:{ tag:'Księży Młyn — UMŁ', cite:'Urząd Miasta Łodzi — Rewitalizacja. Księży Młyn: the first planned factory-and-housing complex of Łódź; monument of industrial architecture (1971), Pomnik Historii (2015); the famuły under renovation.', url:'https://rewitalizacja.uml.lodz.pl/aktualnosci/artykul/19830/2023/4/11/printPage/?L=540' },
+    SWI:{ tag:'Krajewski 2015', cite:'Krajewski (2015). «Niektóre problemy ochrony obiektów architektury w tzw. stylu nadświdrzańskim». <i>Budownictwo i Architektura</i>, 14(3), 127–142.', url:'https://ph.pollub.pl/index.php/bia/article/download/1622/1321/4936' },
+    SWO:{ tag:'Balcerzak 2022', cite:'Balcerzak, R. J. (2022). [Świdermajer and the landscape of the Świder valley]. <i>Kwartalnik Architektury i Urbanistyki</i>, 1/2022.', url:'https://arch.pw.edu.pl/KAiU/Zawartosc-zeszytow/KAiU-1.2022/Radoslaw-Jan-Balcerzak' },
+    ZAK:{ tag:'Koseski 2016', cite:'Koseski, A. (2016). Styl zakopiański. <i>Kwartalnik Architektury i Urbanistyki</i> 2/2016.', url:'https://yadda.icm.edu.pl/baztech/element/bwmeta1.element.baztech-5667e772-e6ea-4418-91fc-0eff0862aae5/c/Koseski_GDYNIA_KAiU_2-2016.pdf' },
+    ZAH:{ tag:'Ślady stylu zakopiańskiego', cite:'«Ślady ukryte w harmonii stylu zakopiańskiego» — Koliba (1891–1894), Pod Jedlami (1896–1897), built by Zakopane carpenters in logs.', url:'https://cejsh.icm.edu.pl/cejsh/element/bwmeta1.element.desklight-2a081e3a-db3e-4d0f-b9ab-631993785691/c/Slady-ukryte-w-harmonii-stylu-zakopianskiego.pdf' }
+  });
+
+  const T = (o) => Object.assign({ region:'poland' }, o);
+  Object.assign(VERN_TYPES, {
+  'pl-kamienica-gdanska':T({
+    name:{ en:'Gabled burgher house of the Hanseatic towns (with a przedproże)', pl:'Kamienica szczytowa miast hanzeatyckich (z przedprożem)' },
+    where:{ en:'Gdańsk (Długa, Mariacka, Długi Targ), Toruń, Elbląg, Chełmno — and the old centres of Szczecin, Wrocław and Poznań', pl:'Gdańsk (Długa, Mariacka, Długi Targ), Toruń, Elbląg, Chełmno — także stare centra Szczecina, Wrocławia i Poznania' },
+    summary:{ en:'A deep, narrow house of brick between party walls, its tall gable to the street on a lot of three windows’ width: the great hall (sień) in front with the stair, the rooms above, the store in the attic under the steep roof, the kitchen and the back house over the yard. In Gdańsk the entrance stands on a raised terrace — the przedproże — with stone slabs, balustrade and gargoyles, a place to sit and a step over the flooded street.',
+      pl:'Głęboki, wąski dom ceglany między ścianami szczytowymi sąsiadów, wysoki szczyt zwrócony do ulicy, działka na trzy osie okien: wielka sień z przodu ze schodami, izby na piętrach, spichrz na strychu pod stromym dachem, kuchnia i dom zapleczny od podwórza. W Gdańsku wejście stoi na wyniesionym tarasie — przedprożu — z kamiennymi płytami, balustradą i rzygaczami: miejsce do siedzenia i stopień nad zalewaną ulicą.' },
+    model:{ L:7, D:18, fl:4, fh:3.2, rot:180, form:'rect', roof:{ n:2, th:55, bei:0.1, divAxis:'y' },
+      open:{ S:vOpen([D(0.5, 0.2, [{ door:true }, { on:true }, { on:true }, { on:true }]), W(0.18, 0.16), W(0.82, 0.16)], 0.4),
+        N:vOpen([W(0.3, 0.15), W(0.7, 0.15)], 0.25), E:{ wwr:0, units:vOff() }, W:{ wwr:0, units:vOff() } },
+      render:{ en:'brick walls, tile roof, timber door', pl:'ściany ceglane, dach z dachówki, drewniane drzwi' },
+      walls:{ en:'brick, the street front plastered or of glazed brick and stone dressings', pl:'cegła, fasada tynkowana lub z cegły glazurowanej z detalem kamiennym' } },
+    feats:[
+      vN('site', { en:'Street front (the lot)', pl:'Front działki' }, { en:'≈ 6–8 m, three window bays', pl:'≈ 6–8 m, trzy osie okien' }, () => MASS.L, 5, 9, 'm', 'GDM'),
+      vFloors({ en:'3–4 and the attic store', pl:'3–4 i spichrz na strychu' }, 3, 5, 'GDM'),
+      vRoofN(null, { en:'two slopes, the gable to the street', pl:'dwuspadowy, szczytem do ulicy' }, [2], 'GDM'),
+      vPitch({ en:'steep, tile', pl:'stromy, dachówka' }, 50, 60, 'INF'),
+      vWall({ en:'brick or plaster', pl:'cegła lub tynk' }, ['brick', 'plaster'], 'GDM'),
+      vI('site', { en:'The przedproże raises the entrance over a street once flooded from the marshy ground, and gives the house a terrace on the street — its gargoyles carry the rain off the wall.', pl:'Przedproże wynosi wejście ponad ulicę zalewaną niegdyś z podmokłego gruntu i daje domowi taras od ulicy — rzygacze odprowadzają deszcz od ściany.' }, 'PRZ2'),
+      vI('ventilation', { en:'Between party walls only the two short fronts open: the deep plan is lit and aired through the street and the yard, and the tall stair-hall draws the air up.', pl:'Między ścianami sąsiadów otwierają się tylko dwa krótkie fronty: głęboki rzut jest oświetlany i przewietrzany od ulicy i od podwórza, a wysoka sień ze schodami ciągnie powietrze ku górze.' }, 'INF')
+    ] }),
+
+  'pl-kamienica-attykowa':T({
+    name:{ en:'Arcaded town house with an attic parapet (attyka)', pl:'Kamienica podcieniowa z attyką' },
+    where:{ en:'Zamość (the Armenian houses), Kazimierz Dolny, Lublin, Sandomierz, Kraków, Tarnów, Przemyśl, Krosno', pl:'Zamość (kamienice ormiańskie), Kazimierz Dolny, Lublin, Sandomierz, Kraków, Tarnów, Przemyśl, Krosno' },
+    summary:{ en:'The Renaissance house of the market squares: a plastered masonry house in a continuous row, an arcade (podcienie) at the ground floor where the merchants sold under cover, two storeys above, and the roof hidden behind a tall decorated parapet — the Polish attic (attyka) — that keeps fire from passing from roof to roof and gathers the rain to the inside slopes.',
+      pl:'Renesansowy dom rynków: tynkowana kamienica murowana w zwartej pierzei, w przyziemiu podcienie, pod którym kupcy handlowali pod dachem, dwa piętra wyżej, a dach ukryty za wysoką, zdobioną attyką — attyką polską — która nie przepuszcza ognia z dachu na dach i sprowadza deszcz na wewnętrzne połacie.' },
+    model:{ L:9, D:16, fl:3, fh:3.4, rot:180, form:'rect', roof:{ n:0, th:0, bei:0 }, loggia:{ w:8, lv:1 },
+      open:{ S:vOpen([D(0.5, 0.18, [{ door:true }, { on:true }, { on:true }]), W(0.2, 0.14, [{ on:false }, { on:true }, { on:true }]), W(0.8, 0.14, [{ on:false }, { on:true }, { on:true }])], 0.3),
+        N:vOpen([W(0.5, 0.2)], 0.2), E:{ wwr:0, units:vOff() }, W:{ wwr:0, units:vOff() } },
+      render:{ en:'plaster walls, tile roof, timber door', pl:'ściany tynkowane, dach z dachówki, drewniane drzwi' },
+      walls:{ en:'brick and stone, plastered and painted; carved stone portal and reliefs', pl:'cegła i kamień, tynkowane i malowane; kamienny portal i płaskorzeźby' } },
+    feats:[
+      vFloors({ en:'2–3', pl:'2–3' }, 2, 4, 'ZAM'),
+      vRoofN(null, { en:'hidden behind the attic: single or butterfly slopes', pl:'ukryty za attyką: pulpitowy lub motylkowy' }, [0, 1], 'ORM'),
+      vWall({ en:'plaster, painted', pl:'tynk, malowany' }, ['plaster'], 'ZAM'),
+      vI('site', { en:'The arcade makes the ground floor a covered street round the square: shade in summer, shelter from snow and rain, and the shop opened onto it.', pl:'Podcienie czyni z przyziemia zadaszoną ulicę wokół rynku: cień latem, osłona przed śniegiem i deszczem, a sklep otwarty ku niemu.' }, 'GOR'),
+      vI('roof', { en:'The attic parapet stops fire passing from roof to roof along the row and hides the low roofs that drain inward.', pl:'Attyka zatrzymuje ogień przechodzący z dachu na dach wzdłuż pierzei i ukrywa niskie dachy odwadniane do środka.' }, 'ORM')
+    ] }),
+
+  'pl-dom-rynkowy':T({
+    name:{ en:'Wooden market house of the small towns (with an arcade)', pl:'Drewniany dom rynkowy miasteczka (podcieniowy)' },
+    where:{ en:'Lanckorona, Pruchnik, Bobowa, Biecz, the small towns of the Lublin land and Podlasie (Tykocin)', pl:'Lanckorona, Pruchnik, Bobowa, Biecz, miasteczka Lubelszczyzny i Podlasia (Tykocin)' },
+    summary:{ en:'The house of the small-town market square: of logs on a stone footing over a vaulted cellar, one storey and a loft, eaves (or in some towns the gable) to the square, side by side with its neighbours. The roof is drawn far forward on posts into a deep arcade (podcień) where trade went on under cover. Lanckorona, rebuilt in wood on its old plan after the fire of 1869, keeps the type; the arcaded rows of the Lublin towns were mostly lost in the wars.',
+      pl:'Dom małomiasteczkowego rynku: zrębowy, na kamiennej podmurówce nad sklepioną piwnicą, parterowy z poddaszem, kalenicą (w niektórych miasteczkach szczytem) do rynku, w zwartej pierzei z sąsiadami. Dach wysunięty daleko do przodu na słupach tworzy głęboki podcień, pod którym handlowano. Typ zachowuje Lanckorona, odbudowana w drewnie na dawnym planie po pożarze 1869 r.; podcieniowe pierzeje miasteczek lubelskich przepadły w większości w czasie wojen.' },
+    model:{ L:11, D:9, fl:1, fh:2.7, rot:180, form:'rect', roof:{ n:2, th:42, bei:0.6, porch:true },
+      open:{ S:vOpen([W(0.15, 0.1), D(0.38, 0.1), W(0.62, 0.1), W(0.85, 0.1)], 0.12), N:vOpen([W(0.5, 0.1)], 0.04), E:{ wwr:0, units:vOff() }, W:{ wwr:0, units:vOff() } },
+      render:{ en:'log walls, shingle roof, timber door', pl:'ściany z bali, dach gontowy, drewniane drzwi' },
+      walls:{ en:'logs on a stone footing, boarded or whitewashed', pl:'zrąb na kamiennej podmurówce, oszalowany lub bielony' } },
+    feats:[
+      vFloors({ en:'1 and the loft', pl:'1 i poddasze' }, 1, 2, 'LAN'),
+      vRoofN(null, { en:'two slopes, drawn forward over the arcade', pl:'dwuspadowy, wysunięty nad podcień' }, [2], 'LAN'),
+      vPitch({ en:'shingle', pl:'gont' }, 38, 50, 'INF'),
+      vWall({ en:'logs, boarded or whitewashed', pl:'bale, oszalowane lub bielone' }, ['logs', 'timber', 'whitewash'], 'LAN'),
+      vRoofFin({ en:'shingle, later sheet metal', pl:'gont, później blacha' }, ['shingle'], 'LAN'),
+      vI('site', { en:'The houses together made the market’s frontage — 50 to over 200 m of continuous arcade, each house shaped by its own carpenter.', pl:'Domy razem tworzyły pierzeję rynku — od 50 do ponad 200 m nieprzerwanego podcienia, każdy dom ukształtowany przez własnego cieślę.' }, 'GOR'),
+      vI('site', { en:'In Pruchnik three sides of the square kept their gable-arcaded wooden houses of the second half of the 19th century until the war.', pl:'W Pruchniku trzy pierzeje rynku zachowały do wojny drewniane domy z podcieniami szczytowymi z drugiej połowy XIX w.' }, 'WOL')
+    ] }),
+
+  'pl-dom-tkacza':T({
+    name:{ en:'Wooden weaver’s house of the Łódź industry', pl:'Drewniany dom tkacza (okręg łódzki)' },
+    where:{ en:'Zgierz (Nowa Osada — Park Kulturowy Miasto Tkaczy), Łódź, Ozorków, Konstantynów, Pabianice', pl:'Zgierz (Nowa Osada — Park Kulturowy Miasto Tkaczy), Łódź, Ozorków, Konstantynów, Pabianice' },
+    summary:{ en:'The house the government towns of the 1820s gave to the cloth-makers brought from Saxony, Silesia and Bohemia: a single-storey timber house, eaves to the street on a regular lot, a central hall with the kitchen, the large workroom with the looms to the light, the family rooms beside, the yard and garden behind. In Zgierz some thirty survive; four were restored in 2011.',
+      pl:'Dom, jaki osady rządowe lat 20. XIX w. dawały sukiennikom sprowadzonym z Saksonii, Śląska i Czech: parterowy dom drewniany, kalenicą do ulicy na regularnej działce, pośrodku sień z kuchnią, duża izba warsztatowa z krosnami od światła, obok izby rodziny, z tyłu podwórze i ogród. W Zgierzu przetrwało ich około trzydziestu; cztery odnowiono w 2011 r.' },
+    model:{ L:13, D:8.5, fl:1, fh:2.9, rot:180, form:'rect', roof:{ n:2, th:40, bei:0.4 },
+      open:{ S:vOpen([W(0.12, 0.1), W(0.3, 0.1), D(0.5, 0.1), W(0.7, 0.1), W(0.88, 0.1)], 0.16), N:vOpen([W(0.3, 0.1), W(0.7, 0.1)], 0.06), E:vOpen([W(0.5, 0.2)], 0.04), W:{ wwr:0.02, units:vOff() } },
+      render:{ en:'timber walls, tile roof, green door', pl:'ściany z desek, dach z dachówki, zielone drzwi' },
+      walls:{ en:'logs or timber frame, boarded and painted', pl:'zrąb lub szkielet, oszalowany i malowany' } },
+    feats:[
+      vFloors({ en:'1, with a loft', pl:'1, z poddaszem' }, 1, 1, 'ZGI'),
+      vRoofN(null, { en:'two slopes, eaves to the street', pl:'dwuspadowy, kalenicą do ulicy' }, [2], 'ZGA'),
+      vWall({ en:'timber, boarded', pl:'drewno, oszalowane' }, ['timber', 'logs'], 'ZGA'),
+      vGlaze(12),
+      vI('openings', { en:'The workroom of the looms needs the long light: the windows are larger and closer than in the farmhouse.', pl:'Izba z krosnami potrzebuje długiego światła: okna są większe i gęstsze niż w chałupie.' }, 'INF'),
+      vI('site', { en:'A planned settlement of 1821: regular lots along straight streets, the house on the street line and the garden behind.', pl:'Osada planowa z 1821 r.: regularne działki wzdłuż prostych ulic, dom w linii ulicy, ogród z tyłu.' }, 'ZGI')
+    ] }),
+
+  'pl-familok':T({
+    name:{ en:'Familok — the miners’ and workers’ house', pl:'Familok — dom robotniczy' },
+    where:{ en:'Upper Silesia — Nikiszowiec (Katowice), Ruda Śląska, Zabrze, Bytom; and the famuły of Łódź (Księży Młyn)', pl:'Górny Śląsk — Nikiszowiec (Katowice), Ruda Śląska, Zabrze, Bytom; oraz łódzkie famuły (Księży Młyn)' },
+    summary:{ en:'The long brick house the mines and mills built for their workers: two to four storeys of small flats — a kitchen and a room — off a common stair, the red brick front with its window arches, the yard behind with the bread ovens, sheds and pigsties shared by the families. At Nikiszowiec (G. and E. Zillmann, 1908–1919) the houses close nine blocks round their own courtyards; at Księży Młyn (Scheibler, 1870s) they stand in rows of two storeys.',
+      pl:'Długi dom ceglany, który kopalnie i fabryki stawiały dla robotników: dwie do czterech kondygnacji małych mieszkań — kuchnia i izba — przy wspólnej klatce schodowej, fasada z czerwonej cegły z łukami nad oknami, z tyłu podwórze z piecami chlebowymi, chlewikami i komórkami wspólnymi dla rodzin. W Nikiszowcu (G. i E. Zillmannowie, 1908–1919) domy zamykają dziewięć bloków wokół własnych podwórzy; na Księżym Młynie (Scheibler, lata 70. XIX w.) stoją w szeregach dwukondygnacyjnych.' },
+    model:{ L:30, D:11, fl:3, fh:3.0, rot:180, form:'rect', roof:{ n:2, th:35, bei:0.3 },
+      open:{ S:vOpen([W(0.06, 0.05), W(0.16, 0.05), D(0.25, 0.05), W(0.34, 0.05), W(0.44, 0.05), W(0.56, 0.05), W(0.66, 0.05), D(0.75, 0.05), W(0.84, 0.05), W(0.94, 0.05)], 0.2),
+        N:vOpen([W(0.1, 0.05), W(0.25, 0.05), W(0.4, 0.05), W(0.6, 0.05), W(0.75, 0.05), W(0.9, 0.05)], 0.15), E:vOpen([W(0.5, 0.15)], 0.04), W:vOpen([W(0.5, 0.15)], 0.04) },
+      render:{ en:'brick walls, tile roof, red door', pl:'ściany ceglane, dach z dachówki, czerwone drzwi' },
+      walls:{ en:'red brick, the window arches and bands picked out', pl:'czerwona cegła, z wyróżnionymi łukami okien i gzymsami' } },
+    feats:[
+      vFloors({ en:'2–4', pl:'2–4' }, 2, 4, 'NIK'),
+      vRoofN(null, { en:'two slopes', pl:'dwuspadowy' }, [2], 'INF'),
+      vWall({ en:'red brick', pl:'czerwona cegła' }, ['brick'], 'NIK'),
+      vI('site', { en:'At Nikiszowiec the houses close blocks round courtyards — a nearly self-sufficient town with church, school, shops and laundry.', pl:'W Nikiszowcu domy zamykają bloki wokół podwórzy — niemal samowystarczalne miasto z kościołem, szkołą, sklepami i pralnią.' }, 'ERI'),
+      vI('ventilation', { en:'The flats run through from the street to the yard: each kitchen and room has a window on both sides of the house.', pl:'Mieszkania przechodzą od ulicy do podwórza: kuchnia i izba mają okna po obu stronach domu.' }, 'INF'),
+      vI('site', { en:'Łódź: at Księży Młyn Scheibler built rows of workers’ houses beside his mill, with a school, shop, hospital and fire station.', pl:'Łódź: na Księżym Młynie Scheibler postawił przy fabryce szeregi domów robotniczych, ze szkołą, sklepem, szpitalem i strażą pożarną.' }, 'KSM')
+    ] }),
+
+  'pl-swidermajer':T({
+    name:{ en:'Świdermajer villa of the Otwock line', pl:'Willa w stylu świdermajer' },
+    where:{ en:'Otwock, Józefów, Falenica, Anin, Michalin — the summer towns along the railway south-east of Warsaw', pl:'Otwock, Józefów, Falenica, Anin, Michalin — letniska wzdłuż linii otwockiej na południowy wschód od Warszawy' },
+    summary:{ en:'The light timber summer house of the pine woods by the Świder, after the villas Michał Elwiro Andriolli built there from 1880: a boarded frame house of two floors, its roofs and eaves richly cut, and open-work verandas and balconies on every side to the shade and the resinous air — the Mazovian cottage crossed with the alpine villa.',
+      pl:'Lekki drewniany dom letniskowy w sosnowych lasach nad Świdrem, na wzór willi, które Michał Elwiro Andriolli budował tam od 1880 r.: oszalowany dom szkieletowy o dwóch kondygnacjach, bogato wycinane dachy i okapy, ażurowe werandy i balkony ze wszystkich stron ku cieniowi i żywicznemu powietrzu — mazowiecka chałupa skrzyżowana z willą alpejską.' },
+    model:{ L:12, D:10, fl:2, fh:2.8, rot:180, form:'rect', roof:{ n:2, th:38, bei:0.8, porch:true },
+      open:{ S:vOpen([W(0.2, 0.14), D(0.5, 0.14), W(0.8, 0.14)], 0.2), N:vOpen([W(0.3, 0.12), W(0.7, 0.12)], 0.1), E:vOpen([W(0.3, 0.15), W(0.7, 0.15)], 0.12), W:vOpen([W(0.5, 0.15)], 0.08) },
+      render:{ en:'timber walls, timber roof, white door', pl:'ściany z desek, dach z papy, białe drzwi' },
+      walls:{ en:'timber frame, boarded, with cut-work trims', pl:'szkielet drewniany, oszalowany, z ażurowymi ozdobami' } },
+    feats:[
+      vFloors({ en:'2 (the upper one in the roof)', pl:'2 (górna w dachu)' }, 1, 2, 'SWI'),
+      vRoofN(null, { en:'two slopes, wide cut eaves', pl:'dwuspadowy, szerokie wycinane okapy' }, [2], 'SWI'),
+      vWall({ en:'timber boards', pl:'deski' }, ['timber'], 'SWI'),
+      vGlaze(20),
+      vI('site', { en:'A summer house: the verandas and balconies open to the pine wood on every side, the house raised on a low footing over the sand.', pl:'Dom letni: werandy i balkony otwarte ku sosnowemu lasowi ze wszystkich stron, dom na niskiej podmurówce nad piaskiem.' }, 'SWI'),
+      vI('visualization', { en:'The colour and the light frame belong to the landscape of the Świder valley: pale timber among the pines and the sand.', pl:'Barwa i lekka konstrukcja należą do krajobrazu doliny Świdra: jasne drewno wśród sosen i piasku.' }, 'SWO')
+    ] }),
+
+  'pl-willa-zakopianska':T({
+    name:{ en:'Zakopane-style villa', pl:'Willa w stylu zakopiańskim' },
+    where:{ en:'Zakopane (Koliba, Pod Jedlami, Oksza) and the Podhale resorts', pl:'Zakopane (Koliba, Pod Jedlami, Oksza) i letniska Podhala' },
+    summary:{ en:'The highland cottage enlarged into a town villa by Stanisław Witkiewicz from 1891: log walls on a high stone footing, a very steep broken roof of shingle with a small upper gable, wide eaves on carved brackets, glazed verandas and balconies, the sun, lily and rosette carved by the Zakopane carpenters who built it.',
+      pl:'Chałupa góralska powiększona do willi miejskiej przez Stanisława Witkiewicza od 1891 r.: ściany z bali na wysokiej kamiennej podmurówce, bardzo stromy łamany dach gontowy z małym szczytem u góry, szerokie okapy na rzeźbionych rysiach, oszklone werandy i balkony, słoneczka, lilijki i rozety wycięte przez zakopiańskich cieśli, którzy ją budowali.' },
+    model:{ L:13, D:11, fl:2, fh:2.8, rot:180, form:'rect', roof:{ n:2, th:55, bei:0.9 }, balc:8,
+      open:{ S:vOpen([W(0.2, 0.12), D(0.5, 0.12), W(0.8, 0.12)], 0.16), N:vOpen([W(0.5, 0.1)], 0.05), E:vOpen([W(0.5, 0.15)], 0.08), W:vOpen([W(0.5, 0.15)], 0.08) },
+      render:{ en:'log walls, shingle roof, timber door', pl:'ściany z bali, dach gontowy, drewniane drzwi' },
+      walls:{ en:'logs on a high stone footing', pl:'zrąb na wysokiej podmurówce kamiennej' } },
+    feats:[
+      vFloors({ en:'2 with the roof storey', pl:'2 z poddaszem' }, 2, 3, 'ZAK'),
+      vRoofN(null, { en:'two slopes, very steep and broken, with a small upper gable', pl:'dwuspadowy, bardzo stromy i łamany, z małym szczytem u góry' }, [2, 3], 'ZAH'),
+      vPitch({ en:'very steep, shingle', pl:'bardzo stromy, gont' }, 50, 62, 'ZAH'),
+      vWall({ en:'logs', pl:'bale' }, ['logs'], 'ZAH'),
+      vRoofFin({ en:'shingle', pl:'gont' }, ['shingle'], 'ZAK'),
+      vI('roof', { en:'The steep roof sheds the mountain snow; the wide eaves keep rain and snow off the log walls.', pl:'Stromy dach zrzuca górski śnieg; szerokie okapy chronią ściany z bali przed deszczem i śniegiem.' }, 'ZAK')
+    ] })
+  });
+
+  Object.assign(VERN_DIST, {
+    'pl-kamienica-gdanska':['Pomorskie', 'Kujawsko-pomorskie', 'Warmińsko-mazurskie'], 'pl-kamienica-attykowa':['Lubelskie', 'Małopolskie', 'Świętokrzyskie', 'Podkarpackie'],
+    'pl-dom-rynkowy':['Małopolskie', 'Podkarpackie', 'Lubelskie', 'Podlaskie'], 'pl-dom-tkacza':['Łódzkie'], 'pl-familok':['Śląskie', 'Łódzkie'],
+    'pl-swidermajer':['Mazowieckie'], 'pl-willa-zakopianska':['Małopolskie'] });
+  ['pl-kamienica-gdanska', 'pl-kamienica-attykowa', 'pl-dom-rynkowy', 'pl-familok'].forEach(k => VICON_URBAN.push(k));
+
+  /* the rooms of each, as the sources describe the type (the sizes are inference) */
+  const K = (en, pl) => ({ en, pt:pl, pl });
+  const along = (b, fl, list) => { const x0 = (b.x || 0) - b.L / 2, y = b.y || 0, d = Math.max(1.5, b.D - 0.9), tot = list.reduce((s, q) => s + q[1], 0); let a = 0;
+    return list.map(([n, w]) => { const ww = b.L * w / tot, r = { n, x:x0 + a + ww / 2, y, w:ww - 0.4, d, fl }; a += ww; return r; }); };
+  const deep = (b, fl, list) => { const y0 = (b.y || 0) - b.D / 2, x = b.x || 0, w = Math.max(1.5, b.L - 0.9), tot = list.reduce((s, q) => s + q[1], 0); let a = 0;
+    return list.map(([n, d]) => { const dd = b.D * d / tot, r = { n, x, y:y0 + a + dd / 2, w, d:dd - 0.4, fl }; a += dd; return r; }); };
+  const kit = K('Kitchen', 'Kuchnia'), izba = K('Room (izba)', 'Izba'), bed = K('Chamber (alkierz)', 'Sypialnia'), hall = K('Hall (sień)', 'Sień'), shop = K('Shop', 'Sklep'), store = K('Store', 'Komora');
+  VM_OVR['pl-kamienica-gdanska'] = (vm, b) => { b.roof.ridge = 'y'; vm.row = { n:3 };
+    vm.els.push({ t:'stair', vol:0, face:'S', along:'par', pos:0.5, w:Math.min(5, b.L - 1), landing:true, porch:false });
+    vm.rooms0 = [].concat(deep(b, 0, [[K('Front room (dornsza)', 'Izba frontowa'), 1], [hall, 1.4], [kit, 1]]), deep(b, 1, [[K('Sala', 'Sala'), 1.2], [hall, 0.6], [izba, 1]]),
+      deep(b, 2, [[bed, 1], [hall, 0.6], [bed, 1]]), deep(b, 3, [[store, 1], [store, 1]])); };
+  VM_OVR['pl-kamienica-attykowa'] = (vm, b) => { b.roof.par = 1.5; b.roof.mat = 'tile'; vm.row = { n:3 };
+    vm.rooms0 = [].concat(deep(b, 0, [[shop, 1], [hall, 0.8], [store, 1]]), deep(b, 1, [[K('Sala', 'Sala'), 1.2], [hall, 0.5], [izba, 1]]), deep(b, 2, [[bed, 1], [hall, 0.5], [kit, 1]])); };
+  VM_OVR['pl-dom-rynkowy'] = (vm, b) => { vm.row = { n:3 }; vm.rooms0 = along(b, 0, [[shop, 1.2], [hall, 0.8], [izba, 1.2], [K('Alcove (alkierz)', 'Alkierz'), 0.8]]); };
+  VM_OVR['pl-dom-tkacza'] = (vm, b) => { vm.court = { on:true, x:0, y:b.D / 2 + 6, L:b.L + 4, D:10, h:1.6, open:'S', gate:{ face:'N', pos:0.5, w:2.5 } };
+    vm.rooms0 = along(b, 0, [[K('Workroom (looms)', 'Warsztat (krosna)'), 1.6], [hall, 0.6], [kit, 0.9], [izba, 1]]); };
+  VM_OVR['pl-familok'] = (vm, b) => { vm.court = { on:true, x:0, y:b.D / 2 + 7, L:b.L, D:12, h:2.0, open:'S', gate:{ face:'E', pos:0.5, w:3 } };
+    vm.els.push({ t:'oven', vol:0, face:'N', pos:0.12, r:0.9 }, { t:'oven', vol:0, face:'N', pos:0.88, r:0.9 });
+    const fl = [0, 1, 2].map(f => along(b, f, [[kit, 1], [izba, 1.3], [K('Stair', 'Klatka'), 0.5], [kit, 1], [izba, 1.3], [izba, 1.3], [kit, 1], [K('Stair', 'Klatka'), 0.5], [izba, 1.3], [kit, 1]]));
+    vm.rooms0 = [].concat(...fl); };
+  VM_OVR['pl-swidermajer'] = (vm, b) => { vm.els.push({ t:'gallery', vol:0, face:'S', kind:'corrida', pos:0.5, w:b.L - 2, floor:1 }, { t:'alpendre', vol:0, face:'E', pos:0.5, w:6, d:2.4 });
+    vm.rooms0 = [].concat(along(b, 0, [[K('Veranda room', 'Pokój werandowy'), 1], [hall, 0.6], [kit, 0.8], [K('Dining room', 'Jadalnia'), 1]]), along(b, 1, [[bed, 1], [bed, 1], [bed, 1]])); };
+  VM_OVR['pl-willa-zakopianska'] = (vm, b) => { b.raise = 0.8;
+    vm.rooms0 = [].concat(along(b, 0, [[K('Sala', 'Sala'), 1.3], [hall, 0.7], [kit, 1]]), along(b, 1, [[bed, 1], [bed, 1], [bed, 1]])); };
+  Object.assign(VM_CHIM_OWN, {
+    'pl-kamienica-gdanska':{ kind:'box', u:0.5, v:0.7, h:1.4 }, 'pl-kamienica-attykowa':{ kind:'box', u:0.5, v:0.6, h:1.0 },
+    'pl-dom-rynkowy':{ kind:'box', u:0.55, v:0.5, h:1.2 }, 'pl-dom-tkacza':{ kind:'box', u:0.55, v:0.5, h:1.2 },
+    'pl-familok':{ kind:'box', u:0.25, v:0.5, h:1.2 }, 'pl-swidermajer':{ kind:'box', u:0.5, v:0.5, h:1.4 }, 'pl-willa-zakopianska':{ kind:'gran', u:0.5, v:0.5, h:1.6 } });
+
+  /* the towns: a site within reach of one is offered its town houses first, the region's farmhouse after */
+  const TOWNS = [
+    ['Gdańsk', 54.352, 18.648, 9, ['pl-kamienica-gdanska']], ['Toruń', 53.010, 18.605, 6, ['pl-kamienica-gdanska']], ['Elbląg', 54.156, 19.404, 5, ['pl-kamienica-gdanska']],
+    ['Chełmno', 53.349, 18.424, 3, ['pl-kamienica-gdanska']], ['Grudziądz', 53.484, 18.754, 4, ['pl-kamienica-gdanska']], ['Bydgoszcz', 53.123, 18.008, 8, ['pl-kamienica-gdanska']],
+    ['Szczecin', 53.428, 14.553, 10, ['pl-kamienica-gdanska']], ['Olsztyn', 53.778, 20.480, 6, ['pl-kamienica-gdanska']], ['Wrocław', 51.110, 17.032, 10, ['pl-kamienica-gdanska', 'pl-familok']],
+    ['Poznań', 52.408, 16.934, 10, ['pl-kamienica-gdanska', 'pl-kamienica-attykowa']], ['Opole', 50.668, 17.923, 6, ['pl-kamienica-gdanska', 'pl-familok']],
+    ['Zamość', 50.717, 23.253, 4, ['pl-kamienica-attykowa', 'pl-dom-rynkowy']], ['Kazimierz Dolny', 51.321, 21.948, 3, ['pl-kamienica-attykowa', 'pl-dom-rynkowy']],
+    ['Lublin', 51.248, 22.568, 8, ['pl-kamienica-attykowa', 'pl-dom-rynkowy']], ['Sandomierz', 50.682, 21.749, 4, ['pl-kamienica-attykowa', 'pl-dom-rynkowy']],
+    ['Kraków', 50.062, 19.937, 12, ['pl-kamienica-attykowa', 'pl-dom-rynkowy']], ['Tarnów', 50.013, 20.987, 5, ['pl-kamienica-attykowa', 'pl-dom-rynkowy']],
+    ['Przemyśl', 49.784, 22.768, 5, ['pl-kamienica-attykowa', 'pl-dom-rynkowy']], ['Krosno', 49.689, 21.765, 4, ['pl-kamienica-attykowa', 'pl-dom-rynkowy']],
+    ['Rzeszów', 50.041, 21.999, 7, ['pl-kamienica-attykowa', 'pl-dom-rynkowy']], ['Kielce', 50.866, 20.628, 6, ['pl-dom-rynkowy', 'pl-kamienica-attykowa']],
+    ['Lanckorona', 49.846, 19.716, 2.5, ['pl-dom-rynkowy']], ['Pruchnik', 49.908, 22.532, 2.5, ['pl-dom-rynkowy']], ['Bobowa', 49.709, 20.948, 2.5, ['pl-dom-rynkowy']],
+    ['Biecz', 49.731, 21.257, 3, ['pl-dom-rynkowy', 'pl-kamienica-attykowa']], ['Tykocin', 53.204, 22.776, 2.5, ['pl-dom-rynkowy']], ['Białystok', 53.133, 23.163, 8, ['pl-dom-rynkowy']],
+    ['Łódź', 51.759, 19.456, 12, ['pl-dom-tkacza', 'pl-familok']], ['Zgierz', 51.856, 19.406, 4, ['pl-dom-tkacza']], ['Ozorków', 51.963, 19.290, 3, ['pl-dom-tkacza']],
+    ['Konstantynów Łódzki', 51.747, 19.326, 3, ['pl-dom-tkacza']], ['Pabianice', 51.664, 19.355, 4, ['pl-dom-tkacza', 'pl-familok']],
+    ['Katowice', 50.259, 19.022, 10, ['pl-familok']], ['Chorzów', 50.297, 18.954, 5, ['pl-familok']], ['Ruda Śląska', 50.292, 18.856, 6, ['pl-familok']],
+    ['Zabrze', 50.308, 18.786, 6, ['pl-familok']], ['Bytom', 50.348, 18.916, 5, ['pl-familok']], ['Gliwice', 50.294, 18.666, 6, ['pl-familok']],
+    ['Sosnowiec', 50.286, 19.104, 6, ['pl-familok']], ['Mysłowice', 50.208, 19.166, 4, ['pl-familok']], ['Siemianowice Śląskie', 50.327, 19.029, 3, ['pl-familok']],
+    ['Świętochłowice', 50.296, 18.918, 3, ['pl-familok']],
+    ['Warszawa', 52.230, 21.011, 14, ['pl-swidermajer', 'pl-kamienica-attykowa']], ['Otwock', 52.105, 21.262, 6, ['pl-swidermajer']], ['Józefów', 52.137, 21.235, 3, ['pl-swidermajer']],
+    ['Milanówek', 52.122, 20.668, 3, ['pl-swidermajer']], ['Zakopane', 49.299, 19.949, 5, ['pl-willa-zakopianska']]];
+  const km = (a, b, c, d) => { const r = Math.PI / 180, x = (d - b) * r * Math.cos((a + c) / 2 * r), y = (c - a) * r; return 6371 * Math.hypot(x, y); };
+  const plTown = S => { const la = +S.lat, lo = +S.lon; let best = null, bd = 1e9;
+    TOWNS.forEach(t => { const d = km(la, lo, t[1], t[2]); if (d <= t[3] && d / t[3] < bd) { best = t; bd = d / t[3]; } }); return best; };
+  const P0 = PL_REGION.place;
+  PL_REGION.place = function (S, V) { const o = P0.call(this, S, V), t = plTown(S);
+    if (t) { o.cand = t[4].concat(o.cand.filter(x => t[4].indexOf(x) < 0)).slice(0, t[4].length + 2); o.bandName = { en:t[0] + ' — the town and its houses', pl:t[0] + ' — miasto i jego domy' }; }
+    return o; };
+
+  ARCH_BIB.push({ r:{ en:'The towns — burgher, market, workers’ and resort houses', pl:'Miasta — kamienice, domy rynkowe, robotnicze i letniskowe' },
+    types:['pl-kamienica-gdanska', 'pl-kamienica-attykowa', 'pl-dom-rynkowy', 'pl-dom-tkacza', 'pl-familok', 'pl-swidermajer', 'pl-willa-zakopianska'],
+    refs:['GDM', 'PRZ2', 'ZAM', 'ORM', 'GOR', 'KAL', 'WOL', 'LAN', 'ZGI', 'ZGA', 'NIK', 'ERI', 'KSM', 'SWI', 'SWO', 'ZAK', 'ZAH'].map(k => VERN_SRC[k].cite) });
 })();
 vDist = k => VERN_TYPES[k] ? (VERN_DIST[k] || []) : [];
 vDistTxt = k => { const d = vDist(k); if (!d.length) return ''; return (d.length > 1 ? VL({ en:'Voivodeships: ', pl:'Województwa: ' }) : VL({ en:'Voivodeship: ', pl:'Województwo: ' })) + d.join(', '); };
