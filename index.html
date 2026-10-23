@@ -2342,6 +2342,34 @@ const SCE_SVG = (() => {
   const arch = (x, y, w, h) =>
     '<path d="M' + x + ' ' + y + 'V' + (y - h + w / 2) + 'A' + (w / 2) + ' ' + (w / 2) + ' 0 0 1 ' + (x + w) + ' ' + (y - h + w / 2) + 'V' + y + 'Z" fill="#fff" stroke="' + INK + '" stroke-width="0.9"/>';
   const C = {
+    /* the Polish forms, as the Roof tab's buttons draw them */
+    dymnik: () => g('<path d="M6 48L32 36L58 48"/>')
+      + '<path d="M24 39.6L32 30L40 39.6Z" fill="#6E5E4C" stroke="' + INK + '" stroke-width="1.1"/><path d="M28.5 38L32 33.8L35.5 38Z" fill="#2b2b2e"/>'
+      + '<path d="M30 28C27 24 33 21 30 16M35 27C33 23 38 20 35 15" fill="none" stroke="#9A9A9A" stroke-width="1.2"/>',
+    sztagowy: () => g('<path d="M6 48L32 40L58 48"/>')
+      + '<path d="M22 46L27 30L37 30L42 46Z" fill="#C9B08A" stroke="' + INK + '" stroke-width="1.1"/>'
+      + '<path d="M27 30L29 14L35 14L37 30Z" fill="#B89A5E" stroke="' + INK + '" stroke-width="1.1"/>'
+      + '<path d="M22 46L30 10M42 46L34 10" stroke="#5A4230" stroke-width="1.3"/>'
+      + '<path d="M28 22H36M27.5 26H36.5M28.5 18H35.5" stroke="rgba(90,66,48,.6)" stroke-width="0.8"/>',
+    komorowy: () => g('<path d="M6 48L32 40L58 48"/>')
+      + tower(20, 24, 24, 46, WASH) + slab(18.5, 27, 21.8, '#E4DED0')
+      + '<rect x="24" y="21.8" width="16" height="1.2" fill="#2b2b2e"/>',
+    baba: () => g('<path d="M6 48L32 40L58 48"/>')
+      + '<path d="M18 46L29 16L37 16L44 46Z" fill="' + BRICK + '" stroke="' + INK + '" stroke-width="1.1"/>'
+      + '<rect x="29.5" y="9" width="7" height="7" rx="1" fill="#B8653F" stroke="' + INK + '" stroke-width="1"/>'
+      + '<ellipse cx="33" cy="9" rx="3.5" ry="1.1" fill="#2b2b2e"/>',
+    arkadowy: () => g('<path d="M6 48L32 40L58 48"/>')
+      + tower(14, 36, 26, 46, WASH) + slab(12.5, 39, 23.8, '#E4DED0')
+      + '<rect x="19" y="22.6" width="6" height="1.2" fill="#2b2b2e"/><rect x="39" y="22.6" width="6" height="1.2" fill="#2b2b2e"/>',
+    kamienny: () => g('<path d="M6 48L32 40L58 48"/>')
+      + tower(24, 16, 22, 46, STONE)
+      + '<path d="M24 30H40M24 38H40M30 22V30M34 30V38M28 38V46" stroke="rgba(0,0,0,.25)" stroke-width="0.8"/>'
+      + '<rect x="24" y="18" width="3.5" height="4" fill="' + STONE + '" stroke="' + INK + '" stroke-width="0.9"/><rect x="36.5" y="18" width="3.5" height="4" fill="' + STONE + '" stroke="' + INK + '" stroke-width="0.9"/>'
+      + '<rect x="27.5" y="18.6" width="9" height="3.4" fill="#2b2b2e"/>' + slab(22, 20, 15.8, '#7E786D'),
+    ceglany: () => g('<path d="M6 48L32 40L58 48"/>')
+      + tower(28, 8, 16, 46, BRICK) + '<rect x="26.6" y="18" width="10.8" height="2.4" fill="#8A4A2E" stroke="' + INK + '" stroke-width="0.9"/>'
+      + '<path d="M28 24H36M28 28H36M28 32H36M28 36H36M28 40H36M32 24V28M30 28V32M34 32V36M32 36V40" stroke="rgba(0,0,0,.25)" stroke-width="0.7"/>'
+      + '<rect x="30.5" y="15.4" width="3" height="1" fill="#2b2b2e"/>',
     /* the Wielkopolska crown: an openwork crown under the cap, two pots */
     wielkopolski: () => g('<path d="M6 48L32 40L58 48"/>')
       + tower(25, 14, 22, 46, WASH) + arch(27, 40, 4, 9) + arch(33, 40, 4, 9)
@@ -2378,66 +2406,98 @@ const SCE_SVG = (() => {
    A teaching simplification, not a census: a valley can carry a neighbour's
    chimney, and the icons name their family. */
 const CHIMNEY_SRC = {
-  POK:['Pokropek 1976', ''], POK2:['Pokropek & Pokropek 1995', ''], MOS:['Moszyński 1929', ''], CIO:['Ciołek 1984', ''],
-  CIO39:['Ciołek 1939', ''], REI:['Reinfuss 1948', ''], GOS:['Gosztyła & Mikrut 2017', 'https://doi.org/10.7862/rb.2017.228'],
-  OLS:['MBL Olsztynek', 'https://muzeumolsztynek.pl'], MWL:['Muzeum Wsi Lubelskiej', 'https://skansen.lublin.pl'],
-  OPE:['Orawski Park Etnograficzny', 'https://www.orawa.eu']
+  SZE11:['Szewczyk 2011', 'https://www.researchgate.net/publication/309492902'],
+  SZE12:['Szewczyk 2012', 'https://aeawa.pb.edu.pl/wp-content/uploads/2018/08/4-Szewczyk.pdf'],
+  CYB06:['Cybulko 2006', 'https://pcr.uwb.edu.pl/BKWP/files/BKWP_2006_12_011.pdf'],
+  WOL:['Wolski & Blin-Olbert', 'https://www.researchgate.net/publication/322295275'],
+  EWM:['Encyklopedia Warmii i Mazur', 'https://encyklopedia.warmia.mazury.pl/index.php/Czarna_kuchnia'],
+  TNN:['Etnografia Lubelszczyzny (Teatr NN)', 'https://teatrnn.pl/leksykon/artykuly/etnografia-lubelszczyzny-slownik-podstawowych-pojec/'],
+  MWK:['Muzeum Wsi Kieleckiej — chałupa ze Świątnik', 'https://mwk.com.pl/en/wystawy/6170-zwiedzaj-w-domu-chalupa-ze-swiatnik'],
+  KLU:['Muzeum Wsi Słowińskiej — chałupa Charlotty Klick', 'http://muzeumkluki.pl/oferta/wystawy-stale/chalupa-charlotty-klick/'],
+  MWO:['Muzeum Wsi Opolskiej — chałupa z Wichrowa', 'https://muzeumwsiopolskiej.pl/qr-code-chalupa-wyrobnicza-z-wichrowa-ok-1830-r/'],
+  OPE:['Orawski Park Etnograficzny — chałupa Omylaka', 'https://visitmalopolska.pl/-/zubrzyca-gorna-orawski-park-etnograficzny-chalupa-omylaka-sien'],
+  SIA:['Skansen w Szymbarku — chałupa dymna z Siar', 'https://visitmalopolska.pl/en_GB/-/skansen-wsi-pogorzanskiej-w-szymbarku-chalupa-dymna-z-siar'],
+  KAW:['Chata Kawuloka, Istebna', 'https://pl.wikipedia.org/wiki/Izba_Regionalna_%E2%80%9EChata_Kawuloka%E2%80%9D_w_Istebnej'],
+  KUR:['Kuczyńska 2007 — Skansen Kurpiowski', 'https://pcr.uwb.edu.pl/SL/files/SL_2007_18_019.pdf'],
+  KRA:['Ludowa architektura Krajny', 'https://regionwielkopolskawsch.blogspot.com/2020/09/ludowa-architektura-krajny.html'],
+  ZUL:['Komin „baba”, Żuławy', 'https://www.werandacountry.pl/domy/domy-w-polsce/dom-z-dusz%C4%85-w-kominie'],
+  KAR:['Kargol 2024 — wieś galicyjska', 'https://nikidw.edu.pl/wp-content/uploads/2024/12/Wies-galicyjska-w-XIX-wieku-ARTYKUL.pdf'],
+  ZYN:['Chyża w Zyndranowej (1860, komin 1901)', 'https://pl.wikipedia.org/wiki/Skansen_Kultury_%C5%81emkowskiej_w_Zyndranowej'],
+  PPZ:['Krótkie dzieje przepisów pożarowych', 'https://www.ppoz.pl/czytelnia/historia-i-tradycje/Krotkie-dzieje-przepisow-pozarowych-cz-7/idn:804']
 };
-/** name, where it comes from, what it is, its sources; shaft (and long,
-    longY) the footprint until the student sets one, h the shaft's height
-    above the roof. The folk house of most of Poland was long a smoke hut
-    (chałupa kurna): the smoke filled the room and left through the loft and
-    the roof. The chimney came with the smoke hood and the brick stack, in
-    the 18th–19th centuries, and the regions built it each in their own
-    material. */
+/** name, where it comes from, what it is, its sources; shaft (and long)
+    the footprint until the student sets one, h the height above the roof,
+    crown the head drawn on it. After Szewczyk's typology of the Podlasie
+    systems (2011) — no chimney at all, the light chimney of poles and clay,
+    the broad chamber chimney (the black kitchen), the brick chimney — and
+    the regional forms the open-air museums keep. Into the second half of
+    the 19th century most of the rural houses of Galicia, the Carpathians
+    and much of the plains were smoke huts (chałupy kurne): the smoke of the
+    stove filled the room and left through the ceiling, the attic and the
+    roof. Fire ordinances — Prussian from 1764, the Opole regency banning
+    timber and clay chimneys in 1811, Austrian ones in Galicia later —
+    pushed the masonry chimney in, unevenly. */
 const CHIMNEY_FAM = {
-  podhalanski:  { name:'Podhale stone chimney', where:'Podhale, Orawa and Spisz',
-    desc:'Into the 19th century the highland house was a smoke hut: the smoke of the black room left through the loft and the shingle. The stack that came later is of stream stone, broad and low under a slab.',
-    src:['POK2', 'MOS', 'OPE'], shaft:0.9, h:1.4, cap:0.16, pots:0, open:true, colours:['#9AA0A6', '#2b2b2e'] },
-  mazowiecki:   { name:'Mazovian whitewashed chimney', where:'Mazovia, Kurpie, Łowicz, Podlasie and the Lublin upland',
-    desc:'The hearth under a smoke hood led into a chimney of wattle and clay, later of brick, rising at the ridge over the hall; whitewashed with the walls.',
-    src:['POK', 'MOS', 'MWL'], shaft:0.5, h:1.9, cap:0.1, pots:1, colours:['#F4F1EA', '#C98A5E'] },
-  slaski:       { name:'Silesian brick chimney', where:'Upper and Lower Silesia, the Opole land',
-    desc:'Red brick left bare, a corbelled head and two flues — the brick country of Silesia.',
-    src:['CIO'], shaft:0.6, h:1.5, cap:0.22, pots:2, brick:true, colours:['#B0603C', '#C98A5E'] },
-  pomorski:     { name:'Black-kitchen chimney of Pomerania', where:'Pomerania, Kashubia, Warmia, Masuria and the Vistula delta',
-    desc:'In the middle of the house the black kitchen (czarna kuchnia) — a brick smoke chamber — gathered the smoke of the hearths and the oven and carried it up through the roof as one broad brick stack.',
-    src:['CIO39', 'POK', 'OLS'], shaft:0.7, h:1.5, cap:0.12, pots:1, colours:['#B0603C', '#C98A5E'] },
-  bieszczadzki: { name:'Carpathian stone stack', where:'The Lemko and Boyko country — the Low Beskid and the Bieszczady',
-    desc:'The chyża was a smoke hut into the 20th century; the stack built later is of dark stone, a lime band under its cap.',
-    src:['REI', 'GOS'], shaft:0.6, h:1.5, cap:0.12, pots:1, band:true, colours:['#4A4A4E', '#F4F1EA'] },
-  wielkopolski: { name:'Wielkopolska double chimney', where:'Greater Poland, Kujawy and the Lubusz land',
-    desc:'The broad-fronted, two-bay house sets its black kitchen in the middle; its whitewashed stack carries two flues under a crown at the ridge.',
-    src:['POK', 'CIO'], shaft:0.7, h:1.7, cap:0.1, pots:2, colours:['#F4F1EA', '#C98A5E'] },
-  prosty:       { name:'Plain stack', where:'Every region',
-    desc:'A plain whitewashed brick stack with one flue — every region builds it.',
-    src:[], shaft:0.45, h:1.2, cap:0.15, pots:1, colours:['#EFE9DC', '#C98A5E'] }
+  dymnik:    { name:'Smoke vent (dymnik) — no chimney', where:'The smoke huts of the Carpathians, the Pogórze and the plains, into the 19th–20th century',
+    desc:'No flue at all: the stove smoked into the room, a hole in the ceiling let the smoke into the attic, and it left through the thatch or shingle and through a vent under the ridge — a little gablet or triangular openings of a hipped roof (dach dymnikowy). Orawa called the ceiling hole woźnica, the Boykos the roof vent uronka.',
+    src:['TNN', 'OPE', 'SIA', 'WOL', 'KAW', 'SZE11'], shaft:0.7, h:0.4, crown:'dymnik', shaftH:0.02, colours:['#6E5E4C', '#2b2b2e'] },
+  sztagowy:  { name:'Pole chimney (komin sztagowy, brożyna)', where:'Kielce region, Roztocze, the Słowińcy coast; also the Dutch (olęder) settlements',
+    desc:'The oldest chimney of the plains: four poles (sztagi) standing on the ground and converging upward, tied by rails, nailed with upright rods, wrapped tight in straw braids and daubed with clay against fire; above the roof the straw wrapping runs on into the thatch. Its foot is the black kitchen, entered from the hall by a low door.',
+    src:['MWK', 'KLU', 'TNN', 'SZE11'], shaft:1.0, h:1.5, crown:'sztagowy', shaftH:0.02, colours:['#C9B08A', '#B89A5E'] },
+  komorowy:  { name:'Chamber chimney of the black kitchen (komin komorowy)', where:'Warmia and Masuria, Kurpie, Podlasie, the Lublin land',
+    desc:'A broad masonry chamber in the middle of the house — the black kitchen, its walls sooted — at first open to the attic; later its walls were raised and drawn in under the ridge into one broad stack. The household cooked and smoked meat inside it, and the oven of the room opened into it.',
+    src:['EWM', 'KUR', 'SZE11', 'CYB06', 'TNN'], shaft:0.9, long:1.4, h:1.2, crown:'komorowy', colours:['#EDE8DD', '#C98A5E'] },
+  baba:      { name:'“Baba” bottle chimney of Żuławy', where:'Żuławy Wiślane — the arcaded houses of the Vistula delta',
+    desc:'Over the square black kitchen in the middle of the house, an elongated pyramid with unequal slopes ending in a round outlet — the “baba” or “bottle” chimney (Marynowy, 1803). When cast-iron ranges came, it was vaulted over and its upper part became the smokehouse.',
+    src:['ZUL', 'EWM'], shaft:1.2, h:1.9, crown:'baba', shaftH:0.02, colours:['#A9583B', '#8A4A2E'] },
+  arkadowy:  { name:'Arcade chimney over the hall (komin arkadowy)', where:'Greater Poland — Krajna and the broad-fronted houses',
+    desc:'A broad chimney standing astride the hall on an arch, its foot closed by a door, niche hearths in its walls; above the roof it shows as a long, broad stack along the ridge. Vertical (“German”) brick chimneys replaced it around 1900.',
+    src:['KRA', 'SZE11'], shaft:0.6, long:2.3, h:1.1, crown:'arkadowy', colours:['#EDE8DD', '#C98A5E'] },
+  kamienny:  { name:'Stone chimney on clay mortar', where:'The Opole land and the Carpathian foothills; the stone country',
+    desc:'Built of field or stream stone laid in clay, in the hall, doubling as the smokehouse (Wichrów, c. 1830); in the mountains the chimney came late — the Zyndranowa chyża, a smoke hut built in 1860, got its kitchen and chimney in 1901.',
+    src:['MWO', 'ZYN', 'KAR'], shaft:0.8, h:1.2, crown:'kamienny', colours:['#9E978A', '#7E786D'] },
+  ceglany:   { name:'Brick chimney (the vertical type)', where:'Every region from the late 19th century; first in the Prussian partition and Silesia',
+    desc:'The vertical brick stack of the fire ordinances: its own foundation, walls one brick (13 cm) thick, rendered — whitewashed in the east (the eastern-Podlasie type), bare red brick in Silesia and the west, a corbelled course under the top.',
+    src:['PPZ', 'SZE11', 'SZE12', 'KRA'], shaft:0.52, h:1.3, crown:'ceglany', colours:['#B0603C', '#8A4A2E'] }
 };
-const CHIMNEY_OLD = {};
-const chimKey = k => CHIMNEY_FAM[k] ? k : CHIMNEY_OLD[k] || 'prosty';
+const CHIMNEY_OLD = { podhalanski:'kamienny', mazowiecki:'komorowy', slaski:'ceglany', pomorski:'komorowy', bieszczadzki:'kamienny', wielkopolski:'arkadowy', prosty:'ceglany' };
+const chimKey = k => CHIMNEY_FAM[k] ? k : CHIMNEY_OLD[k] || 'ceglany';
 const chimFam = k => CHIMNEY_FAM[chimKey(k)];
-/** Per voivodeship: own — the chimneys its sources name, the first drawn by
-    default; near — the neighbours'; note — what the sources say of the
-    place itself. */
+/** Per voivodeship: own — the forms its houses and museums show, the
+    first drawn by default; near — the neighbours'; note — what the sources
+    say of the place. */
 const CHIMNEY_NUT = (() => {
   const T = {};
   const set = (ns, o) => ns.forEach(n => { T[n] = o; });
-  set(['Małopolskie'], { own:['podhalanski', 'mazowiecki'], near:['bieszczadzki', 'slaski'],
-    note:'From the Kraków basin to the Tatras: the whitewashed brick chimney below, the stone stack in the mountains, where the house was long a smoke hut.' });
-  set(['Podkarpackie'], { own:['bieszczadzki', 'mazowiecki'], near:['podhalanski'],
-    note:'The Lemko and Boyko houses were smoke huts into the 20th century; on the Rzeszów foothills the brick chimney came earlier.' });
-  set(['Śląskie', 'Opolskie', 'Dolnośląskie'], { own:['slaski'], near:['podhalanski', 'wielkopolski'],
-    note:'Silesia builds its chimneys in bare red brick.' });
-  set(['Mazowieckie', 'Łódzkie', 'Świętokrzyskie', 'Lubelskie', 'Podlaskie'], { own:['mazowiecki'], near:['wielkopolski', 'bieszczadzki'],
-    note:'Across the central plains the chimney rose from the smoke hood over the hearth, whitewashed with the house.' });
-  set(['Pomorskie', 'Kujawsko-pomorskie', 'Warmińsko-mazurskie', 'Zachodniopomorskie'], { own:['pomorski'], near:['wielkopolski', 'mazowiecki'],
-    note:'In the north the black kitchen in the middle of the house gathered the smoke into one broad brick stack.' });
-  set(['Wielkopolskie', 'Lubuskie'], { own:['wielkopolski'], near:['pomorski', 'slaski'],
-    note:'Greater Poland sets its black kitchen in the middle of the broad-fronted house, under a double chimney.' });
+  set(['Małopolskie'], { own:['kamienny', 'dymnik', 'ceglany'], near:['sztagowy'],
+    note:'Orawa, Podhale and the Pogórze kept smoke huts into the late 19th century: the black room smoked through a hole in the ceiling and vents in the roof; the chimney, of stone and later of brick, came with the range around 1900.' });
+  set(['Podkarpackie'], { own:['dymnik', 'kamienny', 'ceglany'], near:['sztagowy'],
+    note:'Until the 1920s most Boyko and Lemko houses were smoke or half-smoke huts; chimneys spread from the end of the 19th century under the Austrian ordinances.' });
+  set(['Śląskie'], { own:['ceglany', 'dymnik'], near:['kamienny'],
+    note:'Brick in the industrial lowland; in the Silesian Beskids smoke huts lasted — Kawulok’s in Istebna (1863) still has its chimneyless stove.' });
+  set(['Opolskie'], { own:['kamienny', 'ceglany'], near:['arkadowy'],
+    note:'The Opole regency banned timber and clay chimneys in 1811; the poorer cottages built them of stone in clay, in the hall, as a smokehouse too.' });
+  set(['Dolnośląskie', 'Lubuskie'], { own:['ceglany'], near:['kamienny', 'arkadowy'],
+    note:'Masonry halls and brick flues under the Prussian ordinances, from the mid-18th century.' });
+  set(['Wielkopolskie'], { own:['arkadowy', 'ceglany'], near:['komorowy'],
+    note:'The broad arcade chimney over the hall, then, around 1900, the vertical brick chimney.' });
+  set(['Kujawsko-pomorskie'], { own:['arkadowy', 'komorowy', 'ceglany'], near:['sztagowy'],
+    note:'Between the Greater Poland arcade chimney and the northern black kitchen.' });
+  set(['Pomorskie'], { own:['komorowy', 'baba', 'sztagowy'], near:['ceglany'],
+    note:'The black kitchen in the middle of the house; the “baba” over it in the delta; the pole chimney in the Słowińcy village of Kluki.' });
+  set(['Warmińsko-mazurskie'], { own:['komorowy', 'baba'], near:['ceglany'],
+    note:'Every timber house of Warmia and Masuria grouped its rooms round the black kitchen and its chimney, into the end of the 19th century.' });
+  set(['Zachodniopomorskie'], { own:['ceglany', 'komorowy'], near:['sztagowy'],
+    note:'Brick under the Prussian ordinances, the black kitchen behind it.' });
+  set(['Mazowieckie', 'Podlaskie'], { own:['komorowy', 'ceglany'], near:['sztagowy'],
+    note:'The broad chimney filled part of the hall (Kurpie); in Podlasie one shared chimney often served several stoves — perhaps against the hearth tax (podymne).' });
+  set(['Lubelskie', 'Świętokrzyskie', 'Łódzkie'], { own:['sztagowy', 'komorowy', 'ceglany'], near:['dymnik'],
+    note:'The pole chimney over the black kitchen — Świątniki (1758), Żuków on Roztocze — and the smoke vents of the older huts.' });
   return T;
 })();
 const CHIMNEY_CONC = {};
 const CHIMNEY_CONC_NUT = {};
+
 /**
  * The chimneys of the site: { own, near, all, where, note }. own are the
  * place's own (the municipality's first, then its region's), near the
@@ -2445,7 +2505,7 @@ const CHIMNEY_CONC_NUT = {};
  * one drawn when a chimney is added.
  */
 function chimneyPlace(site) {
-  const nuts = site && site.nuts, R = CHIMNEY_NUT[nuts] || { own:[], near:['prosty'], note:null };
+  const nuts = site && site.nuts, R = CHIMNEY_NUT[nuts] || { own:[], near:['ceglany'], note:null };
   const conc = null;
   const C = conc ? (CHIMNEY_CONC_NUT[conc + '|' + nuts] || (CONCELHOS[conc].indexOf(nuts) >= 0 ? CHIMNEY_CONC[conc] : null)) : null;
   const own = [], near = [];
@@ -2453,14 +2513,14 @@ function chimneyPlace(site) {
   if (C) C.own.forEach(k => add(own, k));
   R.own.forEach(k => add(own, k));
   R.near.forEach(k => add(near, k));
-  if (own.indexOf('prosty') < 0) add(near, 'prosty');
+  if (own.indexOf('ceglany') < 0) add(near, 'ceglany');
   return { own, near, all:own.concat(near), where:(C && conc) || nuts || '', note:(C && C.note) || R.note || null };
 }
 /** The chimney a site draws when one is added. */
-const chimneyOf = site => chimneyPlace(site).all[0] || 'prosty';
+const chimneyOf = site => chimneyPlace(site).all[0] || 'ceglany';
 /** A chimney not picked by hand follows the site: moved to Monchique, it
     turns into Monchique's. Returns its family's key. */
-const chimneyList = nuts => { const l = CHIMNEY_NUT[nuts] || ['mazowiecki']; return l.indexOf('prosty') >= 0 ? l.slice() : l.concat(['prosty']); };
+const chimneyList = nuts => chimneyPlace({ nuts }).all;
 /** Names and sentences for the chimney figures, in the strategy icons' own
     shape, so sceFig draws them unchanged. */
 Object.assign(SCE_ICON, {
@@ -2720,6 +2780,61 @@ function chimneyFaces(famKey, x, y, z0, hEff, foot, taperDeg, zAtFn) {
     };
     const holesRound = (pg, sides, list) => pg.forEach((a, i) => { const b = pg[(i + 1) % pg.length]; list.forEach(hh => hole(sides[i], a, b, hh[0], hh[1], hh[2], hh[3], hh[4])); });
     switch (kind) {
+      /* --- the Polish forms --- */
+      case 'dymnik': {
+        /* no flue: a little gablet on the roof, both ends open, the smoke leaving under it */
+        const R0 = '#6E5E4C';
+        lid(-0.45, -0.32, 0.45, 0.32, 0.02, 0.42, R0, HOLE, false);
+        break;
+      }
+      case 'sztagowy': {
+        /* four poles converging upward, daubed with clay below the roof, wrapped in straw above, open at the top */
+        const DAUB = '#C9B08A', STRAW = '#B89A5E';
+        taper(rect(-0.5, -0.5, 0.5, 0.5), rect(-0.36, -0.36, 0.36, 0.36), 0.0, h * 0.45, DAUB, false);
+        taper(rect(-0.36, -0.36, 0.36, 0.36), rect(-0.2, -0.2, 0.2, 0.2), h * 0.45, h, STRAW, false);
+        solid(rect(-0.2, -0.2, 0.2, 0.2), h, h + 0.01, HOLE);
+        [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach(([su, sv]) => taper(rect(su * 0.5 - 0.035, sv * 0.5 - 0.035, su * 0.5 + 0.035, sv * 0.5 + 0.035),
+          rect(su * 0.2 - 0.025, sv * 0.2 - 0.025, su * 0.2 + 0.025, sv * 0.2 + 0.025), 0, h + 0.15, '#5A4230', false));
+        break;
+      }
+      case 'komorowy': {
+        /* the black kitchen's broad stack: a plain cornice, the wide open flue */
+        solid(rect(-W - 0.05, -D - 0.05, W + 0.05, D + 0.05), h, h + 0.08, CAPC, { top:false });
+        solid(rect(-W - 0.05, -D - 0.05, W + 0.05, D + 0.05), h + 0.08, h + 0.081, CAPC);
+        solid(rect(-W + 0.1, -D + 0.1, W - 0.1, D - 0.1), h + 0.081, h + 0.083, HOLE);
+        break;
+      }
+      case 'baba': {
+        /* the elongated pyramid with unequal slopes, the round outlet on it */
+        const BR = '#A9583B';
+        taper(rect(-0.62, -0.5, 0.62, 0.5), rect(-0.14, -0.1, 0.24, 0.16), 0.0, h, BR, false);
+        const cyl = ngon(0.15, 12).map(p => [p[0] + 0.05, p[1] + 0.03]);
+        solid(cyl, h, h + 0.32, '#B8653F', { topFill:HOLE });
+        break;
+      }
+      case 'arkadowy': {
+        /* the long broad stack along the ridge: a cornice and two flues */
+        solid(rect(-W - 0.05, -D - 0.05, W + 0.05, D + 0.05), h, h + 0.07, CAPC);
+        [-W * 0.5, W * 0.5].forEach(u => solid(rect(u - 0.14, -0.14, u + 0.14, 0.14), h + 0.07, h + 0.075, HOLE));
+        break;
+      }
+      case 'kamienny': {
+        /* stone in clay: a slab raised on corner stones over the flue */
+        const ST = '#9E978A', SL = '#7E786D';
+        [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach(([su, sv]) => solid(rect(su * W - (su > 0 ? 0.13 : 0), sv * D - (sv > 0 ? 0.13 : 0), su * W + (su < 0 ? 0.13 : 0), sv * D + (sv < 0 ? 0.13 : 0)), h, h + 0.22, ST));
+        solid(rect(-W + 0.13, -D + 0.13, W - 0.13, D - 0.13), h, h + 0.005, HOLE);
+        solid(rect(-W - 0.1, -D - 0.1, W + 0.1, D + 0.1), h + 0.22, h + 0.3, SL);
+        break;
+      }
+      case 'ceglany': {
+        /* the vertical brick stack: one corbelled course under the top, the flue open */
+        const BR = '#B0603C';
+        solid(rect(-W - 0.05, -D - 0.05, W + 0.05, D + 0.05), h - 0.2, h - 0.12, '#8A4A2E');
+        solid(rect(-W, -D, W, D), h - 0.12, h, BR, { top:false });
+        solid(rect(-W, -D, W, D), h, h + 0.001, BR);
+        solid(rect(-0.07, -0.07, 0.07, 0.07), h + 0.001, h + 0.003, HOLE);
+        break;
+      }
       case 'rendilhada': {
         solid(rect(-W - 0.04, -D - 0.04, W + 0.04, D + 0.04), h, h + 0.06, CAPC);
         const cr = rect(-W + 0.01, -D + 0.01, W - 0.01, D - 0.01), z = h + 0.06;
@@ -9675,7 +9790,7 @@ function buildRoof(host) {
     const fam = chimSync(ch), F = chimFam(fam), others = Object.keys(CHIMNEY_FAM).filter(k => PL.all.indexOf(k) < 0);
     if (others.indexOf(fam) >= 0) chimMore = true;
     chimRow(ch, 'Of this place', PL.own, fam, false);
-    chimRow(ch, PL.own.length ? 'Neighbours and the plain stack' : 'Neighbours and the plain stack — none of its own', PL.near, fam, false);
+    chimRow(ch, PL.own.length ? 'Neighbours and the brick chimney' : 'Neighbours and the brick chimney — none of its own', PL.near, fam, false);
     const more = el('button', { class:'btn small chim-more', type:'button', text:(chimMore ? '▴ ' : '▾ ') + t('Other regions') + ' (' + others.length + ')',
       onclick:() => { chimMore = !chimMore; buildChimUI(); } });
     more.setAttribute('aria-expanded', String(chimMore));
@@ -9687,7 +9802,7 @@ function buildRoof(host) {
     info.appendChild(el('p', { class:'hint' })).textContent = t('Where it comes from') + ': ' + t(F.where);
     info.appendChild(el('p', { class:'hint', text:F.desc }));
     if (PL.own.indexOf(fam) < 0) info.appendChild(el('p', { class:'hint chim-warn',
-      text:PL.near.indexOf(fam) >= 0 ? (fam === 'prosty' ? 'The plain stack every region builds — not a chimney the sources give to this place.' : 'A neighbour’s chimney — not one the sources give to this place.') : 'Not a chimney of this place — it belongs to another region.' }));
+      text:PL.near.indexOf(fam) >= 0 ? (fam === 'ceglany' ? 'The brick chimney every region built in the end — not the form the sources give to this place.' : 'A neighbour’s chimney — not one the sources give to this place.') : 'Not a chimney of this place — it belongs to another region.' }));
     const src = el('p', { class:'hint chim-src' });
     if (F.src.length) {
       src.appendChild(document.createTextNode(t('Sources') + ': '));
@@ -16083,7 +16198,7 @@ function caMaterials(done) {
   const finish = d => { CA_MATS = d; const q = CA_MATS_REQ; CA_MATS_REQ = null; q.forEach(f => { try { f(d); } catch (e) {} }); };
   const ctrl = {};
   try { if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) ctrl.signal = AbortSignal.timeout(45000); } catch (e) {}
-  fetch('https://ncorticos.github.io/construction-advisor-pt/', ctrl).then(r => { if (!r.ok) throw new Error('ca'); return r.text(); })
+  fetch('https://ncorticos.github.io/construction-advisor-pl/', ctrl).then(r => { if (!r.ok) throw new Error('ca'); return r.text(); })
     .then(html => {
       const get = (re, i) => { const m = html.match(re); return m ? m[i] : null; };
       const mz = get(/const MAT_ZONE = \{([\s\S]*?)\};/, 1), sz = get(/const SITE_ZONE_OF = \{([\s\S]*?)\};/, 1);
@@ -22019,9 +22134,10 @@ function vmChimOf(k, wm) {
 /** The Roof tab's family for an archetype's chimney: the stone stack of the mountains, else its region's own. */
 function vmChimFam(k, ch) {
   const d = typeof vDist === 'function' ? vDist(k) : [];
-  if (ch.kind === 'gran') return d.indexOf('Podkarpackie') >= 0 && d.indexOf('Małopolskie') < 0 ? 'bieszczadzki' : 'podhalanski';
-  const own = (CHIMNEY_NUT[d[0]] || {}).own;
-  return own && own.length ? own[0] : 'prosty';
+  if (ch.kind === 'gran') return 'kamienny';
+  const own = ((CHIMNEY_NUT[d[0]] || {}).own || []).filter(f => f !== 'dymnik');
+  if (ch.kind === 'ale') return own.find(f => ['komorowy', 'baba', 'arkadowy'].indexOf(f) >= 0) || 'komorowy';
+  return own.length ? own[0] : 'ceglany';
 }
 /** Whether the archetype is a dwelling whose smoke left through the tiles: no chimney, a wisp of smoke over the roof. */
 function vmSmokeOf(k) {
@@ -24745,7 +24861,7 @@ function collectConstructionHandoff() {
    the tab is opened inside the click, where no pop-up blocker stops it. The
    shared localStorage key stays as a second route, and Save study's file
    carries the same hand-off for later. */
-const CA_URL = 'https://ncorticos.github.io/construction-advisor-pt/';
+const CA_URL = 'https://ncorticos.github.io/construction-advisor-pl/';
 function continueToConstruction() {
   const r = collectConstructionHandoff();
   if (!r.ok) { toast('Open a study first — set the site, then continue'); return; }
@@ -29953,6 +30069,42 @@ vDistTxt = k => { const d = vDist(k); if (!d.length) return ''; return (d.length
 "running gallery (ganek)": "ganek biegnący wzdłuż elewacji",
 "recessed porch": "podcień wgłębny",
 "glazed porch (oszklony ganek)": "oszklony ganek",
+"Smoke vent (dymnik) — no chimney": "Dymnik — bez komina",
+"The smoke huts of the Carpathians, the Pogórze and the plains, into the 19th–20th century": "Chałupy kurne Karpat, Pogórza i nizin, do XIX–XX wieku",
+"No flue at all: the stove smoked into the room, a hole in the ceiling let the smoke into the attic, and it left through the thatch or shingle and through a vent under the ridge — a little gablet or triangular openings of a hipped roof (dach dymnikowy). Orawa called the ceiling hole woźnica, the Boykos the roof vent uronka.": "Bez żadnego przewodu: piec dymił do izby, otwór w powale wypuszczał dym na strych, a stamtąd uchodził przez strzechę lub gont i przez dymnik pod kalenicą — mały daszek albo trójkątne otwory dachu czterospadowego (dach dymnikowy). Na Orawie otwór w powale nazywano woźnicą, u Bojków otwór w dachu — uronką.",
+"Pole chimney (komin sztagowy, brożyna)": "Komin sztagowy (brożyna)",
+"Kielce region, Roztocze, the Słowińcy coast; also the Dutch (olęder) settlements": "Kielecczyzna, Roztocze, wybrzeże Słowińców; także osady olęderskie",
+"The oldest chimney of the plains: four poles (sztagi) standing on the ground and converging upward, tied by rails, nailed with upright rods, wrapped tight in straw braids and daubed with clay against fire; above the roof the straw wrapping runs on into the thatch. Its foot is the black kitchen, entered from the hall by a low door.": "Najstarszy komin nizin: cztery sztagi stojące na ziemi i zbiegające się ku górze, powiązane poprzeczkami, z przybitymi pionowymi żerdkami, szczelnie oplecione słomianymi warkoczami i wylepione gliną dla ochrony przed ogniem; nad dachem słomiany oplot przechodzi w strzechę. Jego podstawą jest czarna kuchnia, do której wchodzi się z sieni niskimi drzwiczkami.",
+"Chamber chimney of the black kitchen (komin komorowy)": "Komin komorowy (czarna kuchnia)",
+"Warmia and Masuria, Kurpie, Podlasie, the Lublin land": "Warmia i Mazury, Kurpie, Podlasie, Lubelszczyzna",
+"A broad masonry chamber in the middle of the house — the black kitchen, its walls sooted — at first open to the attic; later its walls were raised and drawn in under the ridge into one broad stack. The household cooked and smoked meat inside it, and the oven of the room opened into it.": "Szeroka murowana komora pośrodku domu — czarna kuchnia o osmolonych ścianach — początkowo otwarta na poddasze; później jej ściany podwyższono i zwężono pod kalenicą w jeden szeroki komin. Gotowano w niej i wędzono mięso, a do niej otwierał się piec z izby.",
+"“Baba” bottle chimney of Żuławy": "Komin „baba” (butelkowy) z Żuław",
+"Żuławy Wiślane — the arcaded houses of the Vistula delta": "Żuławy Wiślane — domy podcieniowe delty Wisły",
+"Over the square black kitchen in the middle of the house, an elongated pyramid with unequal slopes ending in a round outlet — the “baba” or “bottle” chimney (Marynowy, 1803). When cast-iron ranges came, it was vaulted over and its upper part became the smokehouse.": "Nad kwadratową czarną kuchnią pośrodku domu — wydłużony ostrosłup o nierównych nachyleniach ścian zakończony okrągłym wylotem: komin „baba” lub „butelkowy” (Marynowy, 1803). Po wprowadzeniu kuchni płytowych zamknięto go murowanym sklepieniem, a w górnej części urządzono wędzarnię.",
+"Arcade chimney over the hall (komin arkadowy)": "Komin arkadowy nad sienią",
+"Greater Poland — Krajna and the broad-fronted houses": "Wielkopolska — Krajna i domy szerokofrontowe",
+"A broad chimney standing astride the hall on an arch, its foot closed by a door, niche hearths in its walls; above the roof it shows as a long, broad stack along the ridge. Vertical (“German”) brick chimneys replaced it around 1900.": "Szeroki komin stojący „okrakiem” nad sienią na łuku, z podstawą zamykaną drzwiami i paleniskami wnękowymi w ścianach; nad dachem widać go jako długi, szeroki trzon wzdłuż kalenicy. Około 1900 roku zastąpiły go pionowe („niemieckie”) kominy ceglane.",
+"Stone chimney on clay mortar": "Komin kamienny na zaprawie glinianej",
+"The Opole land and the Carpathian foothills; the stone country": "Opolszczyzna i Pogórze Karpackie; kraina kamienia",
+"Built of field or stream stone laid in clay, in the hall, doubling as the smokehouse (Wichrów, c. 1830); in the mountains the chimney came late — the Zyndranowa chyża, a smoke hut built in 1860, got its kitchen and chimney in 1901.": "Murowany z kamienia polnego lub potokowego na glinie, w sieni, służący zarazem jako wędzarnia (Wichrów, ok. 1830); w górach komin pojawił się późno — chyża w Zyndranowej, zbudowana jako kurna w 1860 roku, dostała kuchnię i komin w 1901 roku.",
+"Brick chimney (the vertical type)": "Komin ceglany (pionowy)",
+"Every region from the late 19th century; first in the Prussian partition and Silesia": "Każdy region od końca XIX wieku; najwcześniej zabór pruski i Śląsk",
+"The vertical brick stack of the fire ordinances: its own foundation, walls one brick (13 cm) thick, rendered — whitewashed in the east (the eastern-Podlasie type), bare red brick in Silesia and the west, a corbelled course under the top.": "Pionowy ceglany komin przepisów przeciwpożarowych: na własnym fundamencie, ściany grubości jednej cegły (13 cm), tynkowane — bielone na wschodzie (typ wschodniopodlaski), z czerwonej cegły bez tynku na Śląsku i zachodzie, z wysuniętą warstwą pod wylotem.",
+"Orawa, Podhale and the Pogórze kept smoke huts into the late 19th century: the black room smoked through a hole in the ceiling and vents in the roof; the chimney, of stone and later of brick, came with the range around 1900.": "Orawa, Podhale i Pogórze zachowały chałupy kurne do końca XIX wieku: czarna izba dymiła przez otwór w powale i dymniki w dachu; komin, kamienny, a potem ceglany, przyszedł z kuchnią płytową około 1900 roku.",
+"Until the 1920s most Boyko and Lemko houses were smoke or half-smoke huts; chimneys spread from the end of the 19th century under the Austrian ordinances.": "Do lat dwudziestych XX wieku większość chałup bojkowskich i łemkowskich była kurna lub półkurna; kominy szerzyły się od końca XIX wieku na mocy austriackich nakazów.",
+"Brick in the industrial lowland; in the Silesian Beskids smoke huts lasted — Kawulok’s in Istebna (1863) still has its chimneyless stove.": "Cegła na uprzemysłowionej nizinie; w Beskidzie Śląskim chałupy kurne przetrwały — chata Kawuloka w Istebnej (1863) wciąż ma piec bez komina.",
+"The Opole regency banned timber and clay chimneys in 1811; the poorer cottages built them of stone in clay, in the hall, as a smokehouse too.": "Rejencja opolska zakazała w 1811 roku kominów drewnianych i glinianych; uboższe chałupy murowały je z kamienia na glinie, w sieni, także jako wędzarnię.",
+"Masonry halls and brick flues under the Prussian ordinances, from the mid-18th century.": "Murowane sienie i ceglane przewody na mocy pruskich zarządzeń, od połowy XVIII wieku.",
+"The broad arcade chimney over the hall, then, around 1900, the vertical brick chimney.": "Szeroki komin arkadowy nad sienią, a około 1900 roku pionowy komin ceglany.",
+"Between the Greater Poland arcade chimney and the northern black kitchen.": "Między wielkopolskim kominem arkadowym a północną czarną kuchnią.",
+"The black kitchen in the middle of the house; the “baba” over it in the delta; the pole chimney in the Słowińcy village of Kluki.": "Czarna kuchnia pośrodku domu; „baba” nad nią w delcie Wisły; komin sztagowy w słowińskiej wsi Kluki.",
+"Every timber house of Warmia and Masuria grouped its rooms round the black kitchen and its chimney, into the end of the 19th century.": "Każda drewniana chata Warmii i Mazur grupowała pomieszczenia wokół czarnej kuchni i jej komina, aż do końca XIX wieku.",
+"Brick under the Prussian ordinances, the black kitchen behind it.": "Cegła na mocy pruskich zarządzeń, a za nią czarna kuchnia.",
+"The broad chimney filled part of the hall (Kurpie); in Podlasie one shared chimney often served several stoves — perhaps against the hearth tax (podymne).": "Szeroki komin zajmował część sieni (Kurpie); na Podlasiu jeden wspólny komin często obsługiwał kilka pieców — być może z powodu podatku podymnego.",
+"The pole chimney over the black kitchen — Świątniki (1758), Żuków on Roztocze — and the smoke vents of the older huts.": "Komin sztagowy nad czarną kuchnią — Świątniki (1758), Żuków na Roztoczu — i dymniki starszych chałup.",
+"The brick chimney every region built in the end — not the form the sources give to this place.": "Komin ceglany, który ostatecznie zbudował każdy region — nie forma, którą źródła przypisują temu miejscu.",
+"Neighbours and the brick chimney": "Sąsiednie i komin ceglany",
+"Neighbours and the brick chimney — none of its own": "Sąsiednie i komin ceglany — brak własnego",
 "Main body": "Bryła główna",
 "Drag the corner of the yard wall": "Przeciągnij narożnik muru podwórza",
 "Drag down or up: storeys of this body": "Przeciągnij w dół lub w górę: kondygnacje tej bryły",
