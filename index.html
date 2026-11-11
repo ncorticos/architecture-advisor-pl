@@ -192,6 +192,7 @@ table.data tr.total td{border-top:1px solid var(--line); font-weight:600; color:
 }
 .pill.ok{background:#eaf3dd; color:#3f6212}
 .pill.empty{background:#f1f2ef; color:#7b838b}
+.pill.warn{background:#fdf1d3; color:#8a5a06}
 .pill.bad{background:#fbe6e6; color:#9f2420}
 table.inv td:nth-child(2){text-align:left}
 table.inv td:last-child{text-align:left; font-family:var(--sans); color:var(--muted); white-space:normal; min-width:280px}
@@ -970,7 +971,7 @@ const L_MAX = 50;
 const APP = {
   name:        'Architecture Advisor PL',
   tag:         'AA PL',
-  version:     '1.164.0',
+  version:     '1.165.0',
   author:      'Nuno Dinis Cortiços',
   institution: 'Lisbon School of Architecture, Universidade de Lisboa',
   builtWith:   'Claude Opus 5 (Anthropic)',
@@ -3340,18 +3341,78 @@ const SOLAR_TECH = {
   pv:      { w:1.13, h:1.72, gap:0.02, eff:0.20, pr:0.80 },
   thermal: { w:1.00, h:2.00, gap:0.06, eta0:0.78, a1:3.5, a2:0.015, tm:50 }
 };
+/* The kinds a student picks, at typical catalogue values — a module's or
+   collector's own datasheet replaces them (IEC 61215 at STC for PV; EN ISO
+   9806, on the gross area, for thermal collectors; the Solar Keymark lists
+   tested ones). PV: an older polycrystalline module about 16 %, a current
+   monocrystalline one about 20 % (kWp per m² = the efficiency at the
+   1 000 W/m² of the standard test). Thermal: the glazed flat plate, and the
+   evacuated tube, which loses less heat (lower a1, a2) but catches less
+   per m² of gross area (lower η0) — the gap closes in winter and at high
+   temperatures. */
+const SOLAR_KIND = {
+  pv:{ mono:{ eff:0.20, en:'Monocrystalline', pt:'' }, poly:{ eff:0.16, en:'Polycrystalline', pt:'' } },
+  thermal:{ flat:{ eta0:0.78, a1:3.5, a2:0.015, en:'Flat plate', pt:'' }, tube:{ eta0:0.55, a1:1.2, a2:0.008, en:'Evacuated tube', pt:'' },
+    thermo:{ eta0:0.78, a1:3.5, a2:0.015, en:'Thermosiphon kit', pt:'', kit:true } }
+};
+/* The thermosiphon kit: one or two flat-plate collectors in a row with a
+   horizontal tank above their top edge — the water warmed in the collector
+   rises into it by itself, no pump. Typical kits: 150 L on 2 m² for three or
+   four people, 300 L on 4 m² for six to eight. The hot water it serves is
+   read by the convention of the Portuguese housing regulation (REH): 40 L
+   per occupant a day, heated by 35 K — a convention to check against the
+   regulation in force, not a measured use. One tank a day is drawn; what
+   the collectors catch beyond each month's draw is not used. */
+const SOLAR_KIT = { lPerson:40, dT:35, tankL:c => c >= 2 ? 300 : 150, tankD:c => c >= 2 ? 0.58 : 0.52 };
+/** A month's hot-water draw for a tank of V litres, kWh. */
+const kitDemand = (V, m) => V * 4.186 * SOLAR_KIT.dT / 3600 * MONTH_DAYS[m];
+/** A field's kind, with its values: monocrystalline and flat plate unless chosen. */
+const solKindOf = (tech, spec) => { const T = tech === 'pv' ? 'pv' : 'thermal', K = SOLAR_KIND[T], k = spec && K[spec.kind] ? spec.kind : (T === 'pv' ? 'mono' : 'flat'); return Object.assign({ id:k }, K[k]); };
+/** The way a racked field faces: the equator (true south north of it) turned by
+    the student's dev, degrees, negative toward the east. */
+const solAz = (sol, lat) => { const dv = clamp(isFinite(+(sol && sol.dev)) ? +sol.dev : 0, -90, 90); return lat >= 0 ? 180 + dv : ((0 - dv) % 360 + 360) % 360; };
+/** A racked field's tilt: the student's, else the latitude. */
+const solTilt = (sol, lat) => sol && sol.tilt !== null && sol.tilt !== undefined && isFinite(+sol.tilt) ? clamp(Math.round(+sol.tilt), 0, 90) : Math.round(Math.abs(lat));
 /** Yearly useful output per m² of collector (kWh/m²) from the plane's months. */
-function solarYield(tech, mon, lat, Ta) {
-  if (tech === 'pv') return mon.reduce((a, h, m) => a + h * MONTH_DAYS[m], 0) / 3.6 * SOLAR_TECH.pv.eff * SOLAR_TECH.pv.pr;
-  const c = SOLAR_TECH.thermal;
-  let q = 0;
-  for (let m = 0; m < 12; m++) {
+function solarYield(tech, mon, lat, Ta, kind) {
+  return solarYieldMonths(tech, mon, lat, Ta, kind).reduce((a, v) => a + v, 0);
+}
+/** The same, month by month (kWh/m²). */
+function solarYieldMonths(tech, mon, lat, Ta, kind) {
+  if (tech === 'pv') { const e = (SOLAR_KIND.pv[kind] || SOLAR_KIND.pv.mono).eff * SOLAR_TECH.pv.pr; return mon.map((h, m) => h * MONTH_DAYS[m] / 3.6 * e); }
+  const c = Object.assign({}, SOLAR_TECH.thermal, SOLAR_KIND.thermal[kind] || SOLAR_KIND.thermal.flat);
+  return mon.map((h, m) => {
     const hours = 2 * solarMonth(lat, m).ws / RAD / 15;
-    const G = mon[m] * 1e6 / Math.max(1, hours * 3600), dT = c.tm - Ta[m];
+    const G = h * 1e6 / Math.max(1, hours * 3600), dT = c.tm - Ta[m];
     const eta = G > 1 ? clamp(c.eta0 - c.a1 * dT / G - c.a2 * dT * dT / G, 0, 1) : 0;
-    q += eta * mon[m] * MONTH_DAYS[m];
-  }
-  return q / 3.6;
+    return eta * h * MONTH_DAYS[m] / 3.6;
+  });
+}
+/** A thermosiphon tank as faces: its two round ends, then the upper half of
+    its shell from the sides to the top — the half seen from any eye above
+    it, in an order that paints right without a depth sort. a and b are the
+    centres of its ends, r its radius. Each face: { pts, n, fill }. With
+    seen (a face normal → does the eye see it?), the whole shell the eye
+    sees, the end turned toward it last. */
+function solarTankFaces(tk, seen) {
+  const a = tk.a, b = tk.b, r = tk.r, N = 14, L = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]) || 1, d = [(b[0] - a[0]) / L, (b[1] - a[1]) / L, (b[2] - a[2]) / L];
+  let p1 = [d[1], -d[0], 0]; const l1 = Math.hypot(p1[0], p1[1]) || 1; p1 = [p1[0] / l1, p1[1] / l1, 0];
+  const p2 = [d[1] * p1[2] - d[2] * p1[1], d[2] * p1[0] - d[0] * p1[2], d[0] * p1[1] - d[1] * p1[0]], up = p2[2] < 0 ? -1 : 1;
+  const dir = th => [Math.cos(th) * p1[0] + up * Math.sin(th) * p2[0], Math.cos(th) * p1[1] + up * Math.sin(th) * p2[1], Math.cos(th) * p1[2] + up * Math.sin(th) * p2[2]];
+  const at = (c, th) => { const v = dir(th); return [c[0] + r * v[0], c[1] + r * v[1], c[2] + r * v[2]]; };
+  const out = [];
+  const ring = c => Array.from({ length:2 * N }, (_, k) => at(c, k / (2 * N) * 2 * Math.PI));
+  out.push({ pts:ring(a), n:d.map(x => -x), fill:'#AEB4BA' }, { pts:ring(b), n:d, fill:'#AEB4BA' });
+  const sh = [];
+  for (let k = 0; k < N; k++) { const t0 = k / N * Math.PI, t1 = (k + 1) / N * Math.PI, n = dir((t0 + t1) / 2);
+    sh.push({ pts:[at(a, t0), at(b, t0), at(b, t1), at(a, t1)], n, fill:n[2] > 0.85 ? '#E3E6E9' : n[2] > 0.5 ? '#D3D7DB' : '#BFC4C9' }); }
+  /* the lower half of each side first, so the top lies over them */
+  sh.sort((x, y) => x.n[2] - y.n[2]);
+  if (!seen) return out.concat(sh);
+  for (let k = N; k < 2 * N; k++) { const t0 = k / N * Math.PI, t1 = (k + 1) / N * Math.PI, n = dir((t0 + t1) / 2);
+    if (seen(n)) sh.unshift({ pts:[at(a, t0), at(b, t0), at(b, t1), at(a, t1)], n, fill:'#A9AFB5' }); }
+  const caps = out.filter(f => !seen(f.n)).concat(sh.filter(f => seen(f.n)), out.filter(f => seen(f.n)));
+  return caps;
 }
 /** A garden turbine's screening estimate from monthly mean winds at 10 m:
     1/7 shear to hub height, Rayleigh gust energy (1.91× the cubed mean),
@@ -3405,33 +3466,73 @@ function turbClamp(x, y) {
   }
   return { x, y, d:h.d, held };
 }
+/** One collector field, PV or thermal, as the Roof tab computes it — where it
+    sits, the way it faces and its tilt, the sun on its plane, its year's
+    output and, for PV, its peak power — for any tab: null when it is off. The
+    share of optimum is against the best a collector of that kind could do
+    here, facing the equator at its best tilt. */
+function solarEval(G, RF, S, C, tech) {
+  const key = tech === 'pv' ? 'pv' : 'th', T = tech === 'pv' ? 'pv' : 'thermal';
+  if (!G || !RF || !RF.sol || !RF.sol[key] || !RF.sol[key].on || !S || !C) return null;
+  const spec = Object.assign({}, RF.sol[key], { tech:T }), kind = solKindOf(T, spec);
+  const fld = solarField(G, RF, S.lat, solarOptimum(S, T, G.rot, C.t, kind.id).tilt, spec);
+  const az = fld && isFinite(fld.az) ? fld.az : G.rot;
+  const tilt = fld && isFinite(fld.tilt) ? fld.tilt : RF.th;
+  const best = solarOptimum(S, T, S.lat >= 0 ? 180 : 0, C.t, kind.id), opt = solarOptimum(S, T, az, C.t, kind.id);
+  const hm = horizontalMonths(S), tp = tiltedYear(hm.H, S.lat, tilt, az);
+  const qm = solarYieldMonths(T, tp.mon, S.lat, C.t, kind.id), perM2 = qm.reduce((a, v) => a + v, 0);
+  const md = SOLAR_TECH[T], n = fld && fld.fits ? fld.c * fld.r : 0, area = n * md.w * md.h;
+  /* a thermosiphon kit serves its tank's daily draw: what the collectors catch beyond it, month by month, is not used */
+  let kit = null, out = area * perM2;
+  if (kind.kit && fld && fld.fits && fld.tank) {
+    const V = fld.tank.V, dem = MONTH_DAYS.map((_, m) => kitDemand(V, m)), col = qm.map(v => v * area), used = col.map((v, m) => Math.min(v, dem[m]));
+    const D = dem.reduce((a, v) => a + v, 0), U = used.reduce((a, v) => a + v, 0);
+    kit = { V, people:V / SOLAR_KIT.lPerson, demand:D, collected:col.reduce((a, v) => a + v, 0), used:U, frac:D > 0 ? U / D : 0, monthsFull:used.filter((u, m) => u >= dem[m] - 1e-6).length };
+    out = U;
+  }
+  return { sol:spec, kind, fld, az, tilt, opt, best, plane:tp.year, perM2, n, area, out, kit,
+    kWp:T === 'pv' ? area * kind.eff : null, ratio:best.y > 0 ? perM2 / best.y : 0, measured:hm.measured };
+}
+/* What the house can use, from its size, so that a field far beyond it shows as such. A teaching yardstick, not an
+   energy audit: one person per 30 m² of floor, two to eight (the regulation's dwelling counts bedrooms plus one); electricity
+   1 000 kWh a year plus 625 per person — the app's 3 500 kWh for a home of four; hot water by the REH's own convention, as for
+   the thermosiphon kit, 40 L a person a day heated by 35 K. Up to 1.3 times the electricity is fine, past twice is red; heat
+   has 1.5 and 2.2, since a collector's year counts summer heat a house does not all draw, and that heat cannot be sent anywhere. Commerce and services, and the
+   support structures, have no such yardstick and are not judged. */
+const SOL_BANDS = { pv:[1.3, 2], thermal:[1.5, 2.2] };
+function houseNeed(G) {
+  const S = STATE.site; if (!G || (S && S.use === 'cs')) return null;
+  let A = 0;
+  if (isPopular()) { let R = null; try { R = vernRead(); } catch (e) { R = null; }
+    if (R && R.T && R.T.support) return null;
+    const vm = R && R.V && R.V.vm; if (vm && vm.vols) vm.vols.forEach(v => { A += (v.kind === 'round' ? Math.PI * v.L * v.L / 4 : v.L * v.D) * (v.fl || 1); }); }
+  if (!(A > 0)) { const pl = planModel(G); A = (isFinite(pl.area) && pl.area > 0 ? pl.area : G.L * G.D) * Math.max(1, Math.round(G.fl || 1)); }
+  /* a building of several dwellings has no ceiling of one household */
+  const flats = isPopular() && ['pt-pombalino', 'pt-gaioleiro', 'pt-lisboa-patio', 'pt-vila-operaria'].includes((STATE.vern || {}).type);
+  const people = flats ? Math.max(2, Math.round(A / 30)) : clamp(Math.round(A / 30), 2, 8);
+  return { area:A, people, pv:1000 + 625 * people, thermal:people * SOLAR_KIT.lPerson * 4.186 * SOLAR_KIT.dT / 3600 * 365 };
+}
+/** A field's year against that need: the share, and green, yellow or red. Null where it is not judged. */
+function solSizing(tech, kwh, G) {
+  const T = tech === 'pv' ? 'pv' : 'thermal', n = houseNeed(G); if (!n || !(kwh > 0)) return null;
+  const r = kwh / n[T], [a, b] = SOL_BANDS[T];
+  return Object.assign({}, n, { need:n[T], r, level:r > b ? 'bad' : r > a ? 'warn' : 'ok', col:r > b ? '#DC2626' : r > a ? '#D97706' : '#16A34A', limit:a });
+}
 /** The Roof tab's PV electricity, recomputed anywhere (Ventilation combines
     it with wind): null where no PV fits or the site is missing. */
 function pvAnnualKwh() {
   try {
-    const G = MASS, RF = ROOF, S = STATE.site, C = STATE.clim;
-    if (!G || !RF || !RF.sol || !RF.sol.pv || !RF.sol.pv.on || !S || !C) return null;
-    const opt = solarOptimum(S, 'pv', G.rot, C.t);
-    const fld = solarField(G, RF, S.lat, opt.tilt, Object.assign({ tech:'pv' }, RF.sol.pv));
-    if (!fld || !fld.fits) return null;
-    const hm = horizontalMonths(S), tp = tiltedYear(hm.H, S.lat, fld.tilt, G.rot);
-    const perM2 = solarYield('pv', tp.mon, S.lat, C.t), md = SOLAR_TECH.pv;
-    const area = fld.c * fld.r * md.w * md.h;
-    return { kwh:area * perM2, kwp:area * md.eff, tilt:fld.tilt, perM2, measured:hm.measured };
+    const E = solarEval(MASS, ROOF, STATE.site, STATE.clim, 'pv');
+    if (!E || !E.fld || !E.fld.fits) return null;
+    return { kwh:E.out, kwp:E.kWp, tilt:E.tilt, az:E.az, perM2:E.perM2, measured:E.measured };
   } catch (e) { return null; }
 }
 /** The Roof tab's thermal heat, recomputed anywhere: null where none fits. */
 function thAnnualKwh() {
   try {
-    const G = MASS, RF = ROOF, S = STATE.site, C = STATE.clim;
-    if (!G || !RF || !RF.sol || !RF.sol.th || !RF.sol.th.on || !S || !C) return null;
-    const opt = solarOptimum(S, 'th', G.rot, C.t);
-    const fld = solarField(G, RF, S.lat, opt.tilt, Object.assign({ tech:'th' }, RF.sol.th));
-    if (!fld || !fld.fits) return null;
-    const hm = horizontalMonths(S), tp = tiltedYear(hm.H, S.lat, fld.tilt, G.rot);
-    const perM2 = solarYield('th', tp.mon, S.lat, C.t), md = SOLAR_TECH.th;
-    const area = fld.c * fld.r * md.w * md.h;
-    return { kwh:area * perM2, tilt:fld.tilt, perM2, measured:hm.measured };
+    const E = solarEval(MASS, ROOF, STATE.site, STATE.clim, 'thermal');
+    if (!E || !E.fld || !E.fld.fits) return null;
+    return { kwh:E.out, area:E.area, tilt:E.tilt, az:E.az, perM2:E.perM2, measured:E.measured, kit:E.kit };
   } catch (e) { return null; }
 }
 /**
@@ -3505,13 +3606,13 @@ function snowFor(site, onReady) {
 }
 /** The pitch that collects most in a year for one technology, facing az. */
 const SOLAR_OPT = {};
-function solarOptimum(site, tech, az, Ta) {
+function solarOptimum(site, tech, az, Ta, kind) {
   const hm = horizontalMonths(site);
-  const key = [tech, az, site.lat, site.lon, hm.measured].join('|');
+  const key = [tech, az, site.lat, site.lon, hm.measured, kind || ''].join('|');
   if (SOLAR_OPT[key]) return SOLAR_OPT[key];
   let best = { tilt:0, y:-1, plane:0 };
   for (let b = 0; b <= 90; b++) {
-    const tv = tiltedYear(hm.H, site.lat, b, az), y = solarYield(tech, tv.mon, site.lat, Ta);
+    const tv = tiltedYear(hm.H, site.lat, b, az), y = solarYield(tech, tv.mon, site.lat, Ta, kind);
     if (y > best.y) best = { tilt:b, y, plane:tv.year };
   }
   return (SOLAR_OPT[key] = Object.assign(best, { measured:hm.measured }));
@@ -3544,6 +3645,100 @@ function collectPlane(M) {
  * the row in front. Returns the modules as quads, the corner point that
  * resizes the field, and what fits.
  */
+/** A field racked on a metal frame: modules facing az (the equator, turned
+    by the student) at the chosen tilt, on any roof — a flat one, a slope
+    turned any way, a slope that does not face the main facade. Columns run
+    across the facing, rows step back from O, each row spaced so the
+    winter-noon sun clears the one in front; every module stands on four
+    legs, its front edge 0.2 m and its back 0.15 m over the covering below,
+    and stays 0.3 m inside the footprint. O is the field's front middle: a
+    quarter of the largest block in from its centre toward the facing, moved
+    by the student's dx (across) and dy (back). */
+function solarRack(G, M, sol, md, lat, auto, opt) {
+  /* opt.slope: laid flush on that slope instead — facing its own way at its own pitch, rows touching, a hand above the
+     tiles, every module on that one plane */
+  const sp = opt && opt.slope, g = md.gap, az = sp ? sp.az : solAz(sol, lat), tilt = sp ? Math.round(sp.th) : solTilt(sol, lat), beta = tilt * RAD, mg = 0.3;
+  const nF = planDir(G.rot, az), eF = [-nF[1], nF[0]], bk = [-nF[0], -nF[1]];
+  const bx = M.pl.boxes.reduce((p, q) => (q[2] - q[0]) * (q[3] - q[1]) > (p[2] - p[0]) * (p[3] - p[1]) ? q : p);
+  /* from a quarter of the block toward the way it faces: on a gable, the slope that faces it; flush, from 0.4 m above
+     the slope's lowest edge over the wall — the wall line, not the eave's edge: an eave is no place for a module, and
+     measured from its edge the first row's margin fell outside the walls, so no module fitted on an eaved slope —
+     on the line of its largest piece's middle */
+  const ext = Math.abs(nF[0]) * (bx[2] - bx[0]) + Math.abs(nF[1]) * (bx[3] - bx[1]), fw = ext / 4;
+  const dx = sol.dx || 0, dy = sol.dy || 0;
+  let O0 = [(bx[0] + bx[2]) / 2 + fw * nF[0], (bx[1] + bx[3]) / 2 + fw * nF[1]];
+  if (sp) { const pc = sp.pieces.reduce((p, q) => q.area > p.area ? q : p), c0 = pc.centroid;
+    let lo = Math.max(...pc.poly.map(q => (q[0] - c0[0]) * nF[0] + (q[1] - c0[1]) * nF[1]));
+    if (M.pl.inside(c0[0], c0[1])) { let d = 0; const st = 0.02;
+      while (d + st <= lo && M.pl.inside(c0[0] + (d + st) * nF[0], c0[1] + (d + st) * nF[1])) d += st;
+      lo = Math.min(lo, d); }
+    O0 = [c0[0] + (lo - 0.4) * nF[0], c0[1] + (lo - 0.4) * nF[1]]; }
+  const O = [O0[0] + dx * eF[0] + dy * bk[0], O0[1] + dx * eF[1] + dy * bk[1]];
+  const altMin = Math.max(5, 90 - Math.abs(lat) - 23.44) * RAD, run = md.h * Math.cos(beta), rise = md.h * Math.sin(beta);
+  const row = sp ? run + g * Math.cos(beta) : run + rise / Math.tan(altMin) + 0.1;
+  const PP = (u, sv) => [O[0] + u * eF[0] + sv * bk[0], O[1] + u * eF[1] + sv * bk[1]];
+  const onSlope = p => !sp || sp.pieces.some(pc => inPoly(p[0], p[1], pc.poly));
+  const zr = (u, sv) => { const p = PP(u, sv); return M.pl.inside(p[0], p[1]) && onSlope(p) ? M.zAt(p[0], p[1]) : null; };
+  const lay = (c, r) => {
+    const W = c * md.w + (c - 1) * g, D = (r - 1) * row + run, mods = [];
+    for (let j = 0; j < r; j++) for (let i = 0; i < c; i++) {
+      const u0 = -W / 2 + i * (md.w + g), u1 = u0 + md.w, s0 = j * row, s1 = s0 + run;
+      if ([[u0 - mg, s0 - mg], [u1 + mg, s0 - mg], [u1 + mg, s1 + mg], [u0 - mg, s1 + mg], [(u0 + u1) / 2, (s0 + s1) / 2]].some(q => zr(q[0], q[1]) === null)) return null;
+      const f0 = zr(u0, s0), f1 = zr(u1, s0), b1 = zr(u1, s1), b0 = zr(u0, s1), mid = zr((u0 + u1) / 2, (s0 + s1) / 2);
+      const cf = sp ? 0.05 : 0.2, cb = sp ? 0.05 : 0.15, zf = Math.max(f0 + cf, f1 + cf, b0 + cb - rise, b1 + cb - rise, mid + cb - rise / 2);
+      if (Math.max(zf - f0, zf - f1, zf + rise - b0, zf + rise - b1) > 3) return null;   // a frame taller than 3 m is no rack
+      const a = PP(u0, s0), b = PP(u1, s0), cc = PP(u1, s1), d = PP(u0, s1);
+      mods.push({ i, j, q:[[a[0], a[1], zf], [b[0], b[1], zf], [cc[0], cc[1], zf + rise], [d[0], d[1], zf + rise]] });
+    }
+    return { W, D, mods };
+  };
+  const lim = sol.tech === 'pv' ? [12, 6] : [8, 4], none = { fits:false, free:true, racked:!sp, slope:sp ? { az:sp.az, th:sp.th } : null, auto, maxC:0, maxR:0, c:0, r:0, mods:[], md, az, tilt };
+  let maxC = 0; for (let c = 1; c <= lim[0]; c++) { if (lay(c, 1)) maxC = c; else break; }
+  if (!maxC) return none;
+  let maxR = 0; for (let r = 1; r <= lim[1]; r++) { if (lay(1, r)) maxR = r; else break; }
+  let c = clamp(sol.cols, 1, maxC), r = clamp(sol.rows, 1, Math.max(1, maxR)), capped = false;
+  const capA = sol.tech === 'pv' ? 40 : 20;
+  while (c * r * md.w * md.h > capA && (c > 1 || r > 1)) { if (c >= r && c > 1) c--; else r--; capped = true; }
+  let L = lay(c, r);
+  while (!L && (c > 1 || r > 1)) { if (c >= r && c > 1) c--; else r--; L = lay(c, r); }
+  if (!L) return none;
+  const at = (i, j) => L.mods.find(m => m.i === i && m.j === j), m00 = at(0, 0), m10 = at(c - 1, 0), m11 = at(c - 1, r - 1), m01 = at(0, r - 1);
+  const zc = L.mods.reduce((acc, m) => acc + (m.q[0][2] + m.q[2][2]) / 2, 0) / L.mods.length, cm = PP(0, L.D / 2);
+  return { fits:true, free:true, racked:!sp, slope:sp ? { az:sp.az, th:sp.th, main:!!sp.main } : null, pn:sp ? sp.n : null, flat:false, auto, capped, c, r, maxC, maxR, md, beta, th:beta, tilt, az, row, run, W:L.W, xc:0, s0:0, sTop:L.D, O, eF, bk,
+    mods:L.mods, handle:m11.q[2], center:[cm[0], cm[1], zc], zc, corners3:[m00.q[0], m10.q[1], m11.q[2], m01.q[3]] };
+}
+/** A field on a facade: the outer wall facing nearest the equator (or the
+    student's turn of it), modules in landscape on brackets hinged at their
+    top edge, tilted out from the horizontal by the facade tilt (90° flat on
+    the wall), from 0.25 m under the eave down, no lower than 0.4 m over the
+    ground, 0.3 m in from the wall's ends. dx slides it along the wall, dy
+    lowers it. It faces the wall's own way; the tilt is the student's. */
+function solarFacade(G, M, sol, md, lat) {
+  const g = md.gap, H0 = M.H0, az0 = solAz(sol, lat), beta = clamp(isFinite(+sol.ftilt) ? +sol.ftilt : 70, 10, 90) * RAD;
+  const brg = n => { const a = (G.rot - 180) * RAD, X = n[0] * Math.cos(a) + n[1] * Math.sin(a), Y = -n[0] * Math.sin(a) + n[1] * Math.cos(a); return ((Math.atan2(X, Y) / RAD) % 360 + 360) % 360; };
+  const dA = (p, q) => Math.abs(((p - q) % 360 + 540) % 360 - 180);
+  const Lm = md.h, Hm = md.w, tilt = Math.round(beta / RAD), none = { fits:false, facade:true, maxC:0, maxR:0, c:0, r:0, mods:[], md, az:az0, tilt };
+  const segs = M.pl.segs.filter(sg => sg.len >= Lm + 0.6);
+  if (!segs.length) return none;
+  const sg = segs.reduce((p, q) => { const dp = dA(brg(p.n), az0), dq = dA(brg(q.n), az0); return dq < dp - 1 || (Math.abs(dq - dp) <= 1 && q.len > p.len) ? q : p; });
+  const az = Math.round(brg(sg.n)), n = sg.n, tx = (sg.b[0] - sg.a[0]) / sg.len, ty = (sg.b[1] - sg.a[1]) / sg.len, off = 0.06;
+  const rowH = Hm * Math.sin(beta) + 0.15, drop = Hm * Math.sin(beta), out = off + Hm * Math.cos(beta);
+  const zTop = H0 - 0.25 - (sol.dy || 0), uMid = sg.len / 2 + (sol.dx || 0);
+  const maxC = Math.floor((2 * Math.min(uMid - 0.3, sg.len - 0.3 - uMid) + g) / (Lm + g)), maxR = zTop > H0 - 0.2 ? 0 : Math.floor((zTop - 0.4 - drop) / rowH) + 1;
+  if (maxC < 1 || maxR < 1) return Object.assign(none, { az, maxC:Math.max(0, maxC), maxR:Math.max(0, maxR) });
+  let c = clamp(sol.cols, 1, maxC), r = clamp(sol.rows, 1, maxR), capped = false;
+  const capA = sol.tech === 'pv' ? 40 : 20;
+  while (c * r * md.w * md.h > capA && (c > 1 || r > 1)) { if (c >= r && c > 1) c--; else r--; capped = true; }
+  const W = c * Lm + (c - 1) * g, WP = (u, z, o) => [sg.a[0] + tx * u + n[0] * o, sg.a[1] + ty * u + n[1] * o, z], mods = [];
+  for (let j = 0; j < r; j++) for (let i = 0; i < c; i++) {
+    const u0 = uMid - W / 2 + i * (Lm + g), u1 = u0 + Lm, zt = zTop - j * rowH, zb = zt - drop;
+    mods.push({ i, j, q:[WP(u0, zb, out), WP(u1, zb, out), WP(u1, zt, off), WP(u0, zt, off)] });
+  }
+  const zBot = zTop - (r - 1) * rowH - drop;
+  return { fits:true, facade:true, flat:false, capped, c, r, maxC, maxR, md, beta, th:beta, tilt, az, W, xc:sol.dx || 0, s0:-zTop, sTop:-zBot, rowH, drop, zTop, n, sg,
+    mods, handle:WP(uMid + W / 2, zBot, out), center:WP(uMid, (zTop + zBot) / 2, (off + out) / 2),
+    corners3:[WP(uMid - W / 2, zTop, off), WP(uMid + W / 2, zTop, off), WP(uMid + W / 2, zBot, out), WP(uMid - W / 2, zBot, out)] };
+}
 /** Two collector fields, PV and thermal, each placed freely on the
     collecting slope: legacy single-tech studies land on their own tech. */
 function fixSolFields(s) {
@@ -3552,7 +3747,14 @@ function fixSolFields(s) {
   const numOr = (v, d) => (v === null || v === undefined || !isFinite(+v)) ? d : +v;
   const nz = (q, c, r, tech) => ({ on:!!(q && q.on), cols:clamp(Math.round(numOr(q && q.cols, c)), 1, tech === 'th' ? 8 : 12),
     rows:clamp(Math.round(numOr(q && q.rows, r)), 1, tech === 'th' ? 4 : 6),
-    pmode:(q && (q.pmode === 'lat' || q.pmode === 'roof')) ? q.pmode : 'roof',
+    /* racked to the south unless the student lays it on the slope; on the roof or on a facade */
+    pmode:(q && (q.pmode === 'lat' || q.pmode === 'roof')) ? q.pmode : 'lat',
+    mount:q && q.mount === 'facade' ? 'facade' : 'roof',
+    kind:q && SOLAR_KIND[tech === 'pv' ? 'pv' : 'thermal'][q.kind] ? q.kind : (tech === 'pv' ? 'mono' : 'flat'),
+    dev:clamp(Math.round(numOr(q && q.dev, 0)), -90, 90),
+    tilt:(q && q.tilt !== null && q.tilt !== undefined && isFinite(+q.tilt)) ? clamp(Math.round(+q.tilt), 0, 90) : null,
+    ftilt:clamp(Math.round(numOr(q && q.ftilt, 70)), 10, 90),
+    slope:(q && q.slope !== null && q.slope !== undefined && isFinite(+q.slope)) ? ((Math.round(+q.slope) % 360) + 360) % 360 : null,
     dx:(q && isFinite(+q.dx)) ? +q.dx : 0, dy:(q && isFinite(+q.dy)) ? +q.dy : 0 });
   if (s.pv || s.th) return { pv:nz(s.pv, 4, 2, 'pv'), th:nz(s.th, 2, 1, 'th'), sel:(s && (s.sel === 'pv' || s.sel === 'th')) ? s.sel : null };
   const t = (s.tech === 'pv' || s.tech === 'thermal') ? s.tech : 'none';
@@ -3563,17 +3765,74 @@ function fixSolFields(s) {
   };
 }
 function solStudy(s) {
+  const placed = tech => { try { const E = solarEval(MASS, ROOF, STATE.site, STATE.clim, tech); if (!E || !E.fld) return null;
+    const f = E.fld; return f.fits ? { placedColumns:f.c, placedRows:f.r, cutBack:f.c * f.r < (E.sol.cols || 0) * (E.kit ? 1 : (E.sol.rows || 0)) || !!f.capped,
+      mounting:f.facade ? 'facade' : f.slope ? 'flush on the slope' : f.racked ? 'racked' : 'flush on the slope', facingAzimuth:Math.round(E.az), tilt:E.tilt,
+      peakKWp:E.kWp !== null ? +E.kWp.toFixed(2) : null, kWhPerYear:Math.round(E.out) } : { placedColumns:0, placedRows:0, cutBack:true, fits:false }; } catch (e) { return null; } };
   const out = {};
-  if (s && s.pv && s.pv.on) out.pv = { technology:'photovoltaic panels', columns:s.pv.cols, rows:s.pv.rows, dx:s.pv.dx, dy:s.pv.dy };
-  if (s && s.th && s.th.on) out.th = { technology:'flat-plate thermal collectors', columns:s.th.cols, rows:s.th.rows, dx:s.th.dx, dy:s.th.dy };
+  const how = q => ({ mount:q.mount === 'facade' ? 'facade' : q.pmode === 'roof' ? 'flush on the slope' : 'racked', facing_deviation_deg:q.dev || 0, tilt_deg:q.tilt, facade_tilt_deg:q.ftilt, slope_facing_deg:q.slope });
+  /* columns and rows are what was asked; placed* what the roof took — they differ where the field was cut back */
+  if (s && s.pv && s.pv.on) out.pv = Object.assign({ technology:(s.pv.kind === 'poly' ? 'polycrystalline' : 'monocrystalline') + ' photovoltaic panels', columns:s.pv.cols, rows:s.pv.rows, dx:s.pv.dx, dy:s.pv.dy }, how(s.pv), placed('pv') || {});
+  if (s && s.th && s.th.on) out.th = Object.assign({ technology:(s.th.kind === 'thermo' ? 'thermosiphon kit with tank' : s.th.kind === 'tube' ? 'evacuated-tube' : 'flat-plate') + ' thermal collectors', columns:s.th.cols, rows:s.th.rows, dx:s.th.dx, dy:s.th.dy }, how(s.th), placed('thermal') || {});
   return Object.keys(out).length ? out : null;
 }
 function solarField(G, RF, lat, optTilt, spec) {
+  const kit = spec && spec.on && spec.tech !== 'pv' && SOLAR_KIND.thermal[spec.kind] && SOLAR_KIND.thermal[spec.kind].kit;
+  if (!kit) return solarFieldCore(G, RF, lat, optTilt, spec);
+  /* a thermosiphon kit: one row of one or two collectors, its tank above their top edge — on a facade the
+     row hangs lower, to leave the tank room under the eave */
+  const c = clamp(Math.round(spec.cols || 1), 1, 2), r = SOLAR_KIT.tankD(c) / 2;
+  const sp = Object.assign({}, spec, { rows:1, cols:c, kit:true }, spec.mount === 'facade' ? { dy:(spec.dy || 0) + 2 * r + 0.15 } : {});
+  const fld = solarFieldCore(G, RF, lat, optTilt, sp);
+  if (!fld || !fld.fits) return fld;
+  const M = roofModel(G, RF), m0 = fld.mods.find(m => m.i === 0), m1 = fld.mods.find(m => m.i === fld.c - 1);
+  const A = m0.q[3], B = m1.q[2], cv = SOLAR_KIT.tankD(fld.c) / 2;
+  /* behind the top edge: away from the facing on a rack, up the slope when flush, out from the wall on a facade */
+  const bk = fld.free ? fld.bk : fld.facade ? [fld.n[0], fld.n[1]] : [0, 1], off = fld.facade ? cv + 0.04 : cv + 0.05;
+  const ctr = P => { const x = P[0] + bk[0] * off, y = P[1] + bk[1] * off, zr = fld.facade ? null : M.zAt(x, y);
+    return { x, y, zr, z:Math.max(P[2], zr === null ? -Infinity : zr) + cv + (fld.facade ? 0.06 : 0.08) }; };
+  const ca = ctr(A), cb = ctr(B);
+  if (!fld.facade && (ca.zr === null || cb.zr === null || !M.pl.inside(ca.x, ca.y) || !M.pl.inside(cb.x, cb.y))) return Object.assign({}, fld, { fits:false, noTank:true });
+  const z = Math.max(ca.z, cb.z), a = [ca.x, ca.y, z], b = [cb.x, cb.y, z], V = SOLAR_KIT.tankL(fld.c);
+  const legs = fld.facade ? [] : [[a, ca.zr], [b, cb.zr]].map(([p, zr]) => [[p[0], p[1], p[2] - cv], [p[0], p[1], zr]]);
+  return Object.assign({}, fld, { kit:true, tank:{ a, b, r:cv, V, legs } });
+}
+/** The roof's pitched slopes a field can be laid on, each once: the way it faces (compass bearing), its pitch, its
+    area, its pieces, its outward normal, and whether it is the one facing the main facade. North-facing ones last. */
+function solSlopes(G, M) {
+  const by = {};
+  M.pieces.forEach(pc => { if (!(pc.f && pc.f.th > 1)) return; (by[pc.key] = by[pc.key] || []).push(pc); });
+  const brg = (x, y) => { const a = (G.rot - 180) * RAD, X = x * Math.cos(a) + y * Math.sin(a), Y = -x * Math.sin(a) + y * Math.cos(a); return Math.round(((Math.atan2(X, Y) / RAD) % 360 + 360) % 360); };
+  const cp = collectPlane(M);
+  return Object.keys(by).map(k => { const f = by[k][0].f, th = f.th, area = by[k].reduce((a, pc) => a + pc.area, 0) / Math.cos(th * RAD);
+    const n = [-f.a * Math.sin(th * RAD), -f.b * Math.sin(th * RAD), Math.cos(th * RAD)];
+    return { key:k, az:brg(-f.a, -f.b), th, area, pieces:by[k], n, main:!!(cp && cp.key === k) }; })
+    .sort((p, q) => q.area - p.area);
+}
+/** The slope a field laid «On the slope» takes: the one the student picked (by the way it faces), else the one facing
+    the main facade, else the one facing nearest the equator — the larger of two as near. */
+function solSlopeFor(G, M, sol, lat) {
+  const L = solSlopes(G, M); if (!L.length) return null;
+  const dA = (p, q) => Math.abs(((p - q) % 360 + 540) % 360 - 180), eq = lat >= 0 ? 180 : 0;
+  if (isFinite(+sol.slope) && sol.slope !== null) { const hit = L.filter(q => dA(q.az, +sol.slope) <= 22.5); if (hit.length) return hit[0]; }
+  const main = L.find(q => q.main); if (main) return main;
+  return L.slice().sort((p, q) => dA(p.az, eq) - dA(q.az, eq) || q.area - p.area)[0];
+}
+function solarFieldCore(G, RF, lat, optTilt, spec) {
   const sol = spec;
   if (!sol || !sol.on) return null;
   const md = SOLAR_TECH[sol.tech], g = md.gap, mods = [], M = roofModel(G, RF), H0 = M.H0, bb = M.pl.bbox;
   const flat = RF.n === 0, cp = flat ? null : collectPlane(M);
-  if (!flat && !cp) return { fits:false, noPlane:true, maxC:0, maxR:0, c:0, r:0, mods, md };
+  /* on a facade, on brackets; racked to face the south (or where the student
+     turns it) on a flat roof, on any slope, and wherever no slope faces the
+     main facade; flush only on that slope, when the student lays it there */
+  if (sol.mount === 'facade') return solarFacade(G, M, sol, md, lat);
+  if (flat || sol.pmode !== 'roof') return solarRack(G, M, sol, md, lat, false);
+  /* «On the slope»: the slope facing the main facade keeps its own layout; any other slope — picked, or the only ones
+     there are when the ridge runs front to back — is laid flush the same way, facing where it faces */
+  const pick = solSlopeFor(G, M, sol, lat);
+  if (!pick) return solarRack(G, M, sol, md, lat, true);
+  if (!(pick.main && cp)) return solarRack(G, M, sol, md, lat, false, { slope:pick });
   const key = flat ? 'flat' : cp.key;
   const onPlane = (x, y) => { const r0 = M.at(x, y); return !!r0 && r0.key === key; };
   /** The runs along x where a band of the plan, ya to yb, lies wholly on the plane, each cut by mg. */
@@ -3620,7 +3879,7 @@ function solarField(G, RF, lat, optTilt, spec) {
   /* a house roof's share: PV about 40 m² (≈8 kWp), thermal about 20 m² —
      bigger asks are cut back, and say so, instead of pretending a house
      could use a field's output */
-  const capA = sol.tech === 'th' ? 20 : 40;
+  const capA = sol.tech === 'pv' ? 40 : 20;
   let capped = false;
   while (c * r * md.w * md.h > capA && (c > 1 || r > 1)) { if (c >= r && c > 1) { c--; W = c * md.w + (c - 1) * g; } else r--; capped = true; }
   if (flat) {
@@ -3678,7 +3937,7 @@ function solarField(G, RF, lat, optTilt, spec) {
     mods.push({ i, j, q:[P(x0, sa), P(x0 + md.w, sa), P(x0 + md.w, sa + md.h), P(x0, sa + md.h)] });
   }
   const sTop = s0 + r * md.h + (r - 1) * g;
-  return { fits:true, flat:false, capped, c, r, maxC, maxR, md, th:beta, s0, sTop, W, xc, ey0:cp.y0, tilt:cpTh, mods, P, handle:P(xc + W / 2, sTop),
+  return { fits:true, flat:false, capped, c, r, maxC, maxR, md, th:beta, s0, sTop, W, xc, ey0:cp.y0, tilt:cpTh, az:G.rot, mods, P, handle:P(xc + W / 2, sTop),
     center:P(xc, (s0 + sTop) / 2),
     corners3:[P(xc - W / 2, s0), P(xc + W / 2, s0), P(xc + W / 2, sTop), P(xc - W / 2, sTop)] };
 }
@@ -5625,6 +5884,7 @@ function faceUnits(f) {
 }
 /** Share of the specified glass actually built (switched-on units). */
 function glassShare(f) {
+  if (OPEN[f] && OPEN[f].bandM > 0) return 1;   // the WWR is what is built
   return faceUnits(f).reduce((a, w) => a + (w.on ? w.frac : 0), 0);
 }
 /** Absolute spans of one wall's glass [u0,u1] per unit, in order: every
@@ -5764,7 +6024,7 @@ function glassSpans(f, u0, u1, segLen, k) {
 }
 function segWindow(sg, G) {
   const f = sg.face || segFace(sg), o = OPEN && OPEN[f];
-  if (!o || !(o.wwr > 0) || sg.len < 1.5) return null;
+  if (!o || !(o.wwr > 0 || o.bandM > 0) || sg.len < 1.5) return null;
   if (sg.step) {
     /* a roof step wall (clerestory): one band from the lower roof up, sized
        to the sub-run's own lowest section so the glass never outgrows it.
@@ -5786,15 +6046,45 @@ function segWindow(sg, G) {
     const hAvail = ceil - base;
     if (o.sillZ + 0.3 > hAvail) return null;
     const head = Math.min(o.headZ, hAvail), h = Math.max(0.3, head - o.sillZ);
-    const w = Math.min(sg.len * 0.92, o.wwr * sg.len * hAvail / Math.max(h, 0.3));
-    const rows = [{ sill:base + o.sillZ, head:base + head }];
-    return { f:'C', w, h, sill:o.sillZ, head, uc:sg.len / 2, n:1, rows, area:w * h, glass:o.wwr * sg.len * hAvail, base, ceil };
+    const w = o.bandM > 0 ? o.bandM : Math.min(sg.len * 0.92, o.wwr * sg.len * hAvail / Math.max(h, 0.3));
+    const rows = [{ sill:base + o.sillZ, head:base + head }], glass = o.wwr * sg.len * hAvail;
+    return { f:'C', w, h, sill:o.sillZ, head, uc:sg.len / 2, n:1, rows, area:o.bandM > 0 ? glass : w * h, glass, base, ceil };
   }
   const n = Math.max(1, Math.round(G.fl || 1)), H0 = n * G.fh;
   const head = n > 1 ? Math.max(o.sillZ + 0.3, Math.min(o.headZ, G.fh - 0.1)) : o.headZ, h = Math.max(0.3, head - o.sillZ);
-  const w = Math.min(sg.len * 0.92, o.wwr * sg.len * H0 / (n * h));
+  const w = o.bandM > 0 ? o.bandM : Math.min(sg.len * 0.92, o.wwr * sg.len * H0 / (n * h));
   const zR = raiseH(MASS), rows = Array.from({ length:n }, (_, k) => ({ sill:zR + k * G.fh + o.sillZ, head:zR + k * G.fh + head }));
-  return { f, w, h, sill:o.sillZ, head, uc:sg.len / 2, n, rows, area:n * w * h, glass:o.wwr * sg.len * H0 };
+  return { f, w, h, sill:o.sillZ, head, uc:sg.len / 2, n, rows, area:o.bandM > 0 ? o.wwr * sg.len * H0 : n * w * h, glass:o.wwr * sg.len * H0 };
+}
+/** Does a wall's own run start on the viewer's right, seen from outside? */
+const uStartsRight = sg => (sg.b[0] - sg.a[0]) * sg.n[1] - (sg.b[1] - sg.a[1]) * sg.n[0] > 0;
+/** Openings are set in metres. A side's units are laid along a band of fixed length (bandM) instead of one the WWR, sill and
+    head stretch, so a window keeps its size and its distance from the wall's middle whatever else changes — and the WWR is
+    what the student built, read back, never an input. A side still in shares (an archetype's, an older study's) is
+    turned over here with every opening staying where it stands. */
+function openBandToMetres(o, f, w, len) {
+  const band = +(len * 0.92).toFixed(3), a0 = w.uc - w.w / 2, b0 = w.uc - band / 2, k = w.w / band;
+  faceUnits(f).forEach(u => { const P = isFinite(+u.pos) ? +u.pos : 0.5, O = isFinite(+u.off) ? +u.off : 0;
+    const turn = e => { if (isFinite(+e.frac)) e.frac = +e.frac * k;
+      if ('pos' in e || 'off' in e || e === u) { const c = a0 + (isFinite(+e.pos) ? +e.pos : P) * w.w + (isFinite(+e.off) ? +e.off : O); e.pos = (c - b0) / band; e.off = 0; } };
+    (u.floors || []).forEach(F => { if (F && typeof F === 'object') turn(F); });
+    turn(u); });
+  o.bandM = band;
+}
+function openMetres() {
+  if (!MASS || !OPEN) return;
+  const pl = planModel(MASS), n = Math.max(1, Math.round(MASS.fl || 1));
+  ['S', 'N', 'E', 'W'].forEach(f => { const o = OPEN[f]; if (!o) return;
+    const segs = pl.segs.filter(sg => !sg.step && segFace(sg) === f); if (!segs.length) return;
+    const ref = segs.reduce((a, q) => q.len > a.len ? q : a, segs[0]);
+    if (!(o.bandM > 0)) { const w = o.wwr > 0 ? segWindow(ref, MASS) : null; if (!w) return; openBandToMetres(o, f, w, ref.len); }
+    let wall = 0, built = 0;
+    segs.forEach(sg => { wall += sg.len * n * MASS.fh; const wn = segWindow(sg, MASS); if (!wn) return;
+      /* a brick panel is no glass, nor a popular house's timber door */
+      const R = unitRects(sg, wn, MASS, Infinity).filter(q => !(faceUnits(f)[q.ui] && unitFloor(faceUnits(f)[q.ui], q.k).gel) && !(q.door && isPopular()));
+      for (let k = 0; k < n; k++) { const iv = R.filter(q => q.k === k), xs = [...new Set(iv.flatMap(q => [q.a, q.b]))].sort((p, q) => p - q);
+        for (let i = 0; i + 1 < xs.length; i++) { const m = (xs[i] + xs[i + 1]) / 2; built += (xs[i + 1] - xs[i]) * iv.reduce((h, q) => m >= q.a && m <= q.b ? Math.max(h, q.v1 - q.v0) : h, 0); } } });
+    if (wall > 0) o.wwr = Math.max(0.001, built / wall); });
 }
 /** The model's own openings on a wall, one rect per unit and storey
     ({a, b, v0, v1, door}) — the same windows as Openings, never a band.
@@ -5809,7 +6099,7 @@ function unitRects(sg, w, G, H0) {
       const eu = unitFloor(u, kk);
       const vv = f === 'C' ? spanVC(u, r.sill, r.head, w.base, w.ceil) : eu.door ? doorSpanV(u, head, kk, G.fh) : unitSpanV(u, r.sill, head, kk, G.fh);
       const v1 = f === 'C' ? vv[1] : Math.min(vv[1], H0);
-      if (v1 - vv[0] >= 0.1) out.push({ a:sp.a, b:sp.b, v0:vv[0], v1, door:!!eu.door, k:kk });
+      if (v1 - vv[0] >= 0.1) out.push({ a:sp.a, b:sp.b, v0:vv[0], v1, door:!!eu.door, rail:!!eu.rail, k:kk, ui:sp.ui });
     });
   });
   return out;
@@ -6680,6 +6970,7 @@ function pageHead(host, title, body) {
    text, so that editing a sentence in English does not silently drop its
    translation. %1, %2 … are substituted after the lookup. */
 const PT_HINT = {};
+const nutsOfPlace = (place, nuts) => nuts;
 const PT_HINT_MISSING = new Set();
 PT_HINT['vent-water'] = 'Jak liczona jest woda. Parowanie według równania ASHRAE dla basenów (za Carrierem), w = A (pw − pa)(0,089 + 0,0782 V) / Y, zmniejszone o połowę dla wody stojącej i nieużywanej; powierzchnia ma temperaturę bliską średniej temperatury powietrza najcieplejszego miesiąca, o stopień wyższą od słońca, a woda głębsza trzyma się bliżej średniej rocznej. Powietrze przechodzące nad wodą jest chłodzone względem suchego ogrodu, który woda zastępuje: woda odbiera powietrzu ciepło przez konwekcję i — inaczej niż sucha ziemia w słońcu — nic mu nie oddaje (przyjęto 30 % słońca padającego na ziemię). Oba efekty dzieli najniższe 1,5 m powietrza, które ją przecina, słabną z wiatrem w miarę, jak ta warstwa grubieje, i nigdy nie przekraczają 60 % depresji termometru mokrego. Dodaną wilgotność odlicza się od chłodzenia w temperaturze odczuwalnej (Steadman). Wilgotność popołudniową i amplitudę dobową szacuje się według położenia działki, dopóki nie wpiszesz ich z normalnych najbliższej stacji; nie liczy się promieniowania chłodnej powierzchni ani fontanny. Stojący basen chłodzi niewiele; różnicę robią wiatr nad szeroką powierzchnią i dom blisko po stronie zawietrznej.';
 PT_HINT['vent-stack'] = 'Efekt kominowy przez okna dachowe. Ciepłe powietrze wewnątrz jest lżejsze od zewnętrznego, więc uchodzi górą i zasysa chłodniejsze dołem: okna dachowe ustawione w Otworach i zacienieniu są wylotami, okna parteru każdej strony — wlotami, po połowie każdego otworu. Przepływ Q = 0,61 · A* · √(2 g Δh ΔT / T), gdzie A* to wloty i wyloty połączone szeregowo, Δh — wysokość od połowy wlotów do okien dachowych, ΔT — o ile cieplej jest wewnątrz niż na zewnątrz, T — letnie powietrze (CIBSE AM10; DeKay i Brown, strategia 85). Działa w bezwietrzne dni, gdy przewietrzanie poprzeczne zawodzi, i rośnie z wysokością między wlotem a wylotem oraz z ciepłem do oddania; przy wietrze oba łączą się jako √(Qwiatr² + Qkomin²), przyjęte jako wspomagające — co jest prawdą, gdy okna dachowe leżą na połaci zawietrznej lub na dachu płaskim, w ssaniu wiatru. Na połaci nawietrznej wiatr może przeciwdziałać efektowi kominowemu.';
@@ -9588,21 +9879,7 @@ function buildRoof(host) {
   };
   /** Everything the page says about the field: what fits, its area, the sun
       on its plane and the year's output. */
-  const solarNowFor = tech => {
-    const key = tech === 'pv' ? 'pv' : 'th';
-    const spec = Object.assign({ tech }, RF.sol ? RF.sol[key] : null);
-    if (!spec.on) return null;
-    const sol = spec;
-    const opt = solarOptimum(S, sol.tech, slopeAz(), C.t);
-    const fld = solarField(G, RF, lat, opt.tilt, spec);
-    const cpl = collectPlane(roofModel(G, RF));
-    const tilt = (fld && fld.fits && isFinite(fld.tilt)) ? fld.tilt : (cpl ? cpl.pieces.reduce((p, q) => q.area > p.area ? q : p, cpl.pieces[0]).f.th : (RF.n === 0 ? opt.tilt : RF.th));
-    const hm = horizontalMonths(S), tp = tiltedYear(hm.H, lat, tilt, slopeAz());
-    const perM2 = solarYield(sol.tech, tp.mon, lat, C.t);
-    const md = SOLAR_TECH[sol.tech], n = fld && fld.fits ? fld.c * fld.r : 0, area = n * md.w * md.h;
-    return { sol, opt, fld, tilt, plane:tp.year, perM2, n, area, out:area * perM2,
-      kWp:sol.tech === 'pv' ? area * md.eff : null, ratio:opt.y > 0 ? perM2 / opt.y : 0, measured:hm.measured };
-  };
+  const solarNowFor = tech => solarEval(G, RF, S, C, tech);
   /** The sloped area of the plane facing the main facade, m². */
   const collectArea = M => { const cp = collectPlane(M); if (!cp) return 0;
     const th = cp.pieces.reduce((p, q) => q.area > p.area ? q : p, cp.pieces[0]).f.th;
@@ -9616,6 +9893,17 @@ function buildRoof(host) {
   /** A house's yearly share, rule of thumb: about 3 500 kWh of electricity,
       about 2 000 kWh of hot water at 50 °C. */
   const solHomes = (tech, kwh) => '≈ ' + fmt(kwh / (tech === 'pv' ? 3500 : 2000), 1) + ' ' + t('homes');
+  /** The worse of two badge colours: a well-pitched field that is far too big is still too big. */
+  const solWorse = (c1, c2) => [ '#DC2626', '#D97706', '#16A34A' ].find(q => q === c1 || q === c2) || c1;
+  /** The field against what this house uses, in words, with how many modules would do. */
+  const solNeedWords = (tech, sn, Z) => {
+    const loc = LANG === 'pl' ? 'pl-PL' : 'en-GB', N = v => Math.round(v).toLocaleString(loc), md = sn.fld.md.w * sn.fld.md.h;
+    const enough = Math.max(1, Math.floor(Z.limit * Z.need / Math.max(1, sn.out / Math.max(1, sn.n))));
+    return t('House of') + ' ' + N(Z.area) + ' m² ≈ ' + Z.people + ' ' + t('people') + ' · ' + t(tech === 'pv' ? 'electricity' : 'hot water') + ' ≈ ' + N(Z.need) + ' kWh/' + t('year') + ' · ' + t('this field') + ' ' + Math.round(Z.r * 100) + ' %'
+      + (Z.level === 'ok' ? ' — ' + t('suited to the house')
+        : ' — ' + t(Z.level === 'bad' ? (tech === 'pv' ? 'far more than the house uses: reduce the field' : 'far more than the house uses: the extra heat is lost, and overheats the collectors in summer') : (tech === 'pv' ? 'more than the house uses' : 'more heat than the house draws'))
+          + ' · ' + t('about') + ' ' + enough + ' ' + t(enough === 1 ? (tech === 'pv' ? 'module is enough' : 'collector is enough') : (tech === 'pv' ? 'modules are enough' : 'collectors are enough')) + ' (' + fmt(enough * md, 1) + ' m²)');
+  };
   const nearestIdeal = th => [{ a:idealW, k:'winter' }, { a:idealS, k:'summer' }, { a:idealB, k:'year-round' }]
     .reduce((p, q) => Math.abs(q.a - th) < Math.abs(p.a - th) ? q : p);
   SCORES.roof = () => {
@@ -9629,6 +9917,7 @@ function buildRoof(host) {
       if (sn) Object.assign(o, { [L + ' collection']:t === 'pv' ? 'PV panels' : 'thermal collectors', [L + ' collector area (m²)']:+sn.area.toFixed(1),
         [L + ' sun on plane (kWh/m²·year)']:Math.round(sn.plane), [L + ' collector pitch (°)']:sn.tilt,
         [t === 'pv' ? 'PV electricity (kWh/year)' : 'Useful heat (kWh/year)']:Math.round(sn.out),
+        [L + ' share of the house use (%)']:(q => q ? Math.round(q.r * 100) : null)(solSizing(t, sn.out, G)),
         [L + ' irradiation']:sn.measured ? 'ERA5 1991–2020 (Open-Meteo)' : 'estimate, clearness 0.55' });
     });
     return o;
@@ -10337,7 +10626,7 @@ function buildRoof(host) {
       }
     }
     const pn = pitchNow();
-    if (!pn) { pillRoof.className = 'pill empty'; pillRoof.textContent = t('Flat — no pitch to judge; racked collectors take the best pitch'); return; }
+    if (!pn) { pillRoof.className = 'pill empty'; pillRoof.textContent = t('Flat — no pitch to judge; racked collectors take the tilt set beside them'); return; }
     const ni = nearestIdeal(pn.th), facing = COMPASS8[Math.round(slopeAz() / 45) % 8];
     const none = !collectPlane(roofModel(G, RF)) ? ' — ' + t('no slope faces the main facade: the ridges run front to back') : '';
     pillRoof.className = 'pill ' + (pn.pct >= 97 ? 'ok' : pn.pct >= 90 ? 'empty' : 'bad');
@@ -10398,7 +10687,7 @@ function buildRoof(host) {
   };
   /** Is the collector field in view? A slope's field faces the main facade
       with the roof's pitch; racked rows on a flat roof are seen from above. */
-  const fieldSeen = (A, fl) => fl.flat ? A.se > 0.05 : camSees(A, 0, -Math.sin(fl.th), Math.cos(fl.th));
+  const fieldSeen = (A, fl) => fl.pn ? camSees(A, fl.pn[0], fl.pn[1], fl.pn[2]) : fl.flat || fl.free ? A.se > 0.05 : fl.facade ? camSees(A, fl.n[0], fl.n[1], 0) : camSees(A, 0, -Math.sin(fl.th), Math.cos(fl.th));
   /** Scale and centre so the plan, the roof and the gauge's steepest ray fit
       beside the badges, whichever way the camera turns. */
   const roofFrame = (W, H) => {
@@ -10640,13 +10929,19 @@ if (F.chim || F.par) {
         sn.fld.mods.forEach(mo => { pathOf(mo.q); stroke(ctx, 'rgba(30,58,138,.55)', 1, [5, 4]); ctx.stroke(); });
       } else if (sn && sn.fld && sn.fld.fits) {
         const pv = sn.sol.tech === 'pv', fl = sn.fld;
-        const mods = fl.flat ? fl.mods.slice().sort((a, b) => b.j - a.j || a.i - b.i) : fl.mods;
+        const mods = fl.flat || fl.free ? fl.mods.slice().sort((a, b) => b.j - a.j || a.i - b.i) : fl.mods;
         const lerp = (a, b, t0) => [a[0] + (b[0] - a[0]) * t0, a[1] + (b[1] - a[1]) * t0, a[2] + (b[2] - a[2]) * t0];
         mods.forEach(mo => {
           const q = mo.q;
-          if (fl.flat || fl.racked) {   // the rack's two legs under the raised edge
-            stroke(ctx, '#64748b', 1);
-            [q[2], q[3]].forEach(p => { const a = proj(p[0], p[1], p[2]); const zb = fl.flat ? H0 : M.zAt(p[0], p[1]); const b = proj(p[0], p[1], zb === null ? H0 : zb); seg(ctx, a[0], a[1], b[0], b[1]); });
+          if (fl.flat || fl.racked) {   // the rack's legs: under the raised edge, and, on a free rack, the front ones and the back rail
+            stroke(ctx, '#64748b', fl.free ? 1.3 : 1);
+            (fl.free ? q : [q[2], q[3]]).forEach(p => { const a = proj(p[0], p[1], p[2]); const zb = fl.flat ? H0 : M.zAt(p[0], p[1]); const b = proj(p[0], p[1], zb === null ? H0 : zb); seg(ctx, a[0], a[1], b[0], b[1]); });
+            if (fl.free) [[q[2], q[3]], [q[0], q[1]]].forEach(([p1, p2]) => { const z1 = M.zAt(p1[0], p1[1]), z2 = M.zAt(p2[0], p2[1]); if (z1 === null || z2 === null) return;
+              const a = proj(p1[0], p1[1], (p1[2] + z1) / 2), b = proj(p2[0], p2[1], (p2[2] + z2) / 2); seg(ctx, a[0], a[1], b[0], b[1]); });
+          }
+          if (fl.facade) {   // the brackets: from the module's lower edge back to the wall
+            stroke(ctx, '#64748b', 1.2);
+            [[q[0], q[3]], [q[1], q[2]]].forEach(([lo, hi]) => { const a = proj(lo[0], lo[1], lo[2]), b = proj(hi[0], hi[1], lo[2]), c2 = proj(hi[0], hi[1], hi[2]); seg(ctx, a[0], a[1], b[0], b[1]); seg(ctx, b[0], b[1], c2[0], c2[1]); });
           }
           const pp = pathOf(q);
           ctx.fillStyle = pv ? '#1e3a8a' : '#111827'; ctx.fill();
@@ -10659,6 +10954,12 @@ if (F.chim || F.par) {
             [0.2, 0.4, 0.6, 0.8].forEach(t0 => { const a = proj(...lerp(q[0], q[1], t0)), b = proj(...lerp(q[3], q[2], t0)); seg(ctx, a[0], a[1], b[0], b[1]); });
           }
         });
+        /* a thermosiphon kit's tank on its two legs, above the collectors' top edge */
+        if (fl.tank) {
+          stroke(ctx, '#64748b', 1.3);
+          fl.tank.legs.forEach(([p1, p2]) => { const a = proj(p1[0], p1[1], p1[2]), b = proj(p2[0], p2[1], p2[2]); seg(ctx, a[0], a[1], b[0], b[1]); });
+          solarTankFaces(fl.tank, n => camSees(A, n[0], n[1], n[2])).forEach(f => { const pp = pathOf(f.pts); ctx.fillStyle = f.fill; ctx.fill(); stroke(ctx, 'rgba(71,85,105,.55)', 0.6); ctx.stroke(); desk.path(pp, true); });
+        }
         // the field's corner point: drag it to add or take away columns and rows
         const hq = proj(fl.handle[0], fl.handle[1], fl.handle[2]);
         ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(hq[0], hq[1], 7.5, 0, 6.284); ctx.fill();
@@ -10732,7 +11033,7 @@ if (F.chim || F.par) {
          phone-width canvas */
       const bw = narrow ? Math.min(100, (W - 16) / 3) : 84, bh = narrow ? 46 : 52;
       const badge = (i, value, col, caption) => {
-        const bx = narrow ? 4 + (i % 3) * (bw + 4) : W - 92, by = narrow ? 4 + Math.floor(i / 3) * (bh + 4) : 6 + i * 58;
+        const bx = narrow ? 4 + (i % 3) * (bw + 4) : i >= 6 ? W - 92 - (bw + 6) : W - 92, by = narrow ? 4 + Math.floor(i / 3) * (bh + 4) : 6 + (i >= 6 ? i - 3 : i) * 58;
         ctx.fillStyle = '#fff';
         ctx.fillRect(bx, by, bw, bh);
         stroke(ctx, col, 1.5); ctx.strokeRect(bx, by, bw, bh);
@@ -10754,7 +11055,14 @@ if (F.chim || F.par) {
         const sn = solarNowFor(tech);
         if (!sn) return;
         const rt = solRate(sn);
-        badge(bi, rt === null ? null : Math.round(sn.out).toLocaleString(LANG === 'pl' ? 'pl-PL' : 'en-GB'), solRateCol(rt), t(cap));
+        /* each number takes the worse of how well the field faces the sun and how far it is past the house's need */
+        const Zs = rt === null ? null : solSizing(tech, sn.out, G), szCol = Zs ? solWorse(solRateCol(rt), Zs.col) : solRateCol(rt);
+        badge(bi, rt === null ? null : Math.round(sn.out).toLocaleString(LANG === 'pl' ? 'pl-PL' : 'en-GB'), szCol, t(cap));
+        /* the PV's peak power, as the licence and the self-consumption rules count it */
+        if (tech === 'pv') badge(5, rt === null ? null : fmt(sn.kWp, 2), szCol, t('PV peak · kWp'));
+        if (Zs) badge(tech === 'pv' ? 7 : 8, Math.round(Zs.r * 100) + ' %', Zs.col, t(tech === 'pv' ? 'PV · of house use' : 'Heat · of house use'));
+        /* a kit's share of the hot water it serves */
+        if (sn.kit) badge(6, Math.round(sn.kit.frac * 100) + ' %', sn.kit.frac >= 0.7 ? '#16A34A' : sn.kit.frac >= 0.5 ? '#D97706' : '#DC2626', t('Solar fraction · hot water'));
       });
 
       /* --- the numbers, last, each beside its line and on its own pad ------ */
@@ -10861,6 +11169,8 @@ if (F.chim || F.par) {
       const key = t === 'pv' ? 'pv' : 'th', sn = solarNowFor(t), on = !!sn, c = solCtl[t];
       if (!c) return;
       c.cc.style.display = c.cr.style.display = on ? '' : 'none';
+      if (c.isKit) c.cr.style.display = 'none';   // a kit is one row
+      if (c.more) c.more.style.display = on ? '' : 'none';
       if (sn && sn.fld && sn.fld.fits) { c.cc.input.value = sn.fld.c; c.cr.input.value = sn.fld.r; }
     });
   };
@@ -10874,7 +11184,14 @@ if (F.chim || F.par) {
     return { x0:fl.xc - fl.W / 2, x1:fl.xc + fl.W / 2, s0:fl.s0, s1:isFinite(fl.sTop) ? fl.sTop : fl.s0 + fl.r * fl.md.h + (fl.r - 1) * fl.md.gap };
   };
   const solarOverlap = () => {
-    const a = solarRect(solarNowFor('pv')), b = solarRect(solarNowFor('thermal'));
+    const A = solarNowFor('pv'), B = solarNowFor('thermal');
+    if (A && B && A.fld && B.fld && A.fld.fits && B.fld.fits && (A.fld.free || A.fld.facade || B.fld.free || B.fld.facade)) {
+      /* fields in their own frames: any two modules whose boxes meet */
+      const box = q => [0, 1, 2].map(k => [Math.min(...q.map(p => p[k])), Math.max(...q.map(p => p[k]))]);
+      const ba = A.fld.mods.map(m => box(m.q)), bb2 = B.fld.mods.map(m => box(m.q));
+      return ba.some(x => bb2.some(y => [0, 1, 2].every(k => x[k][0] < y[k][1] - 0.01 && y[k][0] < x[k][1] - 0.01)));
+    }
+    const a = solarRect(A), b = solarRect(B);
     if (!a || !b) return false;
     return a.x0 < b.x1 - 1e-6 && b.x0 < a.x1 - 1e-6 && a.s0 < b.s1 - 1e-6 && b.s0 < a.s1 - 1e-6;
   };
@@ -10905,7 +11222,7 @@ if (F.chim || F.par) {
     if (!sideReady) return;
     solBox.innerHTML = '';
   [['pv', 'PV panels'], ['thermal', 'Thermal collectors']].forEach(([tt, nm]) => {
-    const key = tt === 'pv' ? 'pv' : 'th', o = RF.sol[key], [mc, mr] = solMax(tt);
+    const key = tt === 'pv' ? 'pv' : 'th', o = RF.sol[key], isKit = tt !== 'pv' && !!(SOLAR_KIND.thermal[o.kind] || {}).kit, [mc, mr] = isKit ? [2, 1] : solMax(tt);
     const tgl = segCtl(null, [{ value:0, label:'Off' }, { value:1, label:'On' }], o.on ? 1 : 0, v => {
       RF.sol[key].on = v === 1;
       if (v === 1) separateFields(tt);
@@ -10914,56 +11231,104 @@ if (F.chim || F.par) {
     });
     const cc = numCtl('Columns', 1, mc, 1, Math.min(o.cols, mc), v => { RF.sol[key].cols = Math.min(v, mc); roofDraw(); }, null);
     const cr = numCtl('Rows', 1, mr, 1, Math.min(o.rows, mr), v => { RF.sol[key].rows = Math.min(v, mr); roofDraw(); }, null);
-    const pm = segCtl(t('Field pitch'), [{ value:'roof', label:t('On the slope') }, { value:'lat', label:t('Racked to latitude') }], o.pmode === 'lat' ? 'lat' : 'roof', v => {
-      RF.sol[key].pmode = v;
+    /* where it sits — the roof or a facade —, how — flush on the slope or racked —, which way, how steep, and of what kind */
+    const eq = lat >= 0 ? t('south') : t('north'), dir = d => { const a = solAz({ dev:d }, lat); return COMPASS8[Math.round(a / 45) % 8] + (d ? ' (' + (d < 0 ? '−' : '+') + Math.abs(d) + '°)' : ''); };
+    const redo = () => { buildSolUI(); roofDraw(); };
+    const mt = segCtl(t('Mounted on'), [{ value:'roof', label:t('the roof') }, { value:'facade', label:t('a facade') }], o.mount === 'facade' ? 'facade' : 'roof', v => {
+      RF.sol[key].mount = v; RF.sol[key].dx = 0; RF.sol[key].dy = 0; redo(); });
+    const pm = segCtl(t('Field pitch'), [{ value:'roof', label:t('On the slope') }, { value:'lat', label:t('Racked, facing') + ' ' + eq }], o.pmode === 'roof' ? 'roof' : 'lat', v => {
+      RF.sol[key].pmode = v; RF.sol[key].dx = 0; RF.sol[key].dy = 0;
       if (v === 'lat') separateFields(tt);
-      roofDraw();
+      redo();
     });
+    const fc = rangeCtl(t('Facing'), -90, 90, 5, o.dev || 0, v => { RF.sol[key].dev = v; roofDraw(); }, dir);
+    const tl = rangeCtl(t('Tilt'), 0, 90, 1, solTilt(o, lat), v => { RF.sol[key].tilt = v; roofDraw(); }, v => v + '°' + (v === Math.round(Math.abs(lat)) ? ' = ' + t('latitude') : ''));
+    const tlBtn = el('button', { type:'button', class:'btn small', text:t('Back to the latitude') + ' (' + Math.round(Math.abs(lat)) + '°)', onclick:() => { RF.sol[key].tilt = null; redo(); } });
+    const ft = rangeCtl(t('Tilt from the horizontal'), 10, 90, 5, o.ftilt || 70, v => { RF.sol[key].ftilt = v; roofDraw(); }, v => v + '°' + (v === 90 ? ' — ' + t('flat on the wall') : ''));
+    const K = SOLAR_KIND[tt === 'pv' ? 'pv' : 'thermal'];
+    const kd = segCtl(t('Kind'), Object.keys(K).map(k => ({ value:k, label:(LANG === 'pl' ? K[k].pt : K[k].en) + (tt === 'pv' ? ' ' + Math.round(K[k].eff * 100) + ' %' : ''),
+      title:tt === 'pv' ? 'η ' + Math.round(K[k].eff * 100) + ' %' : 'η0 ' + K[k].eta0 + ' · a1 ' + K[k].a1 + ' · a2 ' + K[k].a2 + (K[k].kit ? ' · 150 L / 300 L' : '') })), solKindOf(tt, o).id, v => { RF.sol[key].kind = v; if (SOLAR_KIND.thermal[v] && SOLAR_KIND.thermal[v].kit) { RF.sol[key].cols = 1; RF.sol[key].rows = 1; } redo(); });   // a kit starts at one collector, 150 L
+    const more = el('div');
     const pmH = el('p', { class:'hint' });
-    solCtl[tt] = { tgl, cc, cr, pm, pmH };
+    solCtl[tt] = { tgl, cc, cr, pm, pmH, more, isKit };
     solBox.appendChild(el('div', { class:'keys', text:nm }));
     solBox.appendChild(el('div', { class:'rgroup' }, [tgl, cc, cr]));
-    solBox.appendChild(pm);
+    more.appendChild(kd); more.appendChild(mt);
+    if (o.mount === 'facade') more.appendChild(ft);
+    else { more.appendChild(pm); if (o.pmode !== 'roof') { more.appendChild(fc); more.appendChild(tl); if (o.tilt !== null && o.tilt !== undefined) more.appendChild(tlBtn); }
+      else if (RF.n !== 0) {
+        /* «On the slope»: any of the roof's slopes, named by the way it faces and its pitch */
+        const Ls = solSlopes(G, roofModel(G, RF)), cur = solSlopeFor(G, roofModel(G, RF), o, lat);
+        if (Ls.length) { const sel = el('select', { 'aria-label':t('Slope'), style:'font:inherit;font-size:12px;max-width:100%',
+            onchange:e => { RF.sol[key].slope = +e.target.value; RF.sol[key].dx = 0; RF.sol[key].dy = 0; redo(); } });
+          Ls.forEach(q => sel.appendChild(el('option', { value:q.az, text:t('faces') + ' ' + COMPASS8[Math.round(q.az / 45) % 8] + ' (' + q.az + '°) · ' + fmt(q.th, 0) + '° · ' + fmt(q.area, 0) + ' m²' + (q.main ? ' · ' + t('main facade') : ''),
+            selected:cur && cur.key === q.key ? 'selected' : null })));
+          more.appendChild(el('div', { class:'ctl' }, [el('label', { text:t('Slope') }), sel])); } } }
+    solBox.appendChild(more);
     solBox.appendChild(pmH);
   });
   }
-  buildSolUI();
+  /* ready first: built before the flag, the solar box stayed empty until another side section was rebuilt */
   sideReady = true;
+  buildSolUI();
   rail.appendChild(el('div', { class:'keys', text:t('Drag the black point to re-pitch the roof, the white diamond on the ridge across to stand it aside, the amber point at a field corner to size that field, a field itself or its blue centre node to move it. Click a field to select it — each field keeps its own pitch, size and place.') }));
+  /** A field's values in one line: the kind's own numbers, then the year's. */
+  const solValues = (tech, sn) => {
+    const k = sn.kind, loc = LANG === 'pl' ? 'pl-PL' : 'en-GB', N = v => Math.round(v).toLocaleString(loc);
+    const head = tech === 'pv' ? (LANG === 'pl' ? k.pt : k.en) + ' · η ' + Math.round(k.eff * 100) + ' % · ' + fmt(k.eff, 2) + ' kWp/m² · PR ' + fmt(SOLAR_TECH.pv.pr, 2)
+      : (LANG === 'pl' ? k.pt : k.en) + (k.kit ? ' (' + t('flat plate') + ')' : '') + ' · η0 ' + fmt(k.eta0, 2) + ' · a1 ' + fmt(k.a1, 1) + ' W/m²K · a2 ' + fmt(k.a2, 3) + ' W/m²K² · ' + t('at') + ' ' + SOLAR_TECH.thermal.tm + ' °C';
+    if (!sn.fld || !sn.fld.fits) return head;
+    if (sn.kit) { const K2 = sn.kit;
+      return head + ' — ' + sn.n + ' × ' + fmt(sn.fld.md.w * sn.fld.md.h, 2) + ' m² = ' + fmt(sn.area, 1) + ' m² · ' + t('tank') + ' ' + K2.V + ' L (≈ ' + fmt(K2.people, 1) + ' ' + t('people at') + ' ' + SOLAR_KIT.lPerson + ' L/' + t('day') + ', ΔT ' + SOLAR_KIT.dT + ' K) · '
+        + t('hot-water need') + ' ' + N(K2.demand) + ' kWh/' + t('year') + ' · ' + t('collected') + ' ' + N(K2.collected) + ' · ' + t('used') + ' ' + N(K2.used) + ' kWh/' + t('year') + ' · '
+        + t('solar fraction') + ' ' + Math.round(K2.frac * 100) + ' % (' + K2.monthsFull + ' ' + t('months fully solar') + ') · ' + sn.tilt + '° ' + t('facing') + ' ' + COMPASS8[Math.round(sn.az / 45) % 8]; }
+    const body = sn.n + ' × ' + fmt(sn.fld.md.w * sn.fld.md.h, 2) + ' m² = ' + fmt(sn.area, 1) + ' m²'
+      + (tech === 'pv' ? ' · ' + t('peak') + ' ' + fmt(sn.kWp, 2) + ' kWp · ' + N(sn.out) + ' kWh/' + t('year') + ' · ' + N(sn.kWp > 0 ? sn.out / sn.kWp : 0) + ' kWh/kWp·' + t('year')
+        : ' · ' + N(sn.out) + ' kWh/' + t('year') + ' ' + t('of useful heat') + ' · ' + N(sn.perM2) + ' kWh/m²·' + t('year'));
+    return head + ' — ' + body + ' · ' + sn.tilt + '° ' + t('facing') + ' ' + COMPASS8[Math.round(sn.az / 45) % 8] + ' (' + Math.round(sn.az) + '°)';
+  };
   function refreshSolar() {
     syncField();
-    const facing = COMPASS8[Math.round(slopeAz() / 45) % 8];
     const parts = [];
-    let anyFit = false, anyOn = false;
+    let anyFit = false, anyOn = false, worstSize = null;
     [['pv', 'PV panels'], ['thermal', 'Thermal collectors']].forEach(([tech, nm]) => {
       const sn = solarNowFor(tech);
       if (!sn) return;
       anyOn = true;
-      const what = t(nm);
+      const what = t(nm), pmc = solCtl[tech] && solCtl[tech].pmH;
+      if (pmc) pmc.textContent = solValues(tech, sn);
+      const Zn = sn.fld && sn.fld.fits ? solSizing(tech, sn.out, G) : null;
+      if (pmc) { if (!pmc._need) { pmc._need = el('p', { class:'hint' }); pmc.after(pmc._need); }
+        pmc._need.textContent = Zn ? solNeedWords(tech, sn, Zn) : ''; pmc._need.style.color = Zn && Zn.level !== 'ok' ? Zn.col : ''; pmc._need.style.fontWeight = Zn && Zn.level !== 'ok' ? '600' : ''; }
+      if (Zn && (worstSize === null || Zn.level === 'bad' || worstSize === 'ok')) worstSize = Zn.level;
+      const facing = COMPASS8[Math.round(sn.az / 45) % 8];
       if (!sn.fld || !sn.fld.fits) {
-        parts.push(what + ' — ' + t(sn.fld && sn.fld.noPlane ? 'no slope faces the main facade: choose a roof whose ridge runs along it, or a flat roof' : 'no room on this slope for one module'));
+        if (sn.fld && sn.fld.noTank) { parts.push(what + ' — ' + t('no room for the tank above the collectors: move the kit down the roof or toward its middle')); return; }
+        parts.push(what + ' — ' + t(sn.fld && sn.fld.facade ? 'no room on that facade under the eave: lower it, tilt it more, or put it on the roof' : sn.fld && sn.fld.free ? 'no room on the roof for a rack here: move it, or tilt it less' : 'no room on this slope for one module'));
         return;
       }
       anyFit = true;
-      const where = RF.n === 0 ? t('racked on the flat roof at the best pitch') + ' ' + sn.tilt + '°'
-        : sn.fld.racked ? t('racked to latitude') + ' ' + sn.tilt + '° ' + t('facing') + ' ' + facing
+      const fl = sn.fld;
+      const where = fl.facade ? t('on the facade facing') + ' ' + facing + ', ' + t('on brackets at') + ' ' + sn.tilt + '°'
+        : fl.slope ? t('on the slope at') + ' ' + sn.tilt + '° ' + t('facing') + ' ' + facing + (!fl.slope.main && !collectPlane(roofModel(G, RF)) ? ' (' + t('no slope faces the main facade') + ')' : '')
+        : fl.free ? t('racked on a metal frame at') + ' ' + sn.tilt + '° ' + t('facing') + ' ' + facing + (fl.auto ? ' (' + t('no slope faces the main facade') + ')' : RF.n === 0 ? ' ' + t('on the flat roof') : '')
         : t('on the slope at') + ' ' + sn.tilt + '° ' + t('facing') + ' ' + facing;
-      const pmc = solCtl[tech] && solCtl[tech].pmH;
-      if (pmc) {
-        const cpNow = collectPlane(roofModel(G, RF));
-        const roofP = cpNow ? cpNow.pieces.reduce((p, q) => q.area > p.area ? q : p, cpNow.pieces[0]).f.th : RF.th;
-        pmc.textContent = t('Slope') + ' ' + fmt(roofP, 0) + '° · ' + t('Latitude') + ' ' + fmt(sn.opt ? sn.opt.tilt : sn.tilt, 0) + '°';
-      }
-      const rt = solRate(sn), pct = rt === null ? '' : ' · ' + solRateWord(rt) + ' ' + Math.round(rt * 100) + '% ' + t('of optimum');
-      const homes = rt === null ? '' : ' · ' + solHomes(tech, sn.out);
-      const cap = sn.fld.capped ? ' · ' + t('capped at a house roof') : '';
-      parts.push(what + ' ' + where + ' · ' + fmt(sn.plane, 0) + ' kWh/m²·' + t('year on the plane') + pct + homes + cap
+      const rt = solRate(sn), pct = rt === null ? '' : ' · ' + solRateWord(rt) + ' ' + Math.round(rt * 100) + '% ' + t('of the best here');
+      const Zp = rt === null ? null : solSizing(tech, sn.out, G);
+      const homes = rt === null ? '' : ' · ' + (Zp ? Math.round(Zp.r * 100) + ' % ' + t('of the house’s use') : solHomes(tech, sn.out));
+      /* a field smaller than asked says so, and by how much */
+      const askC = sn.kit ? Math.min(2, sn.sol.cols || 1) : sn.sol.cols, askR = sn.kit ? 1 : sn.sol.rows;
+      const cap = (fl.capped ? ' · ' + t('capped at a house roof') : '')
+        + (!fl.capped && (fl.c < askC || fl.r < askR) ? ' · ' + t('cut back from') + ' ' + askC + ' × ' + askR + ' ' + t('to') + ' ' + fl.c + ' × ' + fl.r + ': ' + t('no room for more here') : '');
+      const loc = LANG === 'pl' ? 'pl-PL' : 'en-GB', yr = Math.round(sn.out).toLocaleString(loc) + ' kWh/' + t('year') + (tech === 'pv' ? ' · ' + fmt(sn.kWp, 2) + ' kWp' : '')
+        + (sn.kit ? ' ' + t('used') + ' · ' + t('tank') + ' ' + sn.kit.V + ' L · ' + t('solar fraction') + ' ' + Math.round(sn.kit.frac * 100) + ' %' : '');
+      parts.push(what + ' ' + where + ' · ' + yr + ' · ' + fmt(sn.plane, 0) + ' kWh/m²·' + t('year on the plane') + pct + homes + cap
         + (sn.measured ? '' : ' · ' + t(radiationFor(S).failed ? 'estimate — the site’s irradiation could not be loaded; choose the collector again to retry' : 'estimate until the site’s irradiation loads')));
     });
     if (!anyOn) { pillSolar.className = 'pill empty'; pillSolar.textContent = t('No collectors — switch a collector on left of the model'); return; }
     ['pv', 'thermal'].forEach(tech => { const c = solCtl[tech]; if (c && c.pmH && !solarNowFor(tech)) c.pmH.textContent = ''; });
     if (solarOverlap()) parts.push(t('fields overlap — drag a field aside'));
-    pillSolar.className = 'pill ' + (anyFit ? 'ok' : 'bad');
+    pillSolar.className = 'pill ' + (!anyFit ? 'bad' : worstSize === 'bad' ? 'bad' : worstSize === 'warn' ? 'warn' : 'ok');
     pillSolar.textContent = parts.join(' · ');
   }
   function solarCsvRows() {
@@ -10973,14 +11338,20 @@ if (F.chim || F.par) {
       if (!sn) return;
       rows.push(['Solar collection (' + nm + ')', nm],
         [nm + ' field (columns × rows)', sn.fld && sn.fld.fits ? sn.fld.c + ' × ' + sn.fld.r : 'does not fit'],
-        [nm + ' area (m²)', +sn.area.toFixed(2)], [nm + ' azimuth (°)', slopeAz()], [nm + ' pitch (°)', sn.tilt],
+        [nm + ' kind', sn.kind.en], [nm + ' mounting', sn.fld && sn.fld.facade ? 'facade, on brackets' : sn.fld && sn.fld.free ? 'racked on a metal frame' : 'flush on the slope'],
+        [t === 'pv' ? 'PV module efficiency (%)' : nm + ' η0 / a1 / a2', t === 'pv' ? Math.round(sn.kind.eff * 100) : sn.kind.eta0 + ' / ' + sn.kind.a1 + ' / ' + sn.kind.a2],
+        [nm + ' area (m²)', +sn.area.toFixed(2)], [nm + ' azimuth (°)', Math.round(sn.az)], [nm + ' pitch (°)', sn.tilt],
         [nm + ' optimum pitch (°)', sn.opt.tilt], [nm + ' sun on plane (kWh/m²·year)', Math.round(sn.plane)],
         [nm + ' sun at optimum (kWh/m²·year)', Math.round(sn.opt.plane)], [nm + ' share of optimum (%)', Math.round(100 * sn.ratio)],
         [nm + ' performance', solRateWord(solRate(sn)) + ' ' + Math.round(100 * clamp(sn.ratio, 0, 1)) + '% of optimum'],
         [nm + ' homes covered (rule of thumb)', +((sn.out || 0) / (t === 'pv' ? 3500 : 2000)).toFixed(1)],
+        ...(q => q ? [['House floor area (m²)', Math.round(q.area)], ['House people (1 per 30 m², rule of thumb)', q.people], [nm + ' house use (kWh/year, rule of thumb)', Math.round(q.need)], [nm + ' share of the house use (%)', Math.round(q.r * 100)]] : [])(solSizing(t, sn.out, G)),
         [nm + ' capped at a house roof', !!(sn.fld && sn.fld.capped)],
         [t === 'pv' ? 'PV peak power (kWp)' : nm + ' gross area (m²)', t === 'pv' ? +sn.kWp.toFixed(2) : +sn.area.toFixed(2)],
         [t === 'pv' ? 'PV electricity (kWh/year)' : 'Useful heat at 50 °C (kWh/year)', Math.round(sn.out)],
+        [t === 'pv' ? 'PV specific yield (kWh/kWp·year)' : nm + ' useful heat per m² (kWh/m²·year)', Math.round(t === 'pv' ? (sn.kWp > 0 ? sn.out / sn.kWp : 0) : sn.perM2)],
+        ...(sn.kit ? [['Thermosiphon tank (L)', sn.kit.V], ['Hot-water need, 40 L/person·day at ΔT 35 K (kWh/year)', Math.round(sn.kit.demand)],
+          ['Thermosiphon heat collected (kWh/year)', Math.round(sn.kit.collected)], ['Thermosiphon heat used (kWh/year)', Math.round(sn.kit.used)], ['Solar fraction (%)', Math.round(sn.kit.frac * 100)]] : []),
         [nm + ' irradiation source', sn.measured ? 'ERA5 1991–2020 via Open-Meteo' : 'estimate: clearness index 0.55 × extraterrestrial']);
     });
     if (!rows.length) return [['Solar collection', 'none']];
@@ -10990,7 +11361,9 @@ if (F.chim || F.par) {
   solarRedraw = () => { roofDraw(); };
   host._refresh = () => { roofCam.sync(); refreshRoof(); buildCanopyUI(); benchStage(stage); };   // a canopy may have been made by a balcony on Site   // the plan may have changed on Site since this tab was built
   host.appendChild(hint('roof-solar',
-    'Choose <b>PV panels</b> and/or <b>thermal collectors</b> left of the model — one of each, or both together: electricity and heat share the slope — then size each field — by its columns and rows, or by dragging the amber point at its corner across the roof. The modules lie flush on the largest roof plane facing the main facade, whatever the plan’s wings, recesses or patio do to it — rows from 0.4 m above its lowest edge, kept 0.3 m inside it, clear of ridges, hips and valleys — so they face the direction set on Site; on a flat roof they stand in racked rows at the best pitch, spaced so the 21 December noon sun clears the row in front. The sun on the collector plane is read from the site’s own horizontal irradiation — daily shortwave radiation 1991–2020 from the ERA5 reanalysis (Hersbach et al., 2020), via Open-Meteo — carried onto the tilted plane month by month with the method of Duffie &amp; Beckman: the Erbs, Klein &amp; Duffie monthly split into beam and diffuse, the beam ratio over each month’s mean day (Klein), the isotropic sky and 20 % ground reflection. The pitch’s share of the best yield is the one pitch score on the model. PV: modules of about 20 % efficiency (0.20 kWp per m²) and a performance ratio of 0.80 (IEC 61724-1) give the electricity. Thermal: a flat-plate collector read by the EN ISO 9806 efficiency curve with typical coefficients (η0 0.78, a1 3.5, a2 0.015) at a 50 °C mean fluid against each month’s air temperature gives the heat it can collect — more than a house draws in summer, so a real system’s solar fraction is lower. A real module’s or collector’s datasheet replaces these figures. Without the site’s data the numbers rest on an assumed clearness index of 0.55 and say so. Fields stay inside a house roof — about 40 m² of PV, 20 m² of thermal — so the kilowatts stay ones a household could use; bigger asks are cut back and say so. Each field earns a rating against the best pitch — <b>good</b> from 90 %, <b>fair</b> from 70 %, <b>poor</b> below — in green, yellow and red, with the yearly kilowatt-hours and about how many homes’ share that is.'));
+    'Choose <b>PV panels</b> and/or <b>thermal collectors</b> left of the model — one of each, or both together: electricity and heat share the slope — then size each field — by its columns and rows, or by dragging the amber point at its corner across the roof. Laid <b>On the slope</b>, the modules lie flush on a slope picked beside the field — any of the roof\u2019s slopes, each named by the way it faces and its pitch; unless picked, the largest roof plane facing the main facade (where the ridge runs front to back and none does, the slope facing nearest the equator) — whatever the plan’s wings, recesses or patio do to it — rows from 0.4 m above its lowest edge, kept 0.3 m inside it, clear of ridges, hips and valleys — so they face the direction set on Site; <b>racked</b> — the default, and the way on a flat roof or where no slope faces the main facade — they stand on metal frames facing the equator at the tilt set beside them (the latitude unless changed), each row spaced so the 21 December noon sun clears the row in front. The sun on the collector plane is read from the site’s own horizontal irradiation — daily shortwave radiation 1991–2020 from the ERA5 reanalysis (Hersbach et al., 2020), via Open-Meteo — carried onto the tilted plane month by month with the method of Duffie &amp; Beckman: the Erbs, Klein &amp; Duffie monthly split into beam and diffuse, the beam ratio over each month’s mean day (Klein), the isotropic sky and 20 % ground reflection. The pitch’s share of the best yield is the one pitch score on the model. PV: modules of about 20 % efficiency (0.20 kWp per m²) and a performance ratio of 0.80 (IEC 61724-1) give the electricity. Thermal: a flat-plate collector read by the EN ISO 9806 efficiency curve with typical coefficients (η0 0.78, a1 3.5, a2 0.015) at a 50 °C mean fluid against each month’s air temperature gives the heat it can collect — more than a house draws in summer, so a real system’s solar fraction is lower. A real module’s or collector’s datasheet replaces these figures. Without the site’s data the numbers rest on an assumed clearness index of 0.55 and say so. Fields stay inside a house roof — about 40 m² of PV, 20 m² of thermal — so the kilowatts stay ones a household could use; bigger asks are cut back and say so. Each field earns a rating against the best pitch — <b>good</b> from 90 %, <b>fair</b> from 70 %, <b>poor</b> below — in green, yellow and red, with the yearly kilowatt-hours and about how many homes’ share that is.'));
+  host.appendChild(hint('roof-solar-mount',
+    '<b>Where and how the collectors sit.</b> Each field — PV, thermal, or both — can be <b>mounted on the roof</b> or <b>on a facade</b>. On the roof it is racked on a metal frame by default: it faces the equator (true south here in the northern hemisphere) whatever way the slopes run — on a slope turned east or west, on the back slope, on a flat roof — tilted to the latitude; turn it with <b>Facing</b> (east is −, west +) and pitch it with <b>Tilt</b> to see what each degree costs or gains, or lay it <b>On the slope</b> facing the main facade. On a facade it hangs on brackets on the outer wall facing nearest the equator, under the eave, tilted out from the horizontal (90° lies flat on the wall) — the wall\u2019s own orientation is the one it gets, and windows or doors behind it are not checked. <b>Kind</b> sets the values: PV monocrystalline about 20 % or polycrystalline about 16 % (kWp per m² is that efficiency at the 1 000 W/m² of the standard test, IEC 61215), performance ratio 0.80; thermal flat plate (η0 0.78, a1 3.5 W/m²K, a2 0.015 W/m²K²) or evacuated tube (η0 0.55, a1 1.2, a2 0.008, on the gross area), read at 50 °C by EN ISO 9806 — or a <b>thermosiphon kit</b>: one or two flat-plate collectors in a single row with a horizontal tank above their top edge (150 L on 2 m², 300 L on 4 m²), the warmed water rising into it with no pump. A kit is read against the hot water it serves: one tank a day, 40 L a person heated by 35 K (the REH convention — check the regulation in force); what the collectors catch beyond each month\u2019s draw is lost, so its badge gives the heat used and the <b>solar fraction</b> — the share of that hot water the sun provides. These are typical catalogue values — a real datasheet replaces them. The badges give the year\u2019s <b>PV kWh</b>, <b>heat kWh</b> and the PV\u2019s <b>peak power in kWp</b> — the installed power the licensing and self-consumption rules count — and the line under each field gives its values, its specific yield (kWh/kWp·year) and its share of the best a collector of that kind could do here, facing the equator at its best tilt.'));
   refreshRoof();
 
   /* --- direct manipulation: the pitch point, and the field's corner -------- */
@@ -11113,6 +11486,17 @@ if (F.chim || F.par) {
       const q = camPick(proj, [0, 0, fl.handle[2]], [1, 0, 0], [0, 1, 0], px, py);
       if (!q) return null;
       return { x:q[0], s:q[1], rows:1 + Math.round((q[1] - fl.y0 - md.h * Math.cos(fl.beta)) / fl.row) };
+    }
+    if (fl.free) {   // a free rack: across its facing and back from its front edge, on the level of its middle
+      const q = camPick(proj, [fl.O[0], fl.O[1], fl.zc], [fl.eF[0], fl.eF[1], 0], [fl.bk[0], fl.bk[1], 0], px, py);
+      if (!q) return null;
+      return { x:q[0], s:q[1], rows:1 + Math.round((q[1] - fl.run) / fl.row) };
+    }
+    if (fl.facade) {   // on its wall: along it from the middle, and down from the eave
+      const sg = fl.sg, tx = (sg.b[0] - sg.a[0]) / sg.len, ty = (sg.b[1] - sg.a[1]) / sg.len;
+      const q = camPick(proj, [sg.a[0] + tx * sg.len / 2, sg.a[1] + ty * sg.len / 2, 0], [tx, ty, 0], [0, 0, -1], px, py);
+      if (!q) return null;
+      return { x:q[0], s:q[1], rows:1 + Math.round((q[1] - fl.s0 - fl.drop) / fl.rowH) };
     }
     const q = camPick(proj, [0, fl.ey0, FR.H0 + 0.03], [1, 0, 0], [0, Math.cos(fl.th), Math.sin(fl.th)], px, py);
     if (!q) return null;
@@ -11627,8 +12011,9 @@ function buildOpenings(host) {
   /** Turn the camera to the side under study: square to it in an
       elevation, over it in a plan, else to its corner view. */
   const turnTo = f => { OCAM.az = OCAM.el < 5 ? SQ[f] : CORNER[f]; if (openCam) openCam.sync(); };
-  const cWWR = rangeCtl('Window-to-wall ratio', 0, 80, 1, Math.round(OPEN[curFace].wwr * 100),
-    v => { OPEN[curFace].wwr = v / 100; refreshOpenings(); }, v => fmt(v, 0) + '%');
+  const wwrOut = el('span', { class:'tv' });
+  wwrOut.style.fontFamily = MONO; wwrOut.style.fontSize = '11px';
+  const cWWR = el('div', { class:'ctl' }, [el('label', { text:'Window-to-wall ratio', title:t('The result of the openings as you size them below') }), el('span', { class:'rv' }, [wwrOut])]);
   const cSill = rangeCtl('Sill height', 0, 1.8, 0.05, OPEN[curFace].sillZ,
     v => { OPEN[curFace].sillZ = v; if (OPEN[curFace].headZ <= v + 0.3) { OPEN[curFace].headZ = v + 0.3; syncCtl(cHead, OPEN[curFace].headZ, w => fmt(w, 2) + ' m'); } refreshOpenings(); }, v => fmt(v, 2) + ' m');
   const cHead = rangeCtl('Head height', 1.2, 3.0, 0.05, OPEN[curFace].headZ,
@@ -11691,9 +12076,12 @@ function buildOpenings(host) {
         r.m.textContent = fmt(qw, 2) + ' m · ' + fmt(qa, 2) + ' m² · '
           + (!eu.on ? '–' : String(Math.round(100 * (clamp(2 * H / Math.max(1, depth), 0, 1) + clamp(qw / 2.4, 0, 1)) / 2)))
           + (eu.on && eu.door ? ' · ' + t('door') : eu.on && eu.gel ? ' · ' + t('brick ventilation') : '')
-          + (eu.on ? ' · ' + t('sill') + ' ' + fmt(sillEff, 2) + ' m' : '');
+          + (eu.on ? ' · ' + t('sill') + ' ' + fmt(sillEff, 2) + ' m' : '') + shareTxt(eu.on ? dimsOf(us[i], i) : null);
       });
     };
+    /* share and position read back from the metres, never set: the width as a share of the wall,
+       the opening's middle as a share of the way from the left corner seen from outside */
+    const shareTxt = d => !d || !(d.len > 0) ? '' : ' · ' + t('Share') + ' ' + Math.round(100 * d.W / d.len) + ' % · ' + t('Position') + ' ' + Math.round(100 * clamp((cornerOf(d) + d.W / 2) / d.len, 0, 1)) + ' %';
     /* each opening's own size, typed: width along the wall, height, and
        for a window its sill above its own floor — read from the model as
        built, written back to the same share, height and sill the drag sets */
@@ -11706,20 +12094,23 @@ function buildOpenings(host) {
       const e = unitFloor(u, FL), top = Math.min(B.r.head, h0());
       const sp = glassSpans(curFace, B.w.uc - B.w.w / 2, B.w.uc + B.w.w / 2, B.sg.len, FL).filter(q => q.ui === i && q.b - q.a > 0.05)[0];
       const vv = e.door ? doorSpanV(u, top, FL, G.fh) : unitSpanV(u, B.r.sill, top, FL, G.fh);
-      return { W:sp ? sp.b - sp.a : e.frac * B.w.w, H:vv[1] - vv[0], sill:vv[0] - zFloor, band:B.w.w, door:!!e.door, z0:vv[0] };
+      return { W:sp ? sp.b - sp.a : e.frac * B.w.w, H:vv[1] - vv[0], sill:vv[0] - zFloor, band:B.w.w, door:!!e.door, z0:vv[0], a:sp ? sp.a : 0, len:B.sg.len, left:uStartsRight(B.sg) };
     };
+    /* width and place along the wall, in metres: written back to the unit's anchor on the band, the corner seen from outside */
+    const setPlace = (u, a, W) => { const B = bandNow(); if (!B) return; const F = WV(u), aa = clamp(a, 0, Math.max(0, B.sg.len - W));
+      F.frac = W / Math.max(0.3, B.w.w); F.pos = (aa + W / 2 - (B.w.uc - B.w.w / 2)) / Math.max(0.3, B.w.w); F.off = 0; OPEN[curFace].laid = true; };
+    const edgeOf = (d, v) => d.left ? d.len - v - d.W : v, cornerOf = d => d.left ? d.len - d.a - d.W : d.a;
     const txtN = x => document.createTextNode(x);
     const numIn = (val, lo, hi, set) => el('input', { type:'number', min:lo, max:hi, step:0.05, value:+val.toFixed(2), inputmode:'decimal',
       onchange:e => { const v = parseFloat(String(e.target.value).replace(',', '.')); if (!isFinite(v)) { buildUnitUI(); return; } set(v); OPEN[curFace].laid = true; buildUnitUI(); refreshOpenings(); } });
     const dimsRow = (u, i) => {
       const d = dimsOf(u, i);
       if (!d || !EV(u).on) return null;
-      const wMax = 0.95 * d.band;
+      const wIn = numIn(d.W, 0.3, +d.len.toFixed(2), v => { const W = clamp(v, 0.3, d.len); setPlace(u, d.left ? d.a + d.W - W : d.a, W); }), xIn = numIn(cornerOf(d), 0, +(d.len - d.W).toFixed(2), v => setPlace(u, edgeOf(d, clamp(v, 0, d.len - d.W)), d.W));
+      wIn.dataset.k = 'w'; xIn.dataset.k = 'x';
       const kids = [
-        el('label', null, [txtN(t('Width')), numIn(d.W, 0.3, +wMax.toFixed(2), v => {
-          if (v > wMax + 1e-6) toast(t('At most') + ' ' + fmt(wMax, 2) + ' m — ' + t('raise the window-to-wall ratio for a wider opening'));
-          WV(u).frac = clamp(clamp(v, 0.3, wMax) / Math.max(0.3, d.band), 0.03, 0.95);
-        }), txtN('m')]),
+        el('label', null, [txtN(t('Width')), wIn, txtN('m')]),
+        el('label', null, [txtN(t('From the left corner')), xIn, txtN('m')]),
         el('label', null, [txtN(t('Height')), numIn(d.H, 0.3, +(d.door ? G.fh - 0.1 : maxTop - zFloor).toFixed(2), v => {
           if (d.door) { WV(u).ht = +clamp(v, 0.3, Math.max(0.3, G.fh - 0.1)).toFixed(2); WV(u).up = 0; return; }
           /* a window taller than the room above its sill lowers the sill to fit */
@@ -11770,24 +12161,16 @@ function buildOpenings(host) {
           if (EV(u).door) { WV(u).up = 0; WV(u).gel = false; OPEN[curFace].laid = true; }
           buildUnitUI(); refreshOpenings();
         } });
-      const sh = rangeCtl('Share', 5, 95, 1, Math.round(EV(u).frac * 100), v => {
-        const us = faceUnits(curFace), w = us[i];
-        if (!w) { buildUnitUI(); return; }
-        const nw = clamp(v / 100, 0.05, 0.95);
-        WV(w).frac = nw;
-        OPEN[curFace].laid = true;
-        updateTexts(); refreshOpenings();
-      }, v => fmt(v, 0) + '%');
-      /* every window stands on its own anchor: sliding it along the wall
-         moves nothing else — the drag's black node does the same */
-      const ps = rangeCtl('Position', 0, 100, 1, Math.round(clamp(isFinite(EV(u).pos) ? EV(u).pos : 0.5, 0, 1) * 100), v => {
-        const us = faceUnits(curFace), w = us[i];
-        if (!w) { buildUnitUI(); return; }
-        WV(w).pos = clamp(v / 100, 0, 1);
-        WV(w).off = 0;
-        OPEN[curFace].laid = true;
-        updateTexts(); refreshOpenings();
-      }, v => fmt(v, 0) + '%');
+      /* the same two numbers on sliders, in metres: the typed boxes above follow */
+      const d0 = EV(u).on ? dimsOf(u, i) : null, mfmt = v => fmt(v, 2) + ' m';
+      const typed = (k, v) => { const q = unitBox.querySelectorAll('[data-k="' + k + '"]')[i]; if (q) q.value = +v.toFixed(2); };
+      const sh = d0 ? rangeCtl('Width', 0.3, Math.max(0.3, +d0.len.toFixed(2)), 0.05, +Math.min(d0.W, d0.len).toFixed(2), v => {
+        const d = dimsOf(u, i); if (!d) return; setPlace(u, d.left ? d.a + d.W - v : d.a, v); typed('w', v); updateTexts(); refreshOpenings();
+      }, mfmt) : null;
+      /* every window stands on its own anchor: sliding it along the wall moves nothing else — the drag's black node does the same */
+      const ps = d0 ? rangeCtl('From the left corner', 0, Math.max(0.05, +d0.len.toFixed(2)), 0.05, +cornerOf(d0).toFixed(2), v => {
+        const d = dimsOf(u, i); if (!d) return; setPlace(u, edgeOf(d, clamp(v, 0, d.len - d.W)), d.W); typed('x', v); updateTexts(); refreshOpenings();
+      }, mfmt) : null;
       /* a lone window resizes too: shrinking it frees wall to compose with */
       const r = { m:el('div', { class:'hint' }) };
       const mvL = el('button', { class:'btn small', text:'\u2039', title:t('Move window to the previous face'), 'aria-label':t('Move window to the previous face'), onclick:() => stepFace(i, -1) });
@@ -11800,8 +12183,8 @@ function buildOpenings(host) {
       unitBox.appendChild(line);
       const dm = dimsRow(u, i);
       if (dm) unitBox.appendChild(dm);
-      unitBox.appendChild(sh);
-      unitBox.appendChild(ps);
+      if (sh) unitBox.appendChild(sh);
+      if (ps) unitBox.appendChild(ps);
     });
     const minus = el('button', { class:'btn small', text:'\u2212', title:t('One window fewer'), 'aria-label':t('One window fewer'), onclick:() => {
       const us = faceUnits(curFace);
@@ -11870,14 +12253,14 @@ function buildOpenings(host) {
       clerRead.textContent = '';
       return;
     }
-    const cCwwr = rangeCtl('Window-to-wall ratio', 0, 80, 1, Math.round(o.wwr * 100),
-      v => { o.wwr = v / 100; refreshOpenings(); }, v => fmt(v, 0) + '%');
+    const cl0 = stepWinList(Mod(), h0(), RF)[0];
+    if (cl0 && !(o.bandM > 0)) openBandToMetres(o, 'C', cl0.w, cl0.sg.len);
     const cCsill = rangeCtl('Sill height', 0, 1.8, 0.05, o.sillZ,
       v => { o.sillZ = v; if (o.headZ <= v + 0.3) { o.headZ = v + 0.3; syncCtl(cChead, o.headZ, w => fmt(w, 2) + ' m'); } refreshOpenings(); }, v => fmt(v, 2) + ' m');
     const cChead = rangeCtl('Head height', 1.2, 3.0, 0.05, o.headZ,
       v => { o.headZ = Math.max(v, o.sillZ + 0.3); refreshOpenings(); }, v => fmt(v, 2) + ' m');
-    clerBox.appendChild(controls([cCwwr, cCsill, cChead]));
-    clerBox._sync = () => { syncCtl(cCwwr, Math.round(o.wwr * 100), v => fmt(v, 0) + '%'); syncCtl(cCsill, o.sillZ, v => fmt(v, 2) + ' m'); syncCtl(cChead, o.headZ, v => fmt(v, 2) + ' m'); };
+    clerBox.appendChild(controls([cCsill, cChead]));
+    clerBox._sync = () => { syncCtl(cCsill, o.sillZ, v => fmt(v, 2) + ' m'); syncCtl(cChead, o.headZ, v => fmt(v, 2) + ' m'); };
     const rows = [];
     /* each opening's size typed, as on the sides: width along the step wall,
        height, and for a window its sill above the lower roof — read off the
@@ -11891,12 +12274,11 @@ function buildOpenings(host) {
       const w = cw0.w, r = w.rows[0], H = Math.max(0.3, w.ceil - w.base);
       const sp = glassSpans('C', w.uc - w.w / 2, w.uc + w.w / 2, cw0.sg.len, 0).filter(q => q.ui === i && q.b - q.a > 0.05)[0];
       const vv = spanVC(u, r.sill, r.head, w.base, w.ceil), W = sp ? sp.b - sp.a : u.frac * w.w, Hh = vv[1] - vv[0], sill = vv[0] - w.base;
-      const wMax = 0.95 * w.w;
+      const L = cw0.sg.len;
       const kids = [
-        el('label', null, [txtC(t('Width')), numC(W, 0.3, +wMax.toFixed(2), v => {
-          if (v > wMax + 1e-6) toast(t('At most') + ' ' + fmt(wMax, 2) + ' m — ' + t('raise the window-to-wall ratio for a wider opening'));
-          u.frac = clamp(clamp(v, 0.3, wMax) / Math.max(0.3, w.w), 0.05, 0.95);
-        }), txtC('m')]),
+        el('label', null, [txtC(t('Width')), numC(W, 0.3, +L.toFixed(2), v => { u.frac = clamp(v, 0.3, L) / Math.max(0.3, w.w); }), txtC('m')]),
+        el('label', null, [txtC(t('From the left corner')), numC(uStartsRight(cw0.sg) ? L - (sp ? sp.b : W) : (sp ? sp.a : 0), 0, +Math.max(0, L - W).toFixed(2), v => {
+          const a = clamp(uStartsRight(cw0.sg) ? L - v - W : v, 0, Math.max(0, L - W)); u.pos = (a + W / 2 - (w.uc - w.w / 2)) / Math.max(0.3, w.w); u.off = 0; }), txtC('m')]),
         el('label', null, [txtC(t('Height')), numC(Hh, 0.3, +Math.max(0.3, H - (u.door ? 0.05 : 0)).toFixed(2), v => {
           if (u.door) { u.ht = +clamp(v, 0.3, Math.max(0.3, H - 0.05)).toFixed(2); return; }
           /* taller than the wall above its sill: the sill comes down to fit */
@@ -11917,19 +12299,11 @@ function buildOpenings(host) {
       const dor = el('button', { class:'btn small' + (u.door ? ' solid' : ''), text:t('door'), title:t('A glazed door onto the lower roof'),
         'aria-pressed':String(!!u.door), onclick:() => { u.door = !u.door; if (u.door) { u.gel = false; u.up = 0; } buildClerUI(); refreshOpenings(); } });
       const del = el('button', { class:'btn small', text:'×', title:t('Remove this opening'), 'aria-label':t('Remove this opening'), onclick:() => { faceUnits('C').splice(i, 1); buildClerUI(); refreshOpenings(); } });
-      const sh = rangeCtl('Share', 5, 95, 1, Math.round(clamp(isFinite(u.frac) ? u.frac : 1, 0, 1) * 100), v => {
-        u.frac = clamp(v / 100, 0.05, 0.95); updateClerTexts(); refreshOpenings();
-      }, v => fmt(v, 0) + '%');
-      const ps = rangeCtl('Position', 0, 100, 1, Math.round(clamp(isFinite(u.pos) ? u.pos : 0.5, 0, 1) * 100), v => {
-        u.pos = clamp(v / 100, 0, 1); u.off = 0; updateClerTexts(); refreshOpenings();
-      }, v => fmt(v, 0) + '%');
       const r = { m:el('div', { class:'hint' }) };
       rows.push(r);
       clerBox.appendChild(el('div', { class:'urow' }, [chk, dor, gel, del, r.m]));
       const cd = clerDims(u, i);
       if (cd) clerBox.appendChild(cd);
-      clerBox.appendChild(sh);
-      clerBox.appendChild(ps);
     });
     const minus = el('button', { class:'btn small', text:'−', title:t('One opening fewer'), 'aria-label':t('One opening fewer'), onclick:() => {
       const us = faceUnits('C');
@@ -11957,6 +12331,10 @@ function buildOpenings(host) {
       r.m.textContent = fmt(q.w, 2) + ' m · ' + fmt(q.area, 2) + ' m²'
         + (u.on && u.door ? ' · ' + t('door') : u.on && u.gel ? ' · ' + t('brick ventilation') : '')
         + (u.on ? ' · ' + t('sill') + ' ' + fmt(sillEff, 2) + ' m' : '');
+      /* share and position of the first step wall, read back from the metres */
+      if (u.on && cw.length) { const w = cw[0].w, L = cw[0].sg.len, sp = glassSpans('C', w.uc - w.w / 2, w.uc + w.w / 2, L, 0).filter(q2 => q2.ui === i && q2.b - q2.a > 0.05)[0];
+        if (sp && L > 0) { const a = uStartsRight(cw[0].sg) ? L - sp.b : sp.a, W = sp.b - sp.a;
+          r.m.textContent += ' · ' + t('Share') + ' ' + Math.round(100 * W / L) + ' % · ' + t('Position') + ' ' + Math.round(100 * clamp((a + W / 2) / L, 0, 1)) + ' %'; } }
     });
   }
   function refreshClerestory() {
@@ -12033,7 +12411,7 @@ function buildOpenings(host) {
     segSet(cFace, curFace);
     buildUnitUI();
     const o = OPEN[curFace];
-    syncCtl(cWWR, Math.round(o.wwr * 100), v => fmt(v, 0) + '%');
+    wwrOut.textContent = fmt(o.wwr * 100, 0) + '%';
     syncCtl(cSill, o.sillZ, v => fmt(v, 2) + ' m');
     syncCtl(cHead, o.headZ, v => fmt(v, 2) + ' m');
     syncCtl(cOvD, o.ovD, v => fmt(v, 2) + ' m');
@@ -12362,7 +12740,10 @@ const gelCount = f => { const us = faceUnits(f); return winsOf(f).reduce((a, x) 
   }
 
   function refreshOpenings() {
+    openMetres();
+    if (OPEN.C && OPEN.C.bandM > 0) { const fc = facadeNumbers('C'); if (fc.wall > 0) OPEN.C.wwr = Math.max(0.001, fc.eff); }
     const o = OPEN[curFace];
+    wwrOut.textContent = fmt(o.wwr * 100, 0) + '%';
     const [lo, hi] = wwrRange(curFace);
     const side = t(faceName[curFace]) + ' (' + faceDir(curFace) + ') · ';
     if (o.wwr < lo) { pillWWR.className = 'pill empty'; pillWWR.textContent = side + t('Below the recommended range'); }
@@ -12913,7 +13294,7 @@ const gelCount = f => { const us = faceUnits(f); return winsOf(f).reduce((a, x) 
         /* a selected window's bottom corner sets its length alone, on its own floor */
         const sp0 = glassSpans(curFace, wh.w.uc - wh.w.w / 2, wh.w.uc + wh.w.w / 2, len, selK).filter(s => s.ui === o.sel && s.on && s.b - s.a > 0.05)[0];
         const a0 = sp0 ? sp0.a : wh.w.uc - wh.w.w / 2;
-        unitFloorW(selU, selK).frac = clamp((clamp(inv.u, a0 + 0.3, len) - a0) / Math.max(0.3, wh.w.w), 0.03, 0.95);
+        unitFloorW(selU, selK).frac = (clamp(inv.u, a0 + 0.3, len) - a0) / Math.max(0.3, wh.w.w);
         OPEN[curFace].laid = true;
         buildUnitUI(); refreshOpenings();
         return;
@@ -12924,8 +13305,7 @@ const gelCount = f => { const us = faceUnits(f); return winsOf(f).reduce((a, x) 
       } else {
         const hNow = segWindow(wh.sg, G).h;   // hold the height and sill — this handle only sets the length
         const w = clamp(Math.abs(inv.u - len / 2) * 2, 0.6, len * 0.92);
-        o.wwr = clamp((w * hNow) / (len * per), 0.05, 0.8);
-        syncCtl(cWWR, Math.round(o.wwr * 100), v => fmt(v, 0) + '%');
+        o.bandM = w;
       }
     } else if (kind === 'winmove') {
       drag.moved = true; drag.px = clientX; drag.py = clientY;
@@ -15886,6 +16266,7 @@ function buildVentilation(host) {
         const fld = solarField(G, RF, lat, solarOptimum(S, t, G.rot, C.t).tilt, Object.assign({ tech:t }, o));
         if (!fld || !fld.fits) return;
         fld.mods.forEach(mo => poly(mo.q, t === 'pv' ? '#1E3A8A' : '#22262B', CH.ink, 1));
+        if (fld.tank) solarTankFaces(fld.tank).forEach(f => poly(f.pts, f.fill, 'rgba(71,85,105,.6)', 0.6));
       } catch (e) {}
     });
     window.__arcaShade = { wall: shadeDbg.wall, roof: shadeDbg.roof, sunAlt: +sun.alt.toFixed(1) };
@@ -16279,7 +16660,7 @@ function buildVentilation(host) {
     const fresh = scoreDelta && performance.now() - scoreDelta.at < 3200;
     const ventBadge = (i, value, band, caption, dv) => {
       const col = ventColor(band);
-      const x = narrowV ? 4 + i * 92 : W - 92, y = narrowV ? 4 : 6 + i * 58;
+      const x = narrowV ? 4 + (i % 3) * 92 : W - 92, y = narrowV ? 4 + Math.floor(i / 3) * 58 : 6 + i * 58;
       ctx.fillStyle = '#fff';
       ctx.fillRect(x, y, 84, 52);
       stroke(ctx, col, 1.5); ctx.strokeRect(x, y, 84, 52);
@@ -16303,6 +16684,10 @@ function buildVentilation(host) {
     const tct = (TURB && TURB.on) ? turbCalc() : null;
     const tTot = tct ? tct.kwh + (tct.pv ? tct.pv.kwh : 0) : 0;
     ventBadge(2, tct ? fmt(tct.kwh, 0) : null, !tct ? null : (tTot > TURB_HOME_KWH ? 'bad' : tct.hubMean < 3 ? 'bad' : tct.hubMean < 4.5 ? 'empty' : 'ok'), 'kWh/yr · turbine', null);
+    /* the Roof tab's collectors beside it, their year's output: PV (with its peak power) and heat */
+    { const pvB = pvAnnualKwh(), thB = thAnnualKwh(), loc = LANG === 'pl' ? 'pl-PL' : 'en-GB';
+      if (ROOF && ROOF.sol && ROOF.sol.pv && ROOF.sol.pv.on) ventBadge(3, pvB ? Math.round(pvB.kwh).toLocaleString(loc) : null, pvB ? (q => !q || q.level === 'ok' ? 'ok' : q.level === 'bad' ? 'bad' : 'empty')(solSizing('pv', pvB.kwh, G)) : null, pvB ? t('kWh/yr · PV') + ' ' + fmt(pvB.kwp, 1) + ' kWp' : t('kWh/yr · PV'), null);
+      if (ROOF && ROOF.sol && ROOF.sol.th && ROOF.sol.th.on) ventBadge(4, thB ? Math.round(thB.kwh).toLocaleString(loc) : null, thB ? (q => !q || q.level === 'ok' ? 'ok' : q.level === 'bad' ? 'bad' : 'empty')(solSizing('thermal', thB.kwh, G)) : null, t('kWh/yr · heat'), null); }
     if (shadowTag) {
       const desk = labelDesk(ctx, W, H);
       const boxPts = [];
@@ -18860,6 +19245,7 @@ style === 'sketch' ? '#EFEBE0'
         const fld = solarField(G, RF, S.lat, opt.tilt, Object.assign({ tech:t }, o));
         if (!fld || !fld.fits) return;
         fld.mods.forEach(mo => solItems.push({ pts:mo.q, fill:t === 'pv' ? '#1E3A8A' : '#22262B' }));
+        if (fld.tank) solarTankFaces(fld.tank).forEach(f => solItems.push({ pts:f.pts, fill:f.fill }));
       } catch (e) {}
     });
     /* Texture dressing: the finish's own tile at its true size, repeated
@@ -19560,7 +19946,7 @@ function vernApply(scope) {
   const R = vernRead();
   if (!R) return;
   const m = R.T.model, all = scope === 'all';
-  if (all) { R.V.bodyStudy = {}; R.V.work = 0; }
+  if (all) { R.V.bodyStudy = {}; R.V.work = 0; R.V.vm = null; R.V.rooms = null; }
   if (all || scope === 'site') {
     MASS.L = m.L; MASS.D = m.D; MASS.fl = m.fl; MASS.fh = m.fh; MASS.rot = m.rot;
     MASS.form = m.form; MASS.wing = m.wing ? Object.assign({}, m.wing) : null;
@@ -19637,6 +20023,7 @@ function vernApply(scope) {
   /* a model may pick its materials by place (a function of the site) */
   if (all || scope === 'visualization') { RENDER_PROMPT = VL(typeof m.render === 'function' ? m.render(STATE.site || {}) : m.render);
     const dr = vDress(R.type); RENDER_DRESS = { barra:dr ? dr.barra : null, frames:dr ? dr.frames : null }; }
+  if (all) { try { studyBase(R); } catch (e) { console.error(e); } }
   mountApp(STATE.site, null, STATE.tab, true, true);
   toast(VL({ en:'Model applied: ', pt:'Zastosowano model: ' }) + VL(R.T.name));
 }
@@ -23302,6 +23689,61 @@ function vmFromType(k) {
   vmDoorsOffStairs(vm);
   return vm;
 }
+/* ---------------------------------------------------------------- platforms of the houses on stakes
+   The access of a palheiro or an avieira house is a timber platform: the varanda, balcão or passadiço by which it is entered.
+   On these models alone the student sets each one in metres — its wall, length, depth, height and place along the wall — lays
+   several at different heights, and joins them to each other and to the ground by stairs of a chosen number of steps. */
+const VM_DECK_TYPES = ['pt-palheiro', 'pt-costa-nova', 'pt-avieiro'];
+const VM_OUT = { S:[0, -1], N:[0, 1], E:[1, 0], W:[-1, 0] }, VM_BACK = { S:'N', N:'S', E:'W', W:'E' };
+const vmDecks = vm => (vm.els || []).filter(e => e.t === 'deck');
+/** The platform in plan: its rectangle in world metres and its height over the ground. */
+function vmDeckRect(v, E) {
+  const f = E.face || 'S', a = E.a || 0, w = E.w || 3, d = E.d || 1.2, x0 = v.x - v.L / 2, y0 = v.y - v.D / 2, x1 = v.x + v.L / 2, y1 = v.y + v.D / 2;
+  const R = f === 'S' ? [x0 + a, y0 - d, x0 + a + w, y0] : f === 'N' ? [x0 + a, y1, x0 + a + w, y1 + d] : f === 'E' ? [x1, y0 + a, x1 + d, y0 + a + w] : [x0 - d, y0 + a, x0, y0 + a + w];
+  return { x0:R[0], y0:R[1], x1:R[2], y1:R[3], z:E.z, f };
+}
+/** The riser count a stair takes unless the student has set it. */
+const vmDeckAutoN = dz => Math.max(2, Math.round(Math.abs(dz) / 0.18));
+/** One stair of a platform: the treads from its edge to the ground or to the platform it joins, and whether its foot lands there. */
+function vmDeckStair(vm, v, E, S) {
+  const R = vmDeckRect(v, E), side = S.side || 'E', o = VM_OUT[side], T = S.to && S.to !== 'ground' ? vmDecks(vm).find(q => q.id === S.to) : null;
+  const tv = T ? (vm.vols[T.vol || 0] || v) : null, TR = T ? vmDeckRect(tv, T) : null, z1 = TR ? TR.z : 0, dz = z1 - R.z, n = Math.round(S.n) >= 2 ? Math.round(S.n) : vmDeckAutoN(dz), rise = dz / n, tr = 0.28, sw = S.w || 1;
+  const NS = side === 'S' || side === 'N', e0 = NS ? R.x0 : R.y0, eL = NS ? R.x1 - R.x0 : R.y1 - R.y0, at = clamp(S.at || 0, 0, Math.max(0, eL - sw)), ex = side === 'E' ? R.x1 : side === 'W' ? R.x0 : e0 + at, ey = side === 'S' ? R.y0 : side === 'N' ? R.y1 : e0 + at;
+  /* a tread i: its near edge i runs out from the platform, its top one riser nearer the far level */
+  const treads = []; for (let i = 0; i < n - 1; i++) { const a = i * tr, b = a + tr; treads.push({ p:NS ? [ex, ey + o[1] * a] : [ex + o[0] * a, ey], q:NS ? [ex + sw, ey + o[1] * b] : [ex + o[0] * b, ey + sw], z:R.z + (i + 1) * rise }); }
+  const run = (n - 1) * tr, foot = NS ? [ex + sw / 2, ey + o[1] * run] : [ex + o[0] * run, ey + sw / 2];
+  const lands = !TR || (foot[0] >= TR.x0 - 0.35 && foot[0] <= TR.x1 + 0.35 && foot[1] >= TR.y0 - 0.35 && foot[1] <= TR.y1 + 0.35);
+  return { treads, n, rise, tr, run, side, sw, at, ex, ey, o, NS, foot, lands, z0:R.z, z1, target:T };
+}
+/** A stair sent to another platform leaves by a side from which its foot can land there, where there is one. */
+function vmDeckAim(vm, v, E, S) {
+  const T = vmDecks(vm).find(q => q.id === S.to); if (!T) return;
+  const R = vmDeckRect(v, E), TR = vmDeckRect(vm.vols[T.vol || 0] || v, T), sw = S.w || 1, back = VM_BACK[E.face || 'S'];
+  for (const side of ['S', 'E', 'N', 'W'].filter(q => q !== back)) { const NS = side === 'S' || side === 'N', lo = NS ? R.x0 : R.y0, hi = NS ? R.x1 : R.y1, tl = NS ? TR.x0 : TR.y0, th = NS ? TR.x1 : TR.y1;
+    const at = clamp(((Math.max(lo, tl) + Math.min(hi, th)) / 2) - sw / 2 - lo, 0, Math.max(0, hi - lo - sw)), C = Object.assign({}, S, { side, at });
+    if (Math.min(hi, th) > Math.max(lo, tl) && vmDeckStair(vm, v, E, C).lands) { S.side = side; S.at = +at.toFixed(2); return; } }
+}
+/** Everything a platform covers in plan, its stairs too: for the frame of the drawings. */
+function vmDeckExtents(vm) {
+  const out = [];
+  vmDecks(vm).forEach(E => { const v = vm.vols[E.vol || 0]; if (!v) return; const R = vmDeckRect(v, E); out.push([R.x0, R.y0, R.x1, R.y1]);
+    (E.stairs || []).forEach(S => { const D = vmDeckStair(vm, v, E, S); out.push([Math.min(D.ex, D.foot[0]) - 0.2, Math.min(D.ey, D.foot[1]) - 0.2, Math.max(D.ex, D.foot[0]) + (D.NS ? D.sw : 0) + 0.2, Math.max(D.ey, D.foot[1]) + (D.NS ? 0 : D.sw) + 0.2]); }); });
+  return out;
+}
+/** An archetype's porch on these houses becomes its first platform, with its stair to the ground. */
+function vmPorchToDeck(vm, b) {
+  const P = vm.els.findIndex(e => e.t === 'alpendre'); if (P < 0) return;
+  const E = vm.els[P], w = Math.min(E.w || 6, b.L), a = clamp((E.pos === undefined ? 0.5 : E.pos) * b.L - w / 2, 0, b.L - w);
+  vm.els[P] = { t:'deck', id:'d1', vol:E.vol || 0, face:E.face || 'S', a:+a.toFixed(2), w:+w.toFixed(2), d:E.d || 2.2, z:b.raise || 0.8, guard:true, roof:true, stairs:[{ side:'E', at:0, w:1, to:'ground' }] };
+}
+/** The roofed platform the measuring tabs know as their canopy: moved, resized or taken away with it. */
+function vmDeckCanopy(vm, wi) {
+  if (!VM_DECK_TYPES.includes(vm.type) || !ROOF.zones || !ROOF.zones.length) return;
+  ROOF.zones.forEach(z => { delete z.canopy; });
+  const v = vm.vols[wi], E = vmDecks(vm).find(q => q.roof && (q.vol || 0) === wi); if (!v || !E) return;
+  const R = vmDeckRect(v, E), f = E.face || 'S', NS = f === 'S' || f === 'N';
+  ROOF.zones[0].canopy = { f, x:NS ? +((R.x0 + R.x1) / 2 - v.x).toFixed(2) : (f === 'E' ? v.L / 2 : -v.L / 2), y:NS ? (f === 'N' ? v.D / 2 : -v.D / 2) : +((R.y0 + R.y1) / 2 - v.y).toFixed(2), w:+Math.min(8, E.w || 3).toFixed(1), d:+clamp(E.d || 1.2, 0.6, 4).toFixed(2), p:0, drop:0.15 };
+}
 /** Steps to every ground-floor door of a raised body that nothing else
     serves — no entry step, no porch deck in front of it: a door above the
     ground is always reached. Timber steps over stakes or on a timber house,
@@ -23322,6 +23764,7 @@ function vmDoorStepEls(vm) {
         const served = mine.some(e => {
           if (e.t === 'stair' && e.entry) { const u0 = (e.pos || 0) * len; return c >= u0 - 0.1 && c <= u0 + (e.w || 1.1) + 0.1; }
           if (e.t === 'alpendre' && e.deck !== false) { const w = Math.min(e.w || 6, v.L), u0 = (e.pos || 0.5) * len - w / 2; return c >= u0 && c <= u0 + w; }
+          if (e.t === 'deck') return Math.abs((e.z || 0) - z0) < 0.3 && c >= (e.a || 0) && c <= (e.a || 0) + (e.w || 3);
           return false; });
         if (served) return;
         const w = clamp((o.w || 0.9) + 0.2, 0.9, 1.4);
@@ -23516,6 +23959,9 @@ const VM_REVIEW = {
     vm.court = { on:true, x:b.x, y:b.y - b.D / 2 - 2, L:b.L + 1, D:4, h:0.9, open:'N', gate:{ face:'S', pos:0.5, w:1.2 } }; },
   /* Minho: the quinteiro in front, closed to the road by a high wall and its portal */
   'pt-minho':(vm, b) => { vm.court = { on:true, x:b.x, y:b.y - b.D / 2 - 4, L:b.L + 2, D:8, h:2.0, open:'N', gate:{ face:'S', pos:0.8, w:2.8 } }; },
+  /* the houses on stakes: the porch is a platform the student can move, and more can be added */
+  'pt-palheiro':(vm, b) => vmPorchToDeck(vm, b),
+  'pt-avieiro':(vm, b) => vmPorchToDeck(vm, b),
   /* town houses: the medieval casa corrente's «yard or garden behind», Angra's «kitchen and garden behind» */
   'pt-casa-corrente':(vm, b) => { vm.court = { on:true, x:b.x, y:b.y + b.D / 2 + 3, L:b.L, D:6, h:2.0, open:'S', gate:{ face:'N', pos:0.5, w:1.0 } }; },
   'az-angra':(vm, b) => { vm.court = { on:true, x:b.x, y:b.y + b.D / 2 + 4, L:b.L, D:8, h:2.0, open:'S', gate:{ face:'N', pos:0.5, w:1.0 } }; },
@@ -23561,6 +24007,7 @@ function vmBBox(vm) {
   let b = [Infinity, Infinity, -Infinity, -Infinity];
   vs.forEach(v => { b = [Math.min(b[0], v.x - v.L / 2), Math.min(b[1], v.y - v.D / 2), Math.max(b[2], v.x + v.L / 2), Math.max(b[3], v.y + v.D / 2)]; });
   if (vm.court && vm.court.on) { const c = vm.court; b = [Math.min(b[0], c.x - c.L / 2), Math.min(b[1], c.y - c.D / 2), Math.max(b[2], c.x + c.L / 2), Math.max(b[3], c.y + c.D / 2)]; }
+  vmDeckExtents(vm).forEach(q => { b = [Math.min(b[0], q[0]), Math.min(b[1], q[1]), Math.max(b[2], q[2]), Math.max(b[3], q[3])]; });
   return b;
 }
 
@@ -23940,6 +24387,40 @@ function vmElFaces(vm, vs) {
           push([[px - 0.1, py - w - 0.2, top + 2.0], [px + 1.3, py - w - 0.2, top + 2.0], [px + 1.3, py, top + 2.4], [px - 0.1, py, top + 2.4]], (VM_ROOFMAT[v.roof.mat] || VM_ROOFMAT.tile).c, o); } }
       return;
     }
+    if (E.t === 'deck') {
+      const R = vmDeckRect(v, E), z = R.z, wood = '#8A6240', dk = vmShade(wood, 0.8), back = VM_BACK[f];
+      box(R.x0, R.y0, z - 0.12, R.x1 - R.x0, R.y1 - R.y0, 0.12, wood, o);
+      const across = f === 'S' || f === 'N', dl = across ? R.y1 - R.y0 : R.x1 - R.x0;
+      for (let t = 0.3; t < dl - 0.05; t += 0.3) push(across ? [[R.x0, R.y0 + t, z + 0.002], [R.x1, R.y0 + t, z + 0.002], [R.x1, R.y0 + t + 0.012, z + 0.002], [R.x0, R.y0 + t + 0.012, z + 0.002]] : [[R.x0 + t, R.y0, z + 0.002], [R.x0 + t + 0.012, R.y0, z + 0.002], [R.x0 + t + 0.012, R.y1, z + 0.002], [R.x0 + t, R.y1, z + 0.002]], vmShade(wood, 0.7), o);
+      /* posts to the ground along the outer edge, at least every 1.6 m */
+      const outEdge = f === 'S' ? [[R.x0, R.y0], [R.x1, R.y0]] : f === 'N' ? [[R.x0, R.y1 - 0.12], [R.x1, R.y1 - 0.12]] : f === 'E' ? [[R.x1 - 0.12, R.y0], [R.x1 - 0.12, R.y1]] : [[R.x0, R.y0], [R.x0, R.y1]];
+      const edgeL = Math.hypot(outEdge[1][0] - outEdge[0][0], outEdge[1][1] - outEdge[0][1]), np = Math.max(1, Math.ceil(edgeL / 1.6));
+      for (let i = 0; i <= np; i++) { const t = i / np, a = across ? 0.12 : 0, b = across ? 0 : 0.12, px = outEdge[0][0] + (outEdge[1][0] - outEdge[0][0] - a) * t, py = outEdge[0][1] + (outEdge[1][1] - outEdge[0][1] - b) * t; box(px, py, 0, 0.12, 0.12, z - 0.12, dk, o); }
+      /* the guard round its open sides: not the wall's, nor across a stair or where another platform meets it */
+      const stairsD = (E.stairs || []).map(S => vmDeckStair(vm, v, E, S));
+      if (E.guard !== false) ['S', 'N', 'E', 'W'].filter(s => s !== back).forEach(s => {
+        const NS = s === 'S' || s === 'N', lo = NS ? R.x0 : R.y0, hi = NS ? R.x1 : R.y1, fix = s === 'S' ? R.y0 : s === 'N' ? R.y1 : s === 'E' ? R.x1 : R.x0, gaps = [];
+        stairsD.filter(D => D.side === s).forEach(D => gaps.push([lo + D.at, lo + D.at + D.sw]));
+        vmDecks(vm).filter(q => q !== E && (q.vol || 0) === (E.vol || 0)).forEach(q => { const T = vmDeckRect(v, q);
+          if (Math.abs((s === 'S' ? T.y1 : s === 'N' ? T.y0 : s === 'E' ? T.x0 : T.x1) - fix) < 0.15) gaps.push([NS ? T.x0 : T.y0, NS ? T.x1 : T.y1]); });
+        gaps.sort((p, q) => p[0] - q[0]); let c = lo; const runs = [];
+        gaps.forEach(g => { if (g[0] > c + 0.05) runs.push([c, Math.min(g[0], hi)]); c = Math.max(c, g[1]); }); if (hi > c + 0.05) runs.push([c, hi]);
+        runs.forEach(r => { const pt = t => NS ? [t, fix] : [fix, t], A = pt(r[0]), B = pt(r[1]);
+          push([[A[0], A[1], z + 0.86], [B[0], B[1], z + 0.86], [B[0], B[1], z + 0.92], [A[0], A[1], z + 0.92]], vmShade(wood, 0.85), o);
+          const k = Math.max(1, Math.round((r[1] - r[0]) / 0.5)); for (let i = 0; i <= k; i++) { const q = pt(r[0] + (r[1] - r[0]) * i / k); box(q[0] - 0.02, q[1] - 0.02, z, 0.04, 0.04, 0.86, vmShade(wood, 0.9), o); } }); });
+      /* its stairs: the treads, two strings and a handrail */
+      stairsD.forEach(D => { D.treads.forEach(t => box(Math.min(t.p[0], t.q[0]), Math.min(t.p[1], t.q[1]), t.z - 0.04, Math.abs(t.q[0] - t.p[0]), Math.abs(t.q[1] - t.p[1]), 0.04, wood, o));
+        const hi = Math.max(D.z0, D.z1);
+        [0, D.sw].forEach(off => { const pa = D.NS ? [D.ex + off, D.ey] : [D.ex, D.ey + off], pb = D.NS ? [D.ex + off, D.ey + D.o[1] * D.run] : [D.ex + D.o[0] * D.run, D.ey + off];
+          push([[pa[0], pa[1], D.z0], [pb[0], pb[1], D.z1 + 0.14], [pb[0], pb[1], D.z1], [pa[0], pa[1], D.z0 - 0.28]], vmShade(wood, 0.75), o);
+          push([[pa[0], pa[1], D.z0 + 0.9], [pb[0], pb[1], D.z1 + 0.9], [pb[0], pb[1], D.z1 + 0.84], [pa[0], pa[1], D.z0 + 0.84]], vmShade(wood, 0.85), o); }); });
+      /* covered: the telheiro from the wall on two posts, under the eave where the wall carries one */
+      if (E.roof) { const rr = v.roof, tht = (rr.th || 0) * Math.PI / 180, alongX = rr.ridge === 'x' || (rr.ridge !== 'y' && v.L >= v.D), under = rr.type !== 'flat' && !(rr.type === 'gable' && (across ? !alongX : alongX));
+        const d = E.d || 1.2, eaveS = under ? (rr.bei || 0) * Math.tan(tht) : 0, eOver = eaveS > 0 ? Math.min(rr.bei || 0, d - 0.3) : 0, run = d + 0.2 - eOver, zTop = Math.max(H - eaveS - 0.05, z + 2.2), zOut = clamp(zTop - run * Math.tan(15 * Math.PI / 180), Math.min(zTop, z + 2.1), zTop), zPost = zOut + (zTop - zOut) * 0.2 / run;
+        const a = E.a || 0, w = E.w || 3; [a + 0.05, a + w - 0.2].forEach(u => { const q = at(u, d); box(q[0] - (f === 'E' ? 0.15 : 0), q[1] - (f === 'N' ? 0.15 : 0), z, 0.15, 0.15, zPost - z, wood, o); });
+        push([[...at(a - 0.2, d + 0.2), zOut], [...at(a + w + 0.2, d + 0.2), zOut], [...at(a + w + 0.2, eOver), zTop], [...at(a - 0.2, eOver), zTop]], (VM_ROOFMAT[v.roof.mat] || VM_ROOFMAT.tile).c, o); }
+      return;
+    }
     if (E.t === 'gallery') {
       const w = Math.min(E.w || 4, len - 0.4), u0 = (E.pos || 0.5) * len - w / 2, z = z0 + (E.floor || 0) * v.fh, [px, py] = at(u0, 0), d = 1.1, wood = '#8A6A48';
       if (E.kind === 'reentrante') { const [qx, qy] = at(u0 + w, 0.03); push([[px, py - (f === 'S' ? 0.03 : 0), z], [qx, qy, z], [qx, qy, z + v.fh * 0.92], [px, py - (f === 'S' ? 0.03 : 0), z + v.fh * 0.92]], 'rgba(40,32,26,.6)', o);
@@ -24127,7 +24608,136 @@ function vmIsoSVG(vm, w, opts) {
   const vb = [x0 - pad, y0 - pad, W + 2 * pad, H + 2 * pad].map(v => +v.toFixed(2)).join(' '), h = Math.round(w * (H + 2 * pad) / (W + 2 * pad));
   return '<svg xmlns="http://www.w3.org/2000/svg" class="vmiso" viewBox="' + vb + '" width="' + w + '" height="' + h + '">' + (opts.bg ? '<rect x="' + (x0 - pad) + '" y="' + (y0 - pad) + '" width="' + (W + 2 * pad) + '" height="' + (H + 2 * pad) + '" fill="' + opts.bg + '"/>' : '') + out.join('') + '</svg>';
 }
+/** The isometric opened: true while the model is drawn cut at sill height on the floor picked for rooms. */
+let VM_CUT = false;
+/** The model cut 1.2 m over floor k and seen from above, as an SVG string: the walls in section, the floor,
+    the rooms with their partitions, and the bathroom fittings in three dimensions. Turned and tilted as the
+    isometric; the roofs, the upper floors and the elements are left off. Painted body by body, the farthest
+    first; in each, its walls seen from inside, then what stands on the floor by the depth of its footprint,
+    then its walls seen from outside. */
+function vmCutSVG(vm, rooms, w, k, only) {
+  const RT = vmTurn(vm), V = VM_VIEW, out = [], all = [], HC = 1.2;
+  const dot = (n, a) => n[0] * a[0] + n[1] * a[1] + n[2] * a[2], seen = n => dot(n, V) > 1e-6;
+  const fxy = P => P.reduce((a, p) => a + p[0] * V[0] + p[1] * V[1], 0) / P.length;
+  const draw = (P0, fill, o) => { o = o || {}; const P = P0.map(RT), n = o.n ? RT([o.n[0], o.n[1], 0]).map((x, i) => i < 2 ? x - RT([0, 0, 0])[i] : o.n[2]) : vmNorm(P);
+    if (o.cull && !seen(n)) return; const Q = P.map(vmIso); Q.forEach(p => all.push(p));
+    /* st 'same': stroked in its own colour, closing the hairline between a wall's pieces */
+    const f = o.flat ? fill : vmLit(fill, n); out.push('<polygon points="' + vmPts(Q) + '" fill="' + f + '" stroke="' + (o.st === 'same' ? f : o.st || 'rgba(0,0,0,.35)') + '" stroke-width="' + (o.st === 'same' ? 0.02 : o.sw || 0.025) + '" stroke-linejoin="round"/>'); };
+  const ell = (q, z) => q.map(p => [p[0], p[1], z]);
+  /* a box on the floor, its near faces only; footprint x0..x1, y0..y1, from z0 to z1 */
+  const box = (x0, y0, x1, y1, z0, z1, fill, extra, st) => ({ k:fxy([[x0, y0, 0], [x1, y1, 0]].map(RT)), go:() => {
+    const S = [[[x0, y0], [x1, y0], [0, -1]], [[x1, y0], [x1, y1], [1, 0]], [[x1, y1], [x0, y1], [0, 1]], [[x0, y1], [x0, y0], [-1, 0]]];
+    S.forEach(([a, b, nn]) => draw([[a[0], a[1], z0], [b[0], b[1], z0], [b[0], b[1], z1], [a[0], a[1], z1]], fill, { n:[nn[0], nn[1], 0], cull:true, sw:0.015, st }));
+    draw([[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]], fill, { n:[0, 0, 1], sw:0.015, st }); if (extra) extra(); } });
+  const vs = vmAllVols(vm).filter(v => !v._r), floorOf = v => (v.raise > 0.5 && !v.piers ? v.raise : (v.raise || 0)) + k * v.fh;
+  /* each body's outline (outer, inner by the wall's thickness), anticlockwise */
+  const ring = (v, d) => { if (v.kind === 'rect') { const a = v.L / 2 - d, b = v.D / 2 - d; return [[v.x - a, v.y - b], [v.x + a, v.y - b], [v.x + a, v.y + b], [v.x - a, v.y + b]]; }
+    return Array.from({ length:32 }, (_, i) => { const t = i / 32 * 2 * Math.PI; return [v.x + (v.L / 2 - d) * Math.cos(t), v.y + (v.D / 2 - d) * Math.sin(t)]; }); };
+  const inBody = (v, x, y) => v.kind === 'rect' ? Math.abs(x - v.x) <= v.L / 2 + 1e-6 && Math.abs(y - v.y) <= v.D / 2 + 1e-6 : ((x - v.x) / (v.L / 2)) ** 2 + ((y - v.y) / (v.D / 2)) ** 2 <= 1.0001;
+  /* a close-up of one room: its floor, low walls round it 0.12 m thick, what stands in it */
+  if (only) { const U = []; roomU(only, 0, HC, U, () => false, 0.06, true); U.sort((a, b) => a.k - b.k).forEach(u => u.go()); return frame(); }
+  /* the ground shadow, as the isometric */
+  const bb = vmBBox(vm), sh = [[bb[0] - 0.5, bb[1] - 0.5, 0], [bb[2] + 1, bb[1] - 0.5, 0], [bb[2] + 1, bb[3] + 1, 0], [bb[0] - 0.5, bb[3] + 1, 0]].map(RT).map(vmIso);
+  out.push('<polygon points="' + vmPts(sh) + '" fill="rgba(0,0,0,.08)"/>'); sh.forEach(p => all.push(p));
+  const bodies = vs.map(v => { const O = ring(v, 0); return { v, k:fxy(O.map(p => RT([p[0], p[1], 0]))) }; }).sort((a, b) => a.k - b.k);
+  bodies.forEach(({ v }) => {
+    const O = ring(v, 0), t = Math.min(vmWallT(v), Math.min(v.L, v.D) / 4), I = ring(v, t), base = v.raise > 0.5 && !v.piers ? v.raise : v.piers ? Math.max(0, (v.raise || 0) - 0.15) : 0, wc = vmWallC(v), n = O.length;
+    const side = (A, z0, z1, fill, out1) => A.forEach((a, i) => { const b = A[(i + 1) % A.length], mx = (a[0] + b[0]) / 2 - v.x, my = (a[1] + b[1]) / 2 - v.y, nn = v.kind === 'rect' ? [Math.sign(Math.round((b[1] - a[1]) * 1e3)), -Math.sign(Math.round((b[0] - a[0]) * 1e3))] : [mx / (v.L / 2) ** 2, my / (v.D / 2) ** 2];
+      const s = out1 ? 1 : -1; draw([[a[0], a[1], z0], [b[0], b[1], z0], [b[0], b[1], z1], [a[0], a[1], z1]], fill, { n:[s * nn[0], s * nn[1], 0], cull:true }); });
+    /* a body without this floor: whole, closed by a flat top */
+    if (v.fl <= k) { const top = (v.raise || 0) + vmH(v); side(O, base, top, wc, true); draw(ell(O, top), '#B9B1A4', { n:[0, 0, 1] }); return; }
+    const zf = floorOf(v), zc = zf + Math.min(HC, v.fh - 0.05);
+    if (v.piers && k === 0) { [[O[0][0], O[0][1]], [O[1][0] - 0.25, O[1][1]], [O[2][0] - 0.25, O[2][1] - 0.25], [O[3][0], O[3][1] - 0.25]].slice(0, v.kind === 'rect' ? 4 : 0).forEach(([px, py]) => box(px, py, px + 0.25, py + 0.25, 0, base, '#8E8A80').go()); }
+    if (zf - base > 0.01) side(O, base, zf, wc, true);
+    draw(ell(I, zf), '#E6DFD0', { n:[0, 0, 1] });
+    /* the wall's segments, at most 0.6 m long, each knowing whether it is seen from inside or from outside */
+    const segs = [];
+    for (let i = 0; i < n; i++) { const a = O[i], b = O[(i + 1) % n], ai = I[i], bi = I[(i + 1) % n], m = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / 0.6));
+      for (let j = 0; j < m; j++) { const L = (p, q, u) => [p[0] + (q[0] - p[0]) * u, p[1] + (q[1] - p[1]) * u], u0 = j / m, u1 = (j + 1) / m;
+        segs.push([L(a, b, u0), L(a, b, u1), L(ai, bi, u0), L(ai, bi, u1)]); } }
+    const nOut = s => { const c = [(s[0][0] + s[1][0]) / 2, (s[0][1] + s[1][1]) / 2], ci = [(s[2][0] + s[3][0]) / 2, (s[2][1] + s[3][1]) / 2], d = Math.hypot(c[0] - ci[0], c[1] - ci[1]) || 1; return [(c[0] - ci[0]) / d, (c[1] - ci[1]) / d, 0]; };
+    const farSeg = s => { const nn = nOut(s), P = RT([nn[0], nn[1], 0]), Z = RT([0, 0, 0]); return (P[0] - Z[0]) * V[0] + (P[1] - Z[1]) * V[1] < 0; };
+    const wallSeg = s => { const nn = nOut(s), far = farSeg(s);
+      /* the faces stroked in their own colour, so the wall's 0.6 m pieces read as one */
+      if (far) draw([[s[3][0], s[3][1], zf], [s[2][0], s[2][1], zf], [s[2][0], s[2][1], zc], [s[3][0], s[3][1], zc]], wc, { n:[-nn[0], -nn[1], 0], st:'same' });
+      else draw([[s[0][0], s[0][1], zf], [s[1][0], s[1][1], zf], [s[1][0], s[1][1], zc], [s[0][0], s[0][1], zc]], wc, { n:nn, st:'same' });
+      /* the cut, dark as a section */
+      draw([[s[0][0], s[0][1], zc], [s[1][0], s[1][1], zc], [s[3][0], s[3][1], zc], [s[2][0], s[2][1], zc]], '#4A443D', { n:[0, 0, 1], flat:true, sw:0.01, st:'#4A443D' }); };
+    const segK = s => fxy([s[0], s[1], s[2], s[3]].map(p => RT([p[0], p[1], 0])));
+    segs.filter(farSeg).sort((a, b) => segK(a) - segK(b)).forEach(wallSeg);
+    /* what stands on this floor in this body: the rooms (their floor, their partitions) and the bathrooms' fittings */
+    const mine = (rooms || []).filter(q => q.fl === k && inBody(v, q.x, q.y)), U = [];
+    mine.forEach(q => roomU(q, zf, zc, U, (ax, ay, bx, by) => v.kind === 'rect' && (ax === bx ? Math.abs(Math.abs(ax - v.x) - v.L / 2) < t + 0.2 : Math.abs(Math.abs(ay - v.y) - v.D / 2) < t + 0.2), 0.04));
+    U.sort((a, b) => a.k - b.k).forEach(u => u.go());
+    segs.filter(s => !farSeg(s)).sort((a, b) => segK(a) - segK(b)).forEach(wallSeg);
+  });
+  return frame();
+  /* a room's floor, its partitions (pt either side of its edge, or outside it when out), and a bathroom's fittings, as units to paint by depth */
+  function roomU(q, zf, zc, U, skip, pt, out1) { const z = zf + 0.004; { const x0 = q.x - q.w / 2, x1 = q.x + q.w / 2, y0 = q.y - q.d / 2, y1 = q.y + q.d / 2;
+      draw([[x0, y0, z], [x1, y0, z], [x1, y1, z], [x0, y1, z]], q.wc ? '#CFDFE3' : '#DCE4DC', { n:[0, 0, 1], st:'rgba(46,74,66,.45)', sw:0.015 });
+      /* partitions 0.08 m thick, cut as the walls, where the room's side is not the body's own wall */
+      const ph = zc;
+      [[x0, y0, x1, y0], [x1, y0, x1, y1], [x0, y1, x1, y1], [x0, y0, x0, y1]].forEach(([ax, ay, bx, by]) => {
+        if (skip(ax, ay, bx, by)) return;
+        /* outside the room's edge (a close-up's walls), or across it (a partition between rooms) */
+        /* a close-up: the two walls nearest the eye kept low, so they do not hide the room; the long ones run over the corners */
+        let hh = ph;
+        if (out1) { const nn = ax === bx ? [ax === x0 ? -1 : 1, 0] : [0, ay === y0 ? -1 : 1], P = RT([nn[0], nn[1], 0]), Z = RT([0, 0, 0]);
+          if ((P[0] - Z[0]) * V[0] + (P[1] - Z[1]) * V[1] > 0) hh = zf + 0.12;
+          if (ax === bx) { ax += ax === x0 ? -pt : pt; bx = ax; } else { ay += ay === y0 ? -pt : pt; by = ay; ax -= 2 * pt; bx += 2 * pt; } }
+        const L = Math.hypot(bx - ax, by - ay), m = Math.max(1, Math.ceil(L / 0.5));
+        for (let j = 0; j < m; j++) { const u0 = j / m, u1 = (j + 1) / m, px0 = ax + (bx - ax) * u0, px1 = ax + (bx - ax) * u1, py0 = ay + (by - ay) * u0, py1 = ay + (by - ay) * u1;
+          const b = ax === bx ? box(px0 - pt, py0, px0 + pt, py1, zf, hh, '#EDE8DE', null, 'same') : box(px0, py0 - pt, px1, py0 + pt, zf, hh, '#EDE8DE', null, 'same');
+          const go = b.go; b.go = () => { go(); const T = ax === bx ? [[px0 - pt, py0], [px0 + pt, py0], [px0 + pt, py1], [px0 - pt, py1]] : [[px0, py0 - pt], [px1, py0 - pt], [px1, py0 + pt], [px0, py0 + pt]]; draw(ell(T, hh + 0.002), '#4A443D', { n:[0, 0, 1], flat:true, sw:0.01, st:'#4A443D' }); };
+          U.push(b); } });
+      if (!q.wc || !VM_WC[q.wc]) return;
+      const W = '#FAFAF8', wx = x0 + 0.1, bx = x0 + 0.65;
+      /* WC: the cistern against the wall, the bowl before it, the seat on top */
+      U.push(box(wx, y1 - 0.18, wx + 0.38, y1, zf, zf + 0.8, W));
+      U.push(box(wx + 0.03, y1 - 0.66, wx + 0.35, y1 - 0.18, zf, zf + 0.4, W, () => { const c = [wx + 0.19, y1 - 0.43], E = Array.from({ length:16 }, (_, i) => { const a = i / 16 * 2 * Math.PI; return [c[0] + 0.12 * Math.cos(a), c[1] + 0.17 * Math.sin(a), zf + 0.402]; }); draw(E, '#C9D3D6', { n:[0, 0, 1], flat:true, sw:0.012 }); }));
+      /* basin: the pedestal, the bowl's slab, its hollow */
+      U.push(box(bx + 0.2, y1 - 0.2, bx + 0.35, y1, zf, zf + 0.78, W));
+      U.push(box(bx, y1 - 0.45, bx + 0.55, y1, zf + 0.7, zf + 0.85, W, () => { const c = [bx + 0.275, y1 - 0.24], E = Array.from({ length:16 }, (_, i) => { const a = i / 16 * 2 * Math.PI; return [c[0] + 0.2 * Math.cos(a), c[1] + 0.14 * Math.sin(a), zf + 0.852]; }); draw(E, '#C9D3D6', { n:[0, 0, 1], flat:true, sw:0.012 }); }));
+      if (q.wc === 'shower') { const sx = x1 - 0.8;
+        U.push(box(sx, y1 - 0.8, x1, y1, zf, zf + 0.06, W, () => { const c = [sx + 0.4, y1 - 0.4]; draw([[c[0] - 0.04, c[1] - 0.04, zf + 0.062], [c[0] + 0.04, c[1] - 0.04, zf + 0.062], [c[0] + 0.04, c[1] + 0.04, zf + 0.062], [c[0] - 0.04, c[1] + 0.04, zf + 0.062]], '#7F8C90', { n:[0, 0, 1], flat:true, sw:0.01 }); }));
+        /* its glass screen on the open side */
+        U.push({ k:fxy([[sx, y1 - 0.8, 0], [sx, y1, 0]].map(RT)) + 0.01, go:() => draw([[sx, y1 - 0.8, zf + 0.06], [sx, y1 - 0.25, zf + 0.06], [sx, y1 - 0.25, zf + 1.9 > zc ? zc : zf + 1.9], [sx, y1 - 0.8, zf + 1.9 > zc ? zc : zf + 1.9]], 'rgba(170,205,220,.35)', { n:[-1, 0, 0], flat:true, st:'rgba(90,130,150,.6)', sw:0.012 }) }); }
+      if (q.wc === 'bath') { const ax = x1 - 0.7, ay = y1 - Math.min(1.7, q.d);
+        U.push(box(ax, ay, x1, y1, zf, zf + 0.55, W, () => { const r = 0.08, T = [[ax + r, ay + r], [x1 - r, ay + r], [x1 - r, y1 - r], [ax + r, y1 - r]]; draw(ell(T, zf + 0.552), '#C9D3D6', { n:[0, 0, 1], flat:true, sw:0.012 }); })); }
+    } }
+  function frame() {
+  if (!all.length) return '<svg xmlns="http://www.w3.org/2000/svg" class="vmiso"></svg>';
+  const xs = all.map(p => p[0]), ys = all.map(p => p[1]), x0 = Math.min(...xs), y0 = Math.min(...ys), W = Math.max(...xs) - x0, H = Math.max(...ys) - y0, pad = 0.6;
+  const vb = [x0 - pad, y0 - pad, W + 2 * pad, H + 2 * pad].map(v => +v.toFixed(2)).join(' '), h = Math.round(w * (H + 2 * pad) / (W + 2 * pad));
+  return '<svg xmlns="http://www.w3.org/2000/svg" class="vmiso" viewBox="' + vb + '" width="' + w + '" height="' + h + '">' + out.join('') + '</svg>';
+  }
+}
 /** The plan: bodies, walls by their thickness, openings, the elements' marks, the rooms, north and a scale. */
+/* The bathroom kits a student adds to the plan, with indicative sizes (m): a minimum
+   room with a basin and a WC, one with a shower tray, one with a bath. Fittings at
+   their common catalogue sizes, 0.6–0.7 m clear in front of each — a first layout to
+   test, not a regulatory minimum (check the RGEU and DL 163/2006 for accessibility). */
+const VM_WC = {
+  min:{ en:'Bathroom (basin + WC)', pt:'Łazienka (umywalka + WC)', w:1.5, d:1.4 },
+  shower:{ en:'Bathroom (basin, WC, shower)', pt:'Łazienka (umywalka, WC, prysznic)', w:2.1, d:1.6 },
+  bath:{ en:'Bathroom (basin, WC, bath)', pt:'Łazienka (umywalka, WC, wanna)', w:2.2, d:1.8 }
+};
+/** The fittings of a bathroom room on the plan, in its own corner of the plan transform P (s px per m):
+    the WC and the basin along its north wall from the west, the shower tray in the north-east
+    corner or the bath along the east wall. */
+function vmWcSVG(q, P, s) {
+  const o = [], x0 = q.x - q.w / 2, y1 = q.y + q.d / 2, x1 = q.x + q.w / 2, y0 = q.y - q.d / 2, st = ' fill="#FFFFFF" stroke="#5F7F8C" stroke-width="1" pointer-events="none"';
+  const R = (ax, ay, bx, by, rx) => { const a = P(ax, ay), b = P(bx, by); o.push('<rect x="' + Math.min(+a[0], +b[0]) + '" y="' + Math.min(+a[1], +b[1]) + '" width="' + Math.abs(b[0] - a[0]).toFixed(1) + '" height="' + Math.abs(b[1] - a[1]).toFixed(1) + '" rx="' + ((rx || 0) * s).toFixed(1) + '"' + st + '/>'); };
+  const E = (cx, cy, rx, ry) => { const c = P(cx, cy); o.push('<ellipse cx="' + c[0] + '" cy="' + c[1] + '" rx="' + (rx * s).toFixed(1) + '" ry="' + (ry * s).toFixed(1) + '"' + st + '/>'); };
+  const L = (ax, ay, bx, by) => { const a = P(ax, ay), b = P(bx, by); o.push('<line x1="' + a[0] + '" y1="' + a[1] + '" x2="' + b[0] + '" y2="' + b[1] + '" stroke="#5F7F8C" stroke-width="0.8" pointer-events="none"/>'); };
+  /* WC: cistern against the wall, the bowl before it */
+  const wx = x0 + 0.1; R(wx, y1, wx + 0.38, y1 - 0.18, 0.03); E(wx + 0.19, y1 - 0.18 - 0.24, 0.18, 0.24);
+  /* basin: the counter edge and its bowl */
+  const bx = x0 + 0.65; R(bx, y1, bx + 0.55, y1 - 0.45, 0.06); E(bx + 0.275, y1 - 0.24, 0.2, 0.15);
+  if (q.wc === 'shower') { const sx = x1 - 0.8; R(sx, y1, x1, y1 - 0.8); L(sx, y1, x1, y1 - 0.8); L(x1, y1, sx, y1 - 0.8); E(sx + 0.4, y1 - 0.4, 0.04, 0.04); }
+  if (q.wc === 'bath') { const ax = x1 - 0.7, ay = y1 - Math.min(1.7, q.d); R(ax, y1, x1, ay, 0.04); R(ax + 0.07, y1 - 0.07, x1 - 0.07, ay + 0.07, 0.25); E(ax + 0.35, y1 - 0.2, 0.03, 0.03); }
+  return o.join('');
+}
 function vmPlanSVG(vm, w, opts) {
   opts = opts || {};
   const vs = vmAllVols(vm), bb = vmBBox(vm), pad = 2.5, X0 = bb[0] - pad, Y1 = bb[3] + pad, Wm = bb[2] - bb[0] + 2 * pad, Hm = bb[3] - bb[1] + 2 * pad, s = w / Wm, h = Math.round(Hm * s);
@@ -24185,13 +24795,21 @@ function vmPlanSVG(vm, w, opts) {
     if (E.t === 'gallery' || E.t === 'alpendre' || E.t === 'latada') { const w = E.w || 4, d = E.t === 'gallery' ? (E.kind === 'reentrante' ? -1 : E.kind === 'sacada' ? 0.5 : 1.1) : (E.d || 2.4), u0 = (E.pos || 0.5) * len - w / 2;
       const A = P(...at(u0, Math.max(0, d))), B = P(...at(u0 + w, Math.min(0, d)));
       o.push('<rect x="' + Math.min(A[0], B[0]) + '" y="' + Math.min(A[1], B[1]) + '" width="' + Math.abs(B[0] - A[0]).toFixed(1) + '" height="' + Math.abs(B[1] - A[1]).toFixed(1) + '" fill="none" stroke="#8A6A48" stroke-width="1.2" stroke-dasharray="4 3"/>'); }
+    if (E.t === 'deck') { const R = vmDeckRect(v, E), A = P(R.x0, R.y1), B = P(R.x1, R.y0), c = P((R.x0 + R.x1) / 2, (R.y0 + R.y1) / 2), no = vmDecks(vm).indexOf(E) + 1;
+      o.push('<rect x="' + A[0] + '" y="' + A[1] + '" width="' + (+B[0] - +A[0]).toFixed(1) + '" height="' + (+B[1] - +A[1]).toFixed(1) + '" fill="rgba(138,98,64,.22)" stroke="#6E4B2E" stroke-width="1.2"' + (E.roof ? ' stroke-dasharray="5 3"' : '') + '/>');
+      o.push('<text x="' + c[0] + '" y="' + (+c[1] + 3) + '" font-size="9" text-anchor="middle" fill="#4A321C" font-family="sans-serif" pointer-events="none">P' + no + ' +' + fmt(E.z || 0, 2) + '</text>');
+      (E.stairs || []).forEach(S => vmDeckStair(vm, v, E, S).treads.forEach(t => { const a = P(Math.min(t.p[0], t.q[0]), Math.max(t.p[1], t.q[1])), b = P(Math.max(t.p[0], t.q[0]), Math.min(t.p[1], t.q[1]));
+        o.push('<rect x="' + a[0] + '" y="' + a[1] + '" width="' + (+b[0] - +a[0]).toFixed(1) + '" height="' + (+b[1] - +a[1]).toFixed(1) + '" fill="none" stroke="#6E4B2E" stroke-width="1"/>'); })); }
     if (E.t === 'oven') { const r = E.r || 0.9, p = P(...at((E.pos || 0.5) * len, r * 0.6)); o.push('<circle cx="' + p[0] + '" cy="' + p[1] + '" r="' + (r * s).toFixed(1) + '" fill="#E7DFD0" stroke="#3A3530" stroke-width="1.5"/>'); }
   }));
   /* rooms */
   (opts.rooms || []).forEach((q, i) => { const a = P(q.x - q.w / 2, q.y + q.d / 2);
     o.push('<rect data-room="' + i + '" x="' + a[0] + '" y="' + a[1] + '" width="' + (q.w * s).toFixed(1) + '" height="' + (q.d * s).toFixed(1) + '" fill="' + (q.bad ? 'rgba(217,140,140,.35)' : 'rgba(127,179,163,.28)') + '" stroke="' + (q === VM_ROOMSEL ? '#B5772A' : q.bad ? '#B55' : '#4E8A78') + '" stroke-width="' + (q === VM_ROOMSEL ? 3 : 1) + '"' + (q === VM_ROOMSEL ? ' stroke-dasharray="6 3"' : '') + ' style="cursor:move"/>');
+    if (q.wc && VM_WC[q.wc]) o.push(vmWcSVG(q, P, s));
     /* name and area kept inside their room: the type shrinks to the room's width and height */
-    const c = P(q.x, q.y), nm = VL(q.n), fs = Math.max(6, Math.min(10, q.w * s / Math.max(4, nm.length * 0.6), q.d * s / 2.6));
+    /* a bathroom's name sits in the floor left clear of its fittings: below the wall row, beside the bath */
+    const wcK = q.wc && VM_WC[q.wc], lx = wcK && q.wc === 'bath' ? q.x - 0.35 : q.x, ly = wcK ? (q.y - q.d / 2 + q.y + q.d / 2 - 0.7) / 2 : q.y;
+    const c = P(lx, ly), nm = VL(q.n), fs = Math.max(6, Math.min(10, (wcK && q.wc === 'bath' ? q.w - 0.7 : q.w) * s / Math.max(4, nm.length * 0.6), (wcK ? q.d - 0.7 : q.d) * s / 2.6));
     o.push('<text x="' + c[0] + '" y="' + (+c[1] - fs * 0.15).toFixed(1) + '" font-size="' + fs.toFixed(1) + '" text-anchor="middle" fill="#2E4A42" font-family="sans-serif" pointer-events="none">' + nm.replace(/&/g, '&amp;') + '</text>');
     o.push('<text x="' + c[0] + '" y="' + (+c[1] + fs * 1.05).toFixed(1) + '" font-size="' + (fs * 0.9).toFixed(1) + '" text-anchor="middle" fill="#2E4A42" font-family="sans-serif" pointer-events="none">' + fmt(q.w * q.d, 1) + ' m²</text>');
     const h2 = P(q.x + q.w / 2, q.y - q.d / 2); o.push('<rect data-roomsize="' + i + '" x="' + (+h2[0] - 5) + '" y="' + (+h2[1] - 5) + '" width="9" height="9" fill="#4E8A78" style="cursor:nwse-resize"/>'); });
@@ -24210,7 +24828,8 @@ function vmElevSVG(vm, face, w, opts) {
   const vs = vmAllVols(vm), across = face === 'S' || face === 'N', bb = vmBBox(vm);
   const u = v => across ? (face === 'S' ? v.x : -v.x) : (face === 'E' ? v.y : -v.y), half = v => across ? v.L / 2 : v.D / 2;
   const depth = v => face === 'S' ? -v.y : face === 'N' ? v.y : face === 'E' ? v.x : -v.x;
-  const umin = Math.min(...vs.map(v => u(v) - half(v))) - 2, umax = Math.max(...vs.map(v => u(v) + half(v))) + 2;
+  const uXY = (x, y) => across ? (face === 'S' ? x : -x) : (face === 'E' ? y : -y), dkX = vmDeckExtents(vm).flatMap(q => [uXY(q[0], q[1]), uXY(q[2], q[3])]);
+  const umin = Math.min(...vs.map(v => u(v) - half(v)), ...dkX) - 2, umax = Math.max(...vs.map(v => u(v) + half(v)), ...dkX) + 2;
   const zmax = Math.max(...vs.map(v => (v.raise || 0) + vmH(v) + vmRoofRise(v))) + 1.5, s = w / (umax - umin), h = Math.round((zmax + 0.8) * s);
   const P = (uu, z) => [((uu - umin) * s).toFixed(1), (h - (z + 0.6) * s).toFixed(1)], o = [];
   o.push('<rect width="' + w + '" height="' + h + '" fill="' + (opts.bg || '#FBFAF7') + '"/>');
@@ -24242,6 +24861,13 @@ function vmElevSVG(vm, face, w, opts) {
     const zb = H + vmRoofAt(v, x, y) - 0.2, zt = zb + (E.h || 1.2) + 0.2, ww = E.kind === 'ale' ? 1.2 : E.kind === 'esp' ? 1.8 : E.kind === 'rib' ? 1.4 : E.kind === 'gran' ? 0.7 : 0.6;
     o.push('<polygon points="' + [[uu - ww / 2, zb], [uu + ww / 2, zb], [uu + ww / 2, zt], [uu - ww / 2, zt]].map(p => P(p[0], p[1]).join(',')).join(' ') + '" fill="#F2EFE6" stroke="#3A3530" stroke-width="1"/>'); }));
   o.push('<text x="10" y="16" font-family="sans-serif" font-size="12" fill="#3A3530">' + VL({ en:{ S:'South', E:'East', N:'North', W:'West' }[face] + ' elevation', pt:'Elewacja ' + { S:'południowa', E:'wschodnia', N:'północna', W:'zachodnia' }[face] }) + '</text>');
+  /* the platforms and their stairs, in front of the walls */
+  vmDecks(vm).forEach(E => { const v = vm.vols[E.vol || 0]; if (!v) return; const R = vmDeckRect(v, E), a = Math.min(uXY(R.x0, R.y0), uXY(R.x1, R.y1)), b = Math.max(uXY(R.x0, R.y0), uXY(R.x1, R.y1)), z = R.z;
+    const pl = (pts, f, st) => o.push('<polygon points="' + pts.map(q => P(q[0], q[1]).join(',')).join(' ') + '" fill="' + f + '" stroke="' + (st || '#4A321C') + '" stroke-width="1"/>');
+    pl([[a, z - 0.12], [b, z - 0.12], [b, z], [a, z]], '#8A6240');
+    if (E.guard !== false) pl([[a, z], [b, z], [b, z + 0.9], [a, z + 0.9]], 'rgba(110,80,50,.22)');
+    const np = Math.max(1, Math.ceil((b - a) / 1.6)); for (let i = 0; i <= np; i++) { const t = a + (b - a - 0.12) * i / np; pl([[t, 0], [t + 0.12, 0], [t + 0.12, z - 0.12], [t, z - 0.12]], '#6E4B2E'); }
+    (E.stairs || []).forEach(S => { const D = vmDeckStair(vm, v, E, S); D.treads.forEach(t => { const c0 = uXY(t.p[0], t.p[1]), c1 = uXY(t.q[0], t.q[1]); pl([[Math.min(c0, c1), t.z - 0.04], [Math.max(c0, c1), t.z - 0.04], [Math.max(c0, c1), t.z], [Math.min(c0, c1), t.z]], '#8A6240'); }); }); });
   return '<svg xmlns="http://www.w3.org/2000/svg" class="vmelev" data-s="' + s.toFixed(4) + '" viewBox="0 0 ' + w + ' ' + h + '" width="' + w + '" height="' + h + '">' + o.join('') + '</svg>';
 }
 /** A plan and the south elevation as DXF (R12, lines and circles), metres. */
@@ -24323,6 +24949,8 @@ function vmDXF(vm) {
   vs.forEach(v => { const ring = vmRing(v, 0, 0).map(p => [p[0], p[1]]), Wt = vmWallT(v);
     poly(ring, 'PLAN_WALL_OUT'); poly(vmRing(v, -Wt, 0).map(p => [p[0], p[1]]), 'PLAN_WALL_IN'); });
   if (vm.court && vm.court.on) poly(vmRing(Object.assign({ kind:'rect' }, vm.court), 0, 0).map(p => [p[0], p[1]]), 'PLAN_COURT');
+  vmDecks(vm).forEach(E => { const v = vm.vols[E.vol || 0]; if (!v) return; const R = vmDeckRect(v, E); poly([[R.x0, R.y0], [R.x1, R.y0], [R.x1, R.y1], [R.x0, R.y1]], 'PLAN_PLATFORM');
+    (E.stairs || []).forEach(S => vmDeckStair(vm, v, E, S).treads.forEach(t => poly([[t.p[0], t.p[1]], [t.q[0], t.p[1]], [t.q[0], t.q[1]], [t.p[0], t.q[1]]], 'PLAN_PLATFORM_STAIR'))); });
   ((STATE.vern && STATE.vern.rooms) || []).forEach(q => poly([[q.x - q.w / 2, q.y - q.d / 2], [q.x + q.w / 2, q.y - q.d / 2], [q.x + q.w / 2, q.y + q.d / 2], [q.x - q.w / 2, q.y + q.d / 2]], 'PLAN_ROOMS'));
   /* the south elevation, drawn below the plan */
   const bb = vmBBox(vm), dy = bb[1] - 6;
@@ -24391,6 +25019,11 @@ function vmSel(label, opts, get, set, rebuild) {
   const s = el('select', { onchange:e => { set(e.target.value); vmChanged(rebuild); } });
   opts.forEach(([v, l]) => s.appendChild(el('option', { value:v, text:l, selected:String(get()) === String(v) ? 'selected' : null })));
   return el('label', null, [document.createTextNode(label), s]);
+}
+/** A number whose change also redraws the editor: its readings depend on it. */
+function vmNumR(label, get, set, lo, hi, step) {
+  return el('label', null, [document.createTextNode(label), el('input', { type:'number', min:lo, max:hi, step:step || 0.1, value:+(+get()).toFixed(2),
+    onchange:e => { const v = clamp(+e.target.value, lo, hi); if (isFinite(v)) { set(v); vmChanged(true); } } })]);
 }
 /** The compact forms, for a line of a table: no label, the header names the column. */
 function vmNumC(get, set, lo, hi, step) {
@@ -24546,6 +25179,7 @@ function vmPassToStudy(vm, wi) {
   vmRidgeToRoof(v, true);
   vmChimToRoof(vm, wi);
   toast(wi ? VMT('Now working on: ', 'Teraz pracujesz nad: ') + VL(v.name) : VMT('The main body is now the study’s massing — the other tabs measure it.', 'Bryła główna jest teraz bryłą studium — mierzą ją pozostałe zakładki.'));
+  try { studyBase(vernRead()); } catch (e) { console.error(e); }
   refreshAll();
 }
 /** The study's roof takes the ridge of a modeller body: a gable part's ridge runs along its longer side unless the part is
@@ -24594,8 +25228,134 @@ function vmChimToRoof(vm, wi) {
   ROOF.zones.forEach(z => { delete z.chim; });
   ROOF.zones[zi].chim = { on:true, fam:vmChimFamOf(E, R), picked:true, x:+((fu - 0.5) * MASS.L).toFixed(2), y:+((fv - 0.5) * MASS.D).toFixed(2) };
 }
+/* ---------------------------------------------------------------- one model in every tab
+   Draw the model holds the building as bodies (vm); the measuring tabs hold the body worked on as MASS, ROOF, OPEN.
+   On leaving a tab each side is compared, part by part, with what both held at the last crossing, and what changed goes
+   over to the other side — so the model a tab opens on is always the one the student just left. */
+/** How many of the model's bodies are the parts of one roof (a model whose roof is in parts draws one body per part). */
+function syncParts(R, vm) {
+  const z = R.T.model.roof && R.T.model.roof.zones;
+  return z && z.length > 1 && !(R.V.work > 0) && ROOF.zones && ROOF.zones.length === z.length && vm.vols.length >= z.length ? z.length : 1;
+}
+/** A face's openings as the measuring tabs draw them: storey, kind, size and place along the wall, west to east or south to north. */
+function syncRects(f) {
+  if ((MASS.form || 'rect') !== 'rect' || (MASS.patio && MASS.patio.on)) return null;
+  const NS = f === 'S' || f === 'N', len = NS ? MASS.L : MASS.D, out = [];
+  planModel(MASS).segs.filter(q => !q.step && (q.face || segFace(q)) === f).forEach(sg => {
+    const wn = segWindow(sg, MASS), i = NS ? 0 : 1, dir = (sg.b[i] - sg.a[i]) / (sg.len || 1), a0 = sg.a[i] + len / 2;
+    if (wn) unitRects(sg, wn, MASS, Infinity).forEach(q => out.push({ t:q.door ? 'd' : q.rail ? 'v' : 'w', fl:q.k, pos:+((a0 + dir * (q.a + q.b) / 2) / len).toFixed(3), w:+(q.b - q.a).toFixed(2), h:+(q.v1 - q.v0).toFixed(2) }));
+  });
+  return out.sort((p, q) => p.fl - q.fl || p.pos - q.pos);
+}
+function syncVmSide(R, vm) {
+  const wi = Math.min(R.V.work || 0, vm.vols.length - 1), vs = vm.vols.slice(wi, wi + syncParts(R, vm)), v = vs[0], els = vm.els || [], open = {};
+  VM_FACES.forEach(f => { open[f] = JSON.stringify(vs.map(q => (q.open && q.open[f]) || [])); });
+  return { dims:JSON.stringify([+vs.reduce((a, q) => a + q.L, 0).toFixed(2), v.D, v.fl, v.fh, v.raise || 0]),
+    roof:JSON.stringify(vs.map(q => [q.roof.type, q.roof.th, q.roof.bei || 0, q.roof.ridge || ''])), open,
+    els:JSON.stringify(els.filter(e => (e.t === 'gallery' || e.t === 'stair' || e.t === 'deck') && (e.vol || 0) === wi)),
+    chim:JSON.stringify(els.filter(e => e.t === 'chimney' && (e.vol || 0) === wi).map(e => [e.u, e.v, e.kind])),
+    mat:JSON.stringify([v.wall.mat, v.roof.mat, v.wall.barra || '', v.wall.frames || '']) };
+}
+function syncStudySide() {
+  const zs = ROOF.zones && ROOF.zones.length ? ROOF.zones : [{ n:ROOF.n, th:ROOF.th, bei:ROOF.bei }], open = {}, look = parseRenderPrompt(RENDER_PROMPT || '');
+  VM_FACES.forEach(f => { open[f] = JSON.stringify(syncRects(f)); });
+  return { dims:JSON.stringify([MASS.L, MASS.D, MASS.fl, MASS.fh, MASS.raise && MASS.raise.on ? MASS.raise.h : 0]),
+    roof:JSON.stringify(zs.map(z => [z.n, z.th, z.bei && z.bei.on !== false ? z.bei.d || 0 : 0])), open, balc:JSON.stringify(MASS.balc || []),
+    chim:JSON.stringify(zs.map(z => z.chim && z.chim.on !== false ? [z.chim.x, z.chim.y, z.chim.fam] : null)),
+    mat:JSON.stringify([look.wall ? look.wall.key : '', look.roof ? look.roof.key : '']) };
+}
+/** Both sides as they now are: the next crossing is measured from here. */
+function studyBase(R) {
+  openMetres();
+  const vm = R.V.vm && R.V.vm.type === R.type ? R.V.vm : vmRead().vm;
+  R.V.sync = { type:R.type, wi:Math.min(R.V.work || 0, vm.vols.length - 1), a:syncVmSide(R, vm), b:syncStudySide() };
+}
+/** The balcony a varanda of the drawing is in the Plan tab, and back: both stand at the same place on the same wall. */
+function syncBalcOf(E, hasStair) {
+  const f = E.face || 'S', NS = f === 'S' || f === 'N', len = NS ? MASS.L : MASS.D, c = ((E.pos === undefined ? 0.5 : E.pos) - 0.5) * len, inn = E.kind === 'reentrante';
+  const b = { f, x:NS ? c : (f === 'E' ? 1 : -1) * MASS.L / 2, y:NS ? (f === 'N' ? 1 : -1) * MASS.D / 2 : c, mode:inn ? 'in' : 'out', w:Math.min(E.w || 4, Math.floor(len * 10) / 10), d:inn ? 1.5 : E.kind === 'sacada' ? 0.5 : 1.2, lv:(E.floor || 0) + 1, corner:0 };
+  if (hasStair && !inn) b.stair = { w:STAIR_W };
+  return b;
+}
+function syncVaranda(b, wi, old) {
+  const NS = b.f === 'S' || b.f === 'N', len = NS ? MASS.L : MASS.D, was = (old || []).find(e => e.t === 'gallery' && (e.face || 'S') === b.f && (e.floor || 0) === (b.lv || 1) - 1);
+  return Object.assign({}, was, { t:'gallery', vol:wi, face:b.f, kind:b.mode === 'in' ? 'reentrante' : was && was.kind !== 'reentrante' ? was.kind : 'corrida', pos:+clamp(((NS ? b.x : b.y) + len / 2) / len, 0.02, 0.98).toFixed(3), w:b.w, floor:Math.max(0, (b.lv || 1) - 1) });
+}
+/** Words of a finish in the image brief: the wall's or the roof's phrase of it replaced by the drawing's material. */
+function syncPromptMat(rx, list, key, noun) {
+  const o = list.find(q => q.key === key); if (!o) return;
+  RENDER_PROMPT = [o.words[0] + ' ' + noun].concat((RENDER_PROMPT || '').split(',').map(q => q.trim()).filter(q => q && !rx.test(q))).join(', ').slice(0, 500);
+}
+/** Carry what changed since the last crossing to the other side. True when anything went over. */
+function studySync() {
+  if (!isPopular() || !MASS || !ROOF || !OPEN) return false;
+  let R = null; try { R = vernRead(); } catch (e) { return false; }
+  if (!R || !R.T || R.T.support) return false;
+  const vm = R.V.vm && R.V.vm.type === R.type ? R.V.vm : vmRead().vm, S = R.V.sync;
+  const wi = Math.min(R.V.work || 0, vm.vols.length - 1);
+  if (!S || S.type !== R.type || S.wi !== wi) { studyBase(R); return false; }
+  const a = syncVmSide(R, vm), b = syncStudySide(), np = syncParts(R, vm), vs = vm.vols.slice(wi, wi + np), v = vs[0];
+  const A = k => a[k] !== S.a[k], B = k => b[k] !== S.b[k], Af = f => a.open[f] !== S.a.open[f], Bf = f => b.open[f] !== S.b.open[f];
+  const aOpen = VM_FACES.filter(Af), bOpen = VM_FACES.filter(Bf);
+  if (!['dims', 'roof', 'chim', 'mat'].some(k => A(k) || B(k)) && !A('els') && !B('balc') && !aOpen.length && !bOpen.length) return false;
+  const zs = () => (ROOF.zones && ROOF.zones.length ? ROOF.zones : null);
+  const RT = { flat:0, shed:1, gable:2, ground:2, hip:3, pyramid:3, tesoura:3, cone:3, dome:3 };
+  /* the drawing to the measuring tabs */
+  if (A('dims')) { MASS.L = +vs.reduce((t, q) => t + q.L, 0).toFixed(2); MASS.D = v.D; MASS.fl = v.fl; MASS.fh = Math.max(2.0, v.fh);
+    MASS.raise = v.raise > 0 ? { on:true, h:v.raise, kind:(MASS.raise && MASS.raise.kind) || 'plinth' } : Object.assign({ h:0.9, kind:'plinth' }, MASS.raise, { on:false });
+    fixWing(MASS); fixPatio(MASS); }
+  if (A('roof')) { const z = zs(); if (z) z.forEach((q, i) => { const w = vs[Math.min(i, vs.length - 1)], n = RT[w.roof.type];
+      if (n !== undefined) { q.n = n; q.th = n === 0 ? 0 : Math.min(60, w.roof.type === 'dome' ? 35 : w.roof.th); }
+      if (q.bei || w.roof.bei > 0) q.bei = Object.assign({ ends:true }, q.bei, { on:w.roof.bei > 0, d:w.roof.bei || 0 }); });
+    else { const n = RT[v.roof.type]; if (n !== undefined) { ROOF.n = n; ROOF.th = n === 0 ? 0 : Math.min(60, v.roof.th); } }
+    if (!ROOF.zones || ROOF.zones.length === 1) vmRidgeToRoof(v, true); }
+  if (A('dims') || aOpen.length) (A('dims') ? VM_FACES : aOpen).forEach(f => {
+    const P = { L:MASS.L, D:MASS.D, fl:MASS.fl, fh:MASS.fh, roof:np > 1 ? { zones:ROOF.zones } : {}, open:{}, balc:0 };
+    const u = vernOpenUnits(f, np > 1 ? vm : { vols:[v] }, P), o = OPEN[f] || {}; if (!u) return;
+    OPEN[f] = Object.assign(u, { ovD:o.ovD || 0, ovN:o.ovN || 1, ovL:o.ovL || 0, ovR:o.ovR || 0, finD:o.finD || 0, finN:o.finN || 0, finSide:o.finSide || 'both' }); });
+  if (A('els')) { const els = vm.els.filter(e => (e.vol || 0) === wi);
+    MASS.balc = els.filter(e => e.t === 'gallery' && (e.floor || 0) < MASS.fl).map(e => syncBalcOf(e, els.some(q => q.t === 'stair' && (q.face || 'S') === (e.face || 'S'))));
+    vmDeckCanopy(vm, wi); }
+  if (A('chim')) { if (vm.els.some(e => e.t === 'chimney' && (e.vol || 0) === wi)) vmChimToRoof(vm, wi); else if (ROOF.zones) ROOF.zones.forEach(z => { delete z.chim; }); }
+  if (A('mat')) { const was = JSON.parse(S.a.mat);
+    if (was[0] !== v.wall.mat) syncPromptMat(/\b(walls?|paredes?)\b/i, RENDER_WALLS, v.wall.mat, 'walls');
+    if (was[1] !== v.roof.mat) syncPromptMat(/\b(roofs?|telhados?|coberturas?)\b/i, RENDER_ROOFS, v.roof.mat, 'roof');
+    RENDER_DRESS = { barra:v.wall.barra || null, frames:v.wall.frames || null }; }
+  /* the measuring tabs to the drawing, what the drawing did not change itself */
+  if (B('dims') && !A('dims')) { const sum = vs.reduce((t, q) => t + q.L, 0), k = sum > 0 ? MASS.L / sum : 1;
+    vs.forEach(q => { if (vs.length > 1) { q.L *= k; q.x *= k; } else q.L = MASS.L; q.D = q.kind === 'round' ? q.L : MASS.D; q.fl = MASS.fl; q.fh = MASS.fh; q.raise = MASS.raise && MASS.raise.on ? MASS.raise.h : 0; }); }
+  if (B('roof') && !A('roof')) { const z = zs() || [{ n:ROOF.n, th:ROOF.th, bei:ROOF.bei }];
+    vs.forEach((q, i) => { const c = z[Math.min(i, z.length - 1)];
+      if (!['cone', 'dome', 'pyramid', 'tesoura', 'ground'].includes(q.roof.type)) { q.roof.type = ['flat', 'shed', 'gable', 'hip'][c.n] || q.roof.type; q.roof.th = c.n === 0 ? 0 : c.th; }
+      if (c.bei) q.roof.bei = c.bei.on === false ? 0 : c.bei.d || 0; }); }
+  if ((B('dims') && !A('dims')) || bOpen.length) (B('dims') && !A('dims') ? VM_FACES : bOpen).filter(f => !aOpen.includes(f)).forEach(f => {
+    const rs = syncRects(f), NS = f === 'S' || f === 'N'; if (!rs) return;
+    /* a long terrace of more openings than a wall of the tabs holds keeps the drawing's own */
+    const most = Math.max(0, ...Array.from({ length:v.fl }, (_, k) => [].concat(...vs.map(q => (q.open && q.open[f]) || [])).filter(o => o.fl === k).length)); if (most > 6) return;
+    const old = vs.map(q => (q.open && q.open[f]) || []);
+    vs.forEach(q => { q.open = q.open || {}; q.open[f] = []; });
+    rs.forEach(o => { const q = vs.length === 1 ? vs[0] : !NS ? (f === 'E' ? vs[vs.length - 1] : vs[0]) : vs.find(w => o.pos * MASS.L - MASS.L / 2 < w.x + w.L / 2) || vs[vs.length - 1];
+      const pos = +clamp(vs.length > 1 && NS ? (o.pos * MASS.L - MASS.L / 2 - (q.x - q.L / 2)) / q.L : o.pos, 0.02, 0.98).toFixed(4), was = old[vs.indexOf(q)].find(e => e.fl === o.fl && e.t === o.t && Math.abs(e.pos - pos) * (NS ? q.L : q.D) < 0.3);
+      q.open[f].push(Object.assign({}, was, { t:o.t, pos, w:o.w, h:o.h, fl:o.fl })); }); });
+  if (B('balc') && !A('els')) { const was = vm.els.filter(e => (e.vol || 0) === wi), gone = JSON.parse(S.b.balc).filter(q => q.stair && !(MASS.balc || []).some(c => c.f === q.f && c.stair)).map(q => q.f);
+    vm.els = vm.els.filter(e => !((e.vol || 0) === wi && (e.t === 'gallery' || (e.t === 'stair' && gone.includes(e.face || 'S')))));
+    (MASS.balc || []).forEach(c => { const E = syncVaranda(c, wi, was); vm.els.push(E);
+      if (c.stair && !vm.els.some(e => e.t === 'stair' && (e.vol || 0) === wi && (e.face || 'S') === c.f)) vm.els.push({ t:'stair', vol:wi, face:c.f, along:'par', pos:+Math.max(0.02, E.pos - c.w / 2 / ((c.f === 'S' || c.f === 'N') ? MASS.L : MASS.D)).toFixed(3), w:c.stair.w || 1, landing:false }); }); }
+  if ((B('dims') && !A('dims')) || bOpen.length) vm.els.forEach(e => { if (e.t === 'stair' && e.toDoor && (e.vol || 0) === wi) e.pos = vmStairPos(v, e.face || 'S'); });
+  if (B('chim') && !A('chim')) { const z = zs() || [], i = z.findIndex(q => q.chim && q.chim.on !== false), c = i >= 0 ? z[i].chim : null;
+    const E = vm.els.find(e => e.t === 'chimney' && (e.vol || 0) === wi);
+    if (!c) { if (E) vm.els.splice(vm.els.indexOf(E), 1); }
+    else { const u = +clamp(c.x / MASS.L + 0.5, 0.05, 0.95).toFixed(3), w = +clamp(c.y / MASS.D + 0.5, 0.05, 0.95).toFixed(3);
+      if (E) { E.u = u; E.v = w; } else vm.els.push({ t:'chimney', vol:wi, kind:{ rendilhada:'alg', alentejana:'ale', arca:'box', saloia:'sal', maos:'az', granito:'gran', xisto:'gran', basalto:'gran' }[c.fam] || 'box', u, v:w, h:1.2, wall:v.wall.mat }); } }
+  if (B('mat') && !A('mat')) { const k = JSON.parse(b.mat), was = JSON.parse(S.b.mat);
+    if (k[0] !== was[0] && VM_WALL[k[0]]) { v.wall.mat = k[0]; delete v.wall.c; delete v.wall.t; }
+    if (k[1] !== was[1] && VM_ROOFMAT[k[1]]) v.roof.mat = k[1]; }
+  studyBase(R);
+  return true;
+}
 /** The body the other tabs work on: picked from the model's bodies, the rest staying as glass around it. */
 function vmWorkOn(i) {
+  studySync();
   const R = vernRead(); if (!R) return; const vm = R.V.vm || (R.V.vm = vmFromType(R.type));
   const prev = Math.min(R.V.work || 0, vm.vols.length - 1), next = Math.max(0, Math.min(i, vm.vols.length - 1));
   /* each building keeps what the student set on it in the tabs — its plan, roof and pitch, its openings — and
@@ -24610,7 +25370,7 @@ function vmWorkOn(i) {
   }
   R.V.work = next;
   const put = (T, S) => { Object.keys(T).forEach(k => delete T[k]); Object.assign(T, S); };
-  if (keep[next] && prev !== next) { const S = JSON.parse(JSON.stringify(keep[next])); put(MASS, S.MASS); put(ROOF, S.ROOF); put(OPEN, S.OPEN);
+  if (keep[next] && prev !== next) { const S = JSON.parse(JSON.stringify(keep[next])); put(MASS, S.MASS); put(ROOF, S.ROOF); put(OPEN, S.OPEN); studyBase(R);
     toast(VMT('Now working on: ', 'Teraz pracujesz nad: ') + VL(vm.vols[next].name)); refreshAll(); return; }
   /* first time on this building: its plan and roof from the model, and its own openings, one by one */
   const v = vm.vols[next];
@@ -24803,7 +25563,6 @@ function buildModeller(host) {
   const vm = () => R.V.vm;
 
   top.appendChild(el('button', { type:'button', text:VMT('Start again from the archetype', 'Zacznij od nowa od archetypu'), onclick:() => { R.V.vm = vmFromType(R.type); R.V.rooms = vmDefaultRooms(R.V.vm); VM_SEL = 0; vmChanged(true); } }));
-  top.appendChild(el('button', { type:'button', text:VMT('Hand the main body to the study', 'Przekaż bryłę główną do studium'), title:VMT('The other tabs then measure it (sun, roof, openings, ventilation).', 'Pozostałe zakładki ją wtedy mierzą (słońce, dach, otwory, wentylacja).'), onclick:() => vmPassToStudy(vm()) }));
   const dl = (txt, name, type) => download(new Blob([txt], { type }), slugify(sitePrefix() + name) + (type.indexOf('svg') >= 0 ? '.svg' : '.dxf'));
   top.appendChild(el('button', { type:'button', text:'SVG — ' + VMT('isometric', 'aksonometria'), onclick:() => dl(vmIsoSVG(vm(), 1200, { bg:'#ffffff' }), 'modelo-isometrica', 'image/svg+xml') }));
   top.appendChild(el('button', { type:'button', text:'SVG — ' + VMT('plan', 'rzut'), onclick:() => dl(vmPlanSVG(vm(), 1200, { rooms:R.V.rooms.filter(q => q.fl === VM_ROOMFL) }).svg, 'model-rzut', 'image/svg+xml') }));
@@ -24895,7 +25654,7 @@ function buildModeller(host) {
     ed.appendChild(el('h4', { class:'vmparts', text:VMT('Parts of the house', 'Części domu') }));
     const volOpts = M.vols.map((q, i) => [i, VL(q.name)]);
     (M.els || []).forEach((E, i) => {
-      const title = E.t === 'chimney' ? VMT('Chimney', 'Komin') : E.t === 'stair' ? VMT('Outside stair', 'Schody zewnętrzne') : E.t === 'gallery' ? VMT('Gallery', 'Ganek') : E.t === 'oven' ? VMT('Projecting oven', 'Wysunięty piec') : E.t === 'latada' ? VMT('Vine pergola', 'Pergola z winoroślą') : VMT('Porch', 'Ganek (podcień)');
+      const title = E.t === 'chimney' ? VMT('Chimney', 'Komin') : E.t === 'stair' ? VMT('Outside stair', 'Schody zewnętrzne') : E.t === 'gallery' ? VMT('Gallery', 'Ganek') : E.t === 'oven' ? VMT('Projecting oven', 'Wysunięty piec') : E.t === 'latada' ? VMT('Vine pergola', 'Pergola z winoroślą') : E.t === 'deck' ? VMT('Platform ', '') + (vmDecks(M).indexOf(E) + 1) : VMT('Porch', 'Ganek (podcień)');
       /* closed to one line — what, on which body and face — and opened by a click; the last one added opens by itself */
       const fo = vmFaceOpts().find(q => q[0] === (E.face || 'S')), vo = volOpts.find(q => +q[0] === +E.vol);
       const det = ed.appendChild(el('details', { class:'vmeld' })); if (VM_ELOPEN.has(E)) det.open = true;
@@ -24903,7 +25662,7 @@ function buildModeller(host) {
       det.appendChild(el('summary', null, [el('b', { text:title }), el('span', { text:' · ' + (vo ? vo[1] : '') + (E.t !== 'chimney' && fo ? ' · ' + fo[1] : '') })]));
       const row = det.appendChild(el('div', { class:'vmrow' }));
       row.appendChild(vmSel(VMT('Body', 'Bryła'), volOpts, () => E.vol, x => { E.vol = +x; }));
-      if (E.t !== 'chimney') row.appendChild(vmSel(VMT('Face', 'Elewacja'), vmFaceOpts(), () => E.face || 'S', x => { E.face = x; }));
+      if (E.t !== 'chimney') row.appendChild(vmSel(VMT('Face', 'Elewacja'), vmFaceOpts(), () => E.face || 'S', x => { E.face = x; if (E.t === 'deck') (E.stairs || []).forEach(S => { if (S.side === VM_BACK[x]) S.side = x; }); }, E.t === 'deck'));
       if (E.t === 'chimney') { row.appendChild(vmSel(VMT('Kind', 'Rodzaj'), Object.keys(VM_CHIM).map(k => [k, VL(VM_CHIM[k])]), () => E.kind, x => { E.kind = x; }, true));
         { row.appendChild(vmNum(VMT('Along (0–1)', 'Wzdłuż (0–1)'), () => E.u, x => { E.u = x; }, 0, 0.95, 0.05)); row.appendChild(vmNum(VMT('Across (0–1)', 'W poprzek (0–1)'), () => E.v, x => { E.v = x; }, 0, 0.95, 0.05)); row.appendChild(vmNum(VMT('Height (m)', 'Wysokość (m)'), () => E.h || 1.2, x => { E.h = x; }, 0.3, 4, 0.1)); } }
       if (E.t === 'stair') { row.appendChild(vmSel(VMT('Run', 'Bieg'), [['par', VMT('along the wall', 'wzdłuż ściany')], ['perp', VMT('out from the wall', 'prostopadle do ściany')]], () => E.along, x => { E.along = x; }));
@@ -24913,6 +25672,28 @@ function buildModeller(host) {
       if (E.t === 'gallery') { row.appendChild(vmSel(VMT('Kind', 'Rodzaj'), Object.keys(VM_VAR).map(k => [k, VL(VM_VAR[k])]), () => E.kind, x => { E.kind = x; }));
         row.appendChild(vmNum(VMT('Position (0–1)', 'Położenie (0–1)'), () => E.pos, x => { E.pos = x; }, 0, 1, 0.05)); row.appendChild(vmNum(VMT('Width (m)', 'Szerokość (m)'), () => E.w, x => { E.w = x; }, 0.8, 20, 0.1));
         row.appendChild(vmNum(VMT('Storey (0 = ground)', 'Kondygnacja (0 = parter)'), () => E.floor || 0, x => { E.floor = Math.round(x); }, 0, 3, 1)); }
+      if (E.t === 'deck') { const wv = M.vols[E.vol || 0] || M.vols[0], fE = E.face || 'S', wl = fE === 'S' || fE === 'N' ? wv.L : wv.D, corner = fE === 'S' || fE === 'N' ? VMT('west', 'zachód') : VMT('south', 'południe');
+        row.appendChild(vmNumR(VMT('Height over the ground (m)', ''), () => E.z, x => { E.z = x; }, 0.15, 6, 0.05));
+        row.appendChild(vmNumR(VMT('Length along the wall (m)', ''), () => E.w, x => { E.w = x; }, 0.6, 60, 0.1));
+        row.appendChild(vmNumR(VMT('Depth (m)', 'Głębokość (m)'), () => E.d, x => { E.d = x; }, 0.6, 8, 0.1));
+        row.appendChild(vmNumR(VMT('From the ', '') + corner + VMT(' corner (m)', ''), () => E.a, x => { E.a = x; }, -30, 60, 0.1));
+        row.appendChild(el('button', { type:'button', text:VMT('All along the wall', ''), onclick:() => { E.a = 0; E.w = +wl.toFixed(2); vmChanged(true); } }));
+        row.appendChild(vmChk(VMT('guard', ''), () => E.guard !== false, x => { E.guard = x; }));
+        row.appendChild(vmChk(VMT('roof over it', ''), () => !!E.roof, x => { E.roof = x; }));
+        const sb = det.appendChild(el('div', { class:'vmdeckst' }));
+        const others = vmDecks(M).filter(q => q !== E), sides = ['S', 'E', 'N', 'W'].filter(q => q !== VM_BACK[fE]);
+        (E.stairs || []).forEach((S, si) => { const D = vmDeckStair(M, wv, E, S), rw = sb.appendChild(el('div', { class:'vmrow' })), Z = (D.z1 - D.z0);
+          rw.appendChild(el('b', { text:VMT('Stair ', '') + (si + 1), style:'align-self:center' }));
+          rw.appendChild(vmSel(VMT('Leaves by the side', ''), vmFaceOpts().filter(q => sides.includes(q[0])), () => S.side, x => { S.side = x; S.at = 0; }, true));
+          rw.appendChild(vmNumR(VMT('Along that side (m)', ''), () => D.at, x => { S.at = x; }, 0, 60, 0.1));
+          rw.appendChild(vmNumR(VMT('Width (m)', 'Szerokość (m)'), () => S.w || 1, x => { S.w = x; }, 0.6, 3, 0.1));
+          rw.appendChild(vmSel(VMT('Goes to', ''), [['ground', VMT('the ground', '')]].concat(others.map(q => [q.id, VMT('platform ', '') + (vmDecks(M).indexOf(q) + 1)])), () => S.to || 'ground', x => { S.to = x; delete S.n; vmDeckAim(M, wv, E, S); }, true));
+          rw.appendChild(vmNumR(VMT('Number of steps', ''), () => D.n, x => { S.n = Math.round(x); }, 2, 40, 1));
+          rw.appendChild(el('button', { type:'button', class:'x', text:'✕', title:VMT('Remove this stair', ''), onclick:() => { E.stairs.splice(si, 1); vmChanged(true); } }));
+          const steep = Math.abs(D.rise) > 0.21, noteTxt = fmt(Math.abs(Z), 2) + ' m · ' + VMT('riser ', '') + fmt(Math.abs(D.rise), 3) + ' m · ' + VMT('going ', '') + fmt(D.tr, 2) + ' m · ' + VMT('run ', '') + fmt(D.run, 2) + ' m'
+            + (steep ? ' — ' + VMT('steep: more steps', '') : '') + (D.lands ? '' : ' — ' + VMT('its foot does not reach that platform: move the stair or the platform', ''));
+          sb.appendChild(el('div', { class:'hint', text:noteTxt, style:(steep || !D.lands) ? 'color:var(--c2)' : '' })); });
+        sb.appendChild(el('button', { type:'button', text:'+ ' + VMT('stair', 'schody'), onclick:() => { (E.stairs = E.stairs || []).push({ side:sides.find(q => !E.stairs.some(S => S.side === q)) || sides[0], at:0, w:1, to:'ground' }); vmChanged(true); } })); }
       if (E.t === 'oven') { row.appendChild(vmNum(VMT('Position (0–1)', 'Położenie (0–1)'), () => E.pos, x => { E.pos = x; }, 0, 1, 0.05)); row.appendChild(vmNum(VMT('Radius (m)', 'Promień (m)'), () => E.r || 0.9, x => { E.r = x; }, 0.5, 2, 0.1)); }
       if (E.t === 'alpendre' || E.t === 'latada') { row.appendChild(vmNum(VMT('Width (m)', 'Szerokość (m)'), () => E.w, x => { E.w = x; }, 1, 20, 0.5)); row.appendChild(vmNum(VMT('Depth (m)', 'Głębokość (m)'), () => E.d, x => { E.d = x; }, 1, 6, 0.1)); }
       if (E.t === 'alpendre') { row.appendChild(vmChk(VMT('timber deck (raised floor)', 'drewniany pomost (podniesiona podłoga)'), () => E.deck !== false, x => { E.deck = x; }));
@@ -24926,6 +25707,10 @@ function buildModeller(host) {
     eb.appendChild(el('button', { type:'button', text:'+ ' + VMT('gallery', 'ganek'), onclick:() => addEl({ t:'gallery', face:'S', kind:'corrida', pos:0.5, w:4, floor:1 }) }));
     eb.appendChild(el('button', { type:'button', text:'+ ' + VMT('oven', 'piec'), onclick:() => addEl({ t:'oven', face:'E', pos:0.5, r:0.9 }) }));
     eb.appendChild(el('button', { type:'button', text:'+ ' + VMT('porch', 'ganek'), onclick:() => addEl({ t:'alpendre', face:'S', pos:0.5, w:6, d:2.2 }) }));
+    if (VM_DECK_TYPES.includes(M.type)) eb.appendChild(el('button', { type:'button', class:'pri', text:'+ ' + VMT('platform (varanda, balcão, walkway)', ''), onclick:() => {
+      const ds = vmDecks(M), wv = M.vols[VM_SEL] || M.vols[0], f = ['S', 'E', 'W', 'N'].find(q => !ds.some(d => (d.face || 'S') === q && (d.vol || 0) === VM_SEL)) || 'S', wl = f === 'S' || f === 'N' ? wv.L : wv.D;
+      let id = 1; while (ds.some(d => d.id === 'd' + id)) id++;
+      addEl({ t:'deck', id:'d' + id, face:f, a:0, w:+wl.toFixed(2), d:1.2, z:wv.raise || 0.8, guard:true, roof:false, stairs:[{ side:f === 'S' || f === 'N' ? 'E' : 'S', at:0, w:1, to:'ground' }] }); } }));
     eb.appendChild(el('button', { type:'button', text:'+ ' + VMT('vine pergola', 'pergola z winoroślą'), onclick:() => addEl({ t:'latada', face:'S', pos:0.5, w:6, d:3 }) }));
     /* courtyard and row */
     ed.appendChild(el('h4', { text:VMT('Courtyard and row', 'Podwórze i szereg') }));
@@ -24964,7 +25749,19 @@ function buildModeller(host) {
     ib.appendChild(el('button', { type:'button', class:'btn small', text:'⤒', title:VMT('Look from higher up', 'Spójrz z wyższa'), onclick:() => tilt(10) }));
     ib.appendChild(el('button', { type:'button', class:'btn small', text:'⤓', title:VMT('Look from lower down', 'Spójrz z niższa'), onclick:() => tilt(-10) }));
     if (VM_AZ || Math.abs(VM_EL - 35.26) > 0.5) ib.appendChild(el('button', { type:'button', class:'btn small', text:VMT('Back to the isometric', 'Wróć do aksonometrii'), onclick:() => { VM_AZ = 0; VM_EL = 35.26; vmSetView(); drawViews(); } }));
-    isoBox.insertAdjacentHTML('beforeend', vmIsoSVG(M, 760));
+    /* opened: the model cut at sill height on the floor picked for rooms, to see the rooms and the bathroom fittings */
+    ib.appendChild(el('button', { type:'button', class:'btn small' + (VM_CUT ? ' solid' : ''), text:VM_CUT ? VMT('Close the cut', '') : VMT('Cut open — see the rooms', 'Przekrój — zobacz pomieszczenia'),
+      title:VMT('Cut the model 1.2 m over the floor picked for rooms (click a plan to pick another) and show the rooms and the bathroom fittings', 'Przetnij model 1,2 m nad kondygnacją wybraną dla pomieszczeń (kliknij rzut, aby wybrać inną) i pokaż pomieszczenia oraz wyposażenie łazienek'),
+      onclick:() => { VM_CUT = !VM_CUT; drawViews(); } }));
+    const isoNow = () => VM_CUT ? vmCutSVG(vm(), R.V.rooms, 760, VM_ROOMFL) : vmIsoSVG(vm(), 760);
+    if (VM_CUT) isoBox.appendChild(el('p', { class:'hint', style:'margin:2px 0', text:(VM_ROOMFL ? VMT('Floor ', 'Kondygnacja ') + VM_ROOMFL : VMT('Ground floor', 'Parter')) + VMT(', cut 1.2 m above its floor: the walls in section (dark), the rooms and their partitions, the bathroom fittings. Roofs, upper floors, openings and elements are left off.', '') }));
+    isoBox.insertAdjacentHTML('beforeend', isoNow());
+    /* each bathroom of that floor drawn close, its fittings at a size that reads */
+    if (VM_CUT) { const wcs = R.V.rooms.filter(q => q.fl === VM_ROOMFL && q.wc && VM_WC[q.wc]);
+      if (wcs.length) { const row = isoBox.appendChild(el('div', { style:'display:flex;flex-wrap:wrap;gap:10px;margin-top:6px' }));
+        wcs.forEach(q => { const K = VM_WC[q.wc], f = row.appendChild(el('div', { style:'flex:0 1 230px;text-align:center' }));
+          f.insertAdjacentHTML('beforeend', vmCutSVG(M, null, 220, 0, q).replace('class="vmiso"', 'class="vmwc3d" style="max-width:100%;height:auto"'));
+          f.appendChild(el('p', { class:'vmcap', style:'margin:0', text:VL(q.n) + ' — ' + VMT(K.en, K.pt).replace(/^[^(]*\(|\)$/g, '') + ' · ' + fmt(q.w, 2) + ' × ' + fmt(q.d, 2) + ' m' })); }); } }
     { const sv = isoBox.querySelector('svg.vmiso'); if (sv) { let x0 = null, a0 = 0; sv.style.cursor = 'grab'; sv.style.touchAction = 'none';
       let y0 = 0, e0 = VM_EL;
       sv.addEventListener('pointerdown', ev => { x0 = ev.clientX; a0 = VM_AZ; y0 = ev.clientY; e0 = VM_EL; try { sv.setPointerCapture(ev.pointerId); } catch (e) {} });
@@ -24972,7 +25769,7 @@ function buildModeller(host) {
       sv.addEventListener('pointermove', ev => { if (x0 === null) return; const a = Math.round(a0 + (ev.clientX - x0) * 0.5), e = Math.max(5, Math.min(90, Math.round(e0 + (ev.clientY - y0) * 0.4)));
         if (a !== VM_AZ || e !== Math.round(VM_EL)) { VM_AZ = ((a % 360) + 360) % 360; if (e !== Math.round(VM_EL)) { VM_EL = e; vmSetView(); }
         /* turned degree by degree; the frame only ever grows while dragging, so the model does not jump in size */
-        const nw = vmIsoSVG(vm(), 760), vb = (nw.match(/viewBox="([^"]+)"/) || [])[1];
+        const nw = isoNow(), vb = (nw.match(/viewBox="([^"]+)"/) || [])[1];
         if (vb) { const n = vb.split(' ').map(Number), o = (sv.getAttribute('viewBox') || vb).split(' ').map(Number), X0 = Math.min(n[0], o[0]), Y0 = Math.min(n[1], o[1]), X1 = Math.max(n[0] + n[2], o[0] + o[2]), Y1 = Math.max(n[1] + n[3], o[1] + o[3]);
           sv.setAttribute('viewBox', [X0, Y0, X1 - X0, Y1 - Y0].map(v => +v.toFixed(2)).join(' ')); sv.setAttribute('height', Math.round(760 * (Y1 - Y0) / (X1 - X0))); } sv.innerHTML = nw.replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, ''); } });
       const end = () => { if (x0 !== null) { x0 = null; drawViews(); } }; sv.addEventListener('pointerup', end); sv.addEventListener('pointercancel', end); } }
@@ -25068,7 +25865,7 @@ function buildModeller(host) {
         if (op) { VM_OPSEL = op; VM_ROOMSEL = null; drag = { kind:'op', v, vi:+vi, f, op, p:pt(ev) }; svg.setPointerCapture(ev.pointerId); ev.preventDefault();
           const PLs = vmPlanSVG(vm(), 520, { sel:VM_SEL, fl, rooms:R.V.rooms.filter(r => r.fl === fl) }); svg.innerHTML = PLs.svg.replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, ''); return; }
       }
-      if (VM_ROOMFL !== fl) { VM_ROOMFL = fl; svg.closest('.vmplans') && svg.closest('.vmplans').querySelectorAll('.vmplan1').forEach((d, i) => d.classList.toggle('on', i === fl)); drawEditor(); }
+      if (VM_ROOMFL !== fl) { VM_ROOMFL = fl; svg.closest('.vmplans') && svg.closest('.vmplans').querySelectorAll('.vmplan1').forEach((d, i) => d.classList.toggle('on', i === fl)); drawEditor(); if (VM_CUT) svg._flc = true; }
       const t = ev.target, p = pt(ev), M = vm(), rooms = R.V.rooms.filter(q => q.fl === fl);
       if (t.dataset.court !== undefined) { const c = M.court, ci = +t.dataset.court, sx = ci === 1 || ci === 2 ? 1 : -1, sy = ci >= 2 ? 1 : -1;
         drag = { kind:'court', c, p, fx:c.x - sx * c.L / 2, fy:c.y - sy * c.D / 2, cx:c.x + sx * c.L / 2, cy:c.y + sy * c.D / 2 }; }
@@ -25097,7 +25894,8 @@ function buildModeller(host) {
       svg.innerHTML = PL2.svg.replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '');
     });
     /* a click that did not move leaves the plan as it is, so a double-click still finds its room or its opening */
-    const up = () => { if (drag) { const mv = drag.moved; drag = null; if (mv) { drawEditor(); drawViews(); } } };
+    /* the cut isometric follows the floor a click on a plan picks */
+    const up = () => { const fc = svg._flc; svg._flc = false; if (drag) { const mv = drag.moved; drag = null; if (mv) { drawEditor(); drawViews(); return; } } if (fc) drawViews(); };
     svg.addEventListener('pointerup', up); svg.addEventListener('pointercancel', up);
     svg.addEventListener('dblclick', ev => {
       /* a room renamed in place: the student's own word for it */
@@ -25149,6 +25947,11 @@ function buildModeller(host) {
     rt.querySelectorAll('tbody tr').forEach((tr, i) => { const q = R.V.rooms[i], td = tr.firstChild; if (!q || !td) return; td.textContent = '';
       td.appendChild(el('input', { type:'text', value:VL(q.n), class:'vmroomname', title:VMT('Rename the room', 'Zmień nazwę pomieszczenia'), style:'width:100%; min-width:9em; font:inherit; border:1px solid var(--line); border-radius:6px; padding:2px 6px',
         onchange:e => { const v = e.target.value.trim(); if (v) { q.n = { en:v, pt:v }; drawViews(); } } }));
+      /* a bathroom's kit, changed in place: the fittings follow, the room keeps its name and size */
+      if (q.wc) { const sel = el('select', { title:VMT('Bathroom fittings', ''), style:'margin-top:3px;width:100%;font:inherit;font-size:12px',
+          onchange:e => { if (!VM_WC[e.target.value]) return; q.wc = e.target.value; drawViews(); } });
+        Object.keys(VM_WC).forEach(k => sel.appendChild(el('option', { value:k, text:VMT({ min:'basin + WC', shower:'basin, WC, shower', bath:'basin, WC, bath' }[k], { min:'lavatório + sanita', shower:'lavatório, sanita, duche', bath:'lavatório, sanita, banheira' }[k]), selected:q.wc === k ? 'selected' : null })));
+        td.appendChild(sel); }
       const last = tr.lastChild; if (last) last.appendChild(el('button', { type:'button', class:'vmdel', text:'✕', title:VMT('Remove this room', 'Usuń to pomieszczenie'), style:'margin-left:6px;border:0;background:none;color:#9f2420;cursor:pointer;font:inherit', onclick:() => { R.V.rooms.splice(R.V.rooms.indexOf(q), 1); if (VM_ROOMSEL === q) VM_ROOMSEL = null; drawViews(); } })); });
     metBox.appendChild(rt);
     metBox.appendChild(el('p', { class:'hint', html:VMT('Click a room or an opening on the plan and press Delete to remove it, or use ✕ in the table. Rename a room in the table or by double-clicking it on the plan. <b>Sień</b> is the hall of the Polish folk house — entered straight from outside, often through the whole depth of the house, it gives on the living room (izba) on one side and the chamber (komora) or a second room on the other; in the smoke hut it held the hearth’s smoke on its way to the roof (Pokropek 1976). <b>Room</b> is a room of free use.', 'Kliknij pomieszczenie lub otwór na rzucie i naciśnij Delete, aby je usunąć, albo użyj ✕ w tabeli. Zmień nazwę pomieszczenia w tabeli lub klikając je dwukrotnie na rzucie. <b>Sień</b> to wejściowe pomieszczenie polskiego domu ludowego — wchodzi się do niej prosto z zewnątrz, często przechodzi przez całą głębokość domu i prowadzi z jednej strony do izby, z drugiej do komory lub drugiej izby; w chałupie kurnej przez sień uchodził dym z paleniska ku dachowi (Pokropek 1976). <b>Pomieszczenie</b> to pomieszczenie o dowolnym przeznaczeniu.') }));
@@ -25157,6 +25960,10 @@ function buildModeller(host) {
     const rb = side.appendChild(el('div', { class:'vmbtns' }));
     const addRoom = (en, pt) => { const v = vm().vols[0]; R.V.rooms.push({ n:{ en, pt }, x:v.x, y:v.y, w:3, d:3, fl:VM_ROOMFL }); drawViews(); };
     [['Main room (izba)', 'Izba'], ['Hall (sień)', 'Sień'], ['Store (komora)', 'Komora'], ['Chamber (alkierz)', 'Alkierz'], ['Kitchen', 'Kuchnia'], ['Byre (obora)', 'Obora'], ['Cellar (piwnica)', 'Piwnica'], ['Loft (strych)', 'Strych']].forEach(([en, pt]) => rb.appendChild(el('button', { type:'button', text:'+ ' + VMT(en, pt), onclick:() => addRoom(en, pt) })));
+    /* the bathroom, in three kits, sized to hold its fittings */
+    Object.keys(VM_WC).forEach(k => { const K = VM_WC[k]; rb.appendChild(el('button', { type:'button', text:'+ ' + VMT(K.en, K.pt), onclick:() => {
+      const v = vm().vols[0]; R.V.rooms.push({ n:{ en:'Bathroom', pt:'' }, x:v.x, y:v.y, w:K.w, d:K.d, fl:VM_ROOMFL, wc:k }); drawViews(); } })); });
+    rb.appendChild(el('p', { class:'hint', style:'margin:2px 0 4px', text:VMT('Each bathroom is drawn with its fittings and ≈ 0.6–0.7 m clear in front of each: an indicative layout, not a legal minimum — check the RGEU, and DL 163/2006 if it must be accessible (1.5 m turning circle). Change the kit in the table; see it in 3D with «Cut open» over the isometric.', 'Każda łazienka jest rysowana z wyposażeniem i ≈ 0,6–0,7 m wolnej przestrzeni przed każdym urządzeniem: układ orientacyjny, nie minimum prawne — sprawdź warunki techniczne (WT), a jeśli ma być dostępna, przepisy o dostępności (okrąg manewrowy 1,5 m). Zmień wyposażenie w tabeli; zobacz je w 3D przyciskiem «Przekrój» nad aksonometrią.') }));
     rb.appendChild(el('button', { type:'button', text:VMT('Remove the last room', 'Usuń ostatnie pomieszczenie'), onclick:() => { R.V.rooms.pop(); drawViews(); } }));
     rb.appendChild(el('button', { type:'button', text:VMT('Rooms of the type', 'Pomieszczenia typu'), onclick:() => { R.V.rooms = vmDefaultRooms(vm()); drawViews(); } }));
   }
@@ -25973,8 +26780,12 @@ function exportModel() {
     const opt = solarOptimum(STATE.site, t, G.rot, STATE.clim.t);
     const fld = solarField(G, RF, STATE.site.lat, opt.tilt, spec);
     if (fld && fld.fits) {
-      const b0 = (fld.flat ? fld.tilt : RF.th) * RAD, nrm = [0, -Math.sin(b0), Math.cos(b0)];
-      fld.mods.forEach((mo, k) => add('solar', nm + (k + 1), 'AA-SOLAR', [[mo.q, nrm]],
+      const b0 = (fld.flat ? fld.tilt : RF.th) * RAD, nrm0 = [0, -Math.sin(b0), Math.cos(b0)];
+      /* a rack or a facade field faces its own way: each module's normal from its own corners */
+      const nOf = q => { const u = [q[1][0] - q[0][0], q[1][1] - q[0][1], q[1][2] - q[0][2]], v = [q[3][0] - q[0][0], q[3][1] - q[0][1], q[3][2] - q[0][2]];
+        let n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]]; const L = Math.hypot(...n) || 1; n = n.map(x => x / L); return n[2] < 0 || (fld.facade && n[0] * fld.n[0] + n[1] * fld.n[1] < 0) ? n.map(x => -x) : n; };
+      if (fld.tank) add('solar', 'Thermosiphon tank ' + fld.tank.V + ' L', 'AA-SOLAR', solarTankFaces(fld.tank).map(f => [f.pts, f.n]), { solarType:'STORAGETANK', mat:'AA_Solar' });
+      fld.mods.forEach((mo, k) => add('solar', nm + (k + 1), 'AA-SOLAR', [[mo.q, fld.free || fld.facade ? nOf(mo.q) : nrm0]],
         { solarType:st, pitch:fld.tilt, mat:'AA_Solar' }));
     }
   });
@@ -26460,6 +27271,7 @@ function cadDownload(kind) {
 /** The Export 3D menu under the tab bar: one line per format, the tools
     each opens in, and what the model is. */
 function toggleCadMenu(ev) {
+  try { if (studySync()) refreshAll(); } catch (e) { console.error(e); }
   const old = $('#cadMenu');
   if (old) { old.remove(); return; }
   const sv = $('#saveMenu');
@@ -26612,8 +27424,13 @@ function collectConstructionHandoff() {
   const rwArea = skyF + Object.keys(skyO).reduce((a, k) => a + skyO[k], 0);
   /* roof slopes by true facing (downhill direction); flat pieces bucket F */
   const roofO = caZero8(); let roofF = 0, roofArea = 0;
+  /* only the roof over the plan goes on: the eaves past the walls are outside the envelope (sampled on a 10 cm grid) */
+  const overPlan = pc => { const P = pc.poly, xs = P.map(q => q[0]), ys = P.map(q => q[1]), st = 0.1; let n = 0, m = 0;
+    for (let x = Math.min(...xs) + st / 2; x < Math.max(...xs); x += st) for (let y = Math.min(...ys) + st / 2; y < Math.max(...ys); y += st)
+      if (inPoly(x, y, P)) { m++; if (Mm.pl.inside(x, y)) n++; }
+    return m ? n / m : 1; };
   Mm.pieces.forEach(pc => {
-    const t = (pc.f && pc.f.t) || 0, a = (pc.area || 0) * Math.sqrt(1 + t * t);
+    const t = (pc.f && pc.f.t) || 0, a = (pc.area || 0) * overPlan(pc) * Math.sqrt(1 + t * t);
     roofArea += a;
     if (t < 0.02 || !pc.f) roofF += a;
     else roofO[slopeCompass(-pc.f.a, -pc.f.b, G.rot)] += a;
@@ -26636,7 +27453,7 @@ function collectConstructionHandoff() {
   const rO = o => { const r = {}; CA_COMPASS8.forEach(c => { r[c] = r2(o[c] || 0); }); return r; };
   const payload = {
     app:'Construction Advisor PT', version:CA_HANDOFF_VERSION, savedAt:new Date().toISOString(),
-    site:{ conc:S.place || S.nuts, nuts:S.nuts, alt:S.alt, use:S.use === 'cs' ? 'cs' : 'hab', operation:S.operation === 'renovation' ? 'renovation' : 'new' },
+    site:{ conc:S.place || S.nuts, nuts:nutsOfPlace(S.place, S.nuts), alt:S.alt, use:S.use === 'cs' ? 'cs' : 'hab', operation:S.operation === 'renovation' ? 'renovation' : 'new' },
     state:{
       FLR_STATE:{ area:r2(footprint), perim:r2(perim) },
       BUDGET_STATE:{
@@ -26752,7 +27569,8 @@ function applyStudy(o) {
     const s = o.open && o.open[f];
     if (!s || typeof s !== 'object') return;
     const d = OPEN[f];
-    if (isFinite(+s.wwr)) d.wwr = clamp(+s.wwr, 0.02, 0.9);
+    if (isFinite(+s.wwr)) d.wwr = clamp(+s.wwr, 0.001, 0.9);
+    if (+s.bandM > 0) d.bandM = +s.bandM; else delete d.bandM;
     if (isFinite(+s.sillZ)) d.sillZ = +s.sillZ;
     if (isFinite(+s.headZ)) d.headZ = +s.headZ;
     if (d.headZ < d.sillZ + 0.3) d.headZ = d.sillZ + 0.3;
@@ -26839,6 +27657,7 @@ function applyStudy(o) {
   if (o.mesh) STATE.note = t('Saved with a 3D mesh — re-import the model file to see it again.');
 }
 function toggleSaveMenu(ev) {
+  try { if (studySync()) refreshAll(); } catch (e) { console.error(e); }
   const old = $('#saveMenu');
   if (old) { old.remove(); return; }
   const cm = $('#cadMenu');
@@ -28063,13 +28882,16 @@ function initSetup() {
       STUDY = o;
       const S = o.site, C = o.clim, fire = n => { try { n.dispatchEvent(new Event('input', { bubbles:true })); } catch (e) {} };
       conc.value = S.place || '';
-      if (NUTS_LIST.indexOf(S.nuts) >= 0) sel.value = S.nuts;
+      { const n = nutsOfPlace(S.place, S.nuts); if (NUTS_LIST.indexOf(n) >= 0) { sel.value = n; fillConc(n); } }
       C.t.forEach((v, i) => { inputs.t[i].value = v === null || v === undefined ? '' : v; fire(inputs.t[i]); });
       C.p.forEach((v, i) => { inputs.p[i].value = v === null || v === undefined ? '' : v; fire(inputs.p[i]); });
       srcInp.value = C.source || '';
       lat.value = S.lat; lon.value = S.lon; fire(lat); fire(lon);
       alt.value = S.alt; fire(alt); altDirty = false;
       setMethod(S.method === 'popular' ? 'popular' : 'olgyay');
+      /* the use and the type of intervention come back with the study, and go on to Construction Advisor as saved */
+      if (S.use && [...use.options].some(op => op.value === S.use)) use.value = S.use;
+      opBtns.forEach(x => x.setAttribute('aria-pressed', x.dataset.op === (S.operation === 'renovation' ? 'renovation' : 'new') ? 'true' : 'false'));
       refresh();
       if (!climComplete(readNormals())) {
         IMPORT.note = t('That study’s normals are incomplete — check the boxes before going on.');
@@ -28156,6 +28978,7 @@ function mountApp(site, clim, keepTab, keepModel, keepScroll) {
   else for (const k in KEEP) delete KEEP[k];
   KEEPERS.length = 0;
   const scrollY0 = window.scrollY || 0;
+  if (site && site.place) { const n = nutsOfPlace(site.place, site.nuts); if (n !== site.nuts) site = Object.assign({}, site, { nuts:n }); }
   STATE.site = site;
   TABS.length = 0; tabsFor(site).forEach(x => TABS.push(x));
   if (clim) STATE.clim = Object.assign({}, clim, { k: koppen(clim.t, clim.p, site.lat < 0) });
@@ -28184,14 +29007,16 @@ function mountApp(site, clim, keepTab, keepModel, keepScroll) {
   OPEN.S.wwr = 0.35;   // a defensible start, not a recommendation — the badge judges it live
   OPEN.N.wwr = 0.05;   // north starts at the low end of its band
   OPEN.C.wwr = 0.30;   // clerestory: high glass earns its keep as daylight, shaded by the upper roof
+  /* the defaults first, then the study over them: set after it, they wiped the sunspace, roof windows and turbine
+     it had restored — and on a page just loaded, still null, they broke the restore halfway */
+  SUNSP = { on:false, face:'S', depth:2.2, widthFrac:0.6 };
+  RWIN = { size:'78x140', cw:0.78, ch:1.40, per:{}, s:0, n:0, e:0, w:0, sF:0.5, nF:0.5, eF:0.35, wF:0.35, fX:0 };
+  TURB = { on:false, diam:2.0, hub:9, x:16, y:10 };
   if (STUDY) {
     try { applyStudy(STUDY); }
     catch (err) { console.error(err); STATE.note = t('That study could not be fully restored — starting from the defaults.'); }
     STUDY = null;
   }
-  SUNSP = { on:false, face:'S', depth:2.2, widthFrac:0.6 };
-  RWIN = { size:'78x140', cw:0.78, ch:1.40, per:{}, s:0, n:0, e:0, w:0, sF:0.5, nF:0.5, eF:0.35, wF:0.35, fX:0 };
-  TURB = { on:false, diam:2.0, hub:9, x:16, y:10 };
   }
   const app = $('#app');
   app.innerHTML = '';
@@ -28222,6 +29047,10 @@ function mountApp(site, clim, keepTab, keepModel, keepScroll) {
   if (keepScroll) { window.scrollTo(0, scrollY0); requestAnimationFrame(() => window.scrollTo(0, scrollY0)); setTimeout(() => window.scrollTo(0, scrollY0), 200); }
 
   function activate(key) {
+    /* every tab opens on the model the student just left: what changed crosses over, and the pages are drawn again on it */
+    if (STATE.tab !== key) { let moved = false; try { moved = studySync(); } catch (err) { console.error(err); }
+      if (moved) { mountApp(STATE.site, null, key, true); return; } }
+    try { openMetres(); } catch (err) { console.error(err); }
     STATE.tab = key;
     TABS.forEach(tab => {
       const on = tab.key === key;
@@ -29452,6 +30281,8 @@ Object.assign(PT, {
   "Shading fit /100": "Ajuste do sombreamento /100",
   "Windows": "Janelas",
   "Share": "Quota",
+  "From the left corner": "Do canto esquerdo",
+  "The result of the openings as you size them below": "O resultado dos vãos conforme os dimensiona abaixo",
   "Position": "Posição",
   "Built": "Construído",
   "of wall": "da parede",
@@ -29850,7 +30681,7 @@ Object.assign(PT_HINT, {
   'sce-src':
     'Strefa zimowa i jej temperatura projektowa pochodzą z PN-EN 12831-1:2017 (tablica krajowa); para letnia z PN-76/B-03420 (wycofana 2011, niezastąpiona). Obie czytają najbliższą osadzoną stację synoptyczną, nigdy same współrzędne — a tablica województw podaje większości, więc działka przy granicy (okolice Suwałk, Tatry) idzie za swoją stacją, nie za województwem. Intencje są grzewcze w każdej parze; otoczenie przenosi te same intencje na działkę. Nic z tego nie jest wymaganiem.',
   'roof-solar':
-    'Wybierz <b>panele PV</b> albo <b>kolektory termiczne</b> po lewej modelu, potem zwymiaruj pole — kolumnami i rzędami albo ciągnąc bursztynowy punkt w jego narożniku po dachu. Moduły leżą płasko na największej płaszczyźnie dachu zwróconej ku fasadzie głównej, cokolwiek skrzydła, wnęki albo dziedziniec planu z nią robią — rzędy od 0,4 m powyżej jej najniższej krawędzi, trzymane 0,3 m w jej wnętrzu, z dala od kalenic, koszy i dolin — więc patrzą w kierunku ustawionym w Terenie; na płaskim dachu stoją w rzędach na konstrukcji, pod najlepszym nachyleniem, w rozstawie, nad którym grudniowe słońce południa z 21 grudnia przechodzi nad przednim rzędem. Słońce na płaszczyźnie kolektorów czytane jest z własnej poziomej irradiacji miejsca — dzienne promieniowanie krótkofalowe 1991–2020 z reanalizy ERA5 (Hersbach i in., 2020), przez Open-Meteo — przeniesione na płaszczyznę pochyloną miesiąc po miesiącu metodą Duffie &amp; Beckmana: miesięczny podział Erbsa, Kleina &amp; Duffie na bezpośrednie i rozproszone, stosunek bezpośredniego w średnim dniu każdego miesiąca (Klein), niebo izotropowe i 20% odbicia gruntu. Udział połaci w najlepszym uzysku to jedyna ocena nachylenia na modelu. PV: moduły o sprawności około 20% (0,20 kWp na m²) i współczynniku wydajności 0,80 (IEC 61724-1) dają energię elektryczną. Termika: kolektor płaski czytany krzywą sprawności EN ISO 9806 przy typowych współczynnikach (η0 0,78, a1 3,5, a2 0,015), w średniej temperaturze czynnika 50 °C przeciw temperaturze powietrza każdego miesiąca, daje ciepło, które potrafi zebrać — więcej, niż dom ciągnie latem, więc udział solarny prawdziwej instalacji jest niższy. Karta katalogowa prawdziwego modułu albo kolektora zastępuje te liczby. Bez danych miejsca liczby opierają się na założonym indeksie przejrzystości 0,55 i tak mówią.',
+    'Wybierz <b>panele PV</b> i/lub <b>kolektory termiczne</b> po lewej modelu — po jednym z każdego albo oba razem: prąd i ciepło dzielą połać — potem zwymiaruj każde pole — kolumnami i rzędami albo ciągnąc bursztynowy punkt w jego narożniku po dachu. Ułożone <b>Na połaci</b> moduły leżą płasko na połaci wybranej obok pola — dowolnej z połaci dachu, każda nazwana stroną, na którą patrzy, i swoim nachyleniem; jeśli nic nie wybrano, na największej płaszczyźnie dachu zwróconej ku fasadzie głównej (gdzie kalenica biegnie od frontu do tyłu i żadna nie jest, na połaci zwróconej najbliżej równika) — cokolwiek skrzydła, wnęki albo dziedziniec planu z nią robią — rzędy od 0,4 m powyżej jej najniższej krawędzi, trzymane 0,3 m w jej wnętrzu, z dala od kalenic, naroży i koszy — więc patrzą w kierunku ustawionym w Terenie; <b>na konstrukcji</b> — domyślnie, i tak na dachu płaskim albo gdzie żadna połać nie patrzy ku fasadzie głównej — stoją na metalowych ramach zwróconych ku równikowi pod nachyleniem ustawionym obok nich (szerokość geograficzna, jeśli nie zmienione), każdy rząd w rozstawie, nad którym słońce południa 21 grudnia przechodzi nad przednim rzędem. Słońce na płaszczyźnie kolektorów czytane jest z własnej poziomej irradiacji miejsca — dzienne promieniowanie krótkofalowe 1991–2020 z reanalizy ERA5 (Hersbach i in., 2020), przez Open-Meteo — przeniesione na płaszczyznę pochyloną miesiąc po miesiącu metodą Duffie &amp; Beckmana: miesięczny podział Erbsa, Kleina &amp; Duffie na bezpośrednie i rozproszone, stosunek bezpośredniego w średnim dniu każdego miesiąca (Klein), niebo izotropowe i 20% odbicia gruntu. Udział połaci w najlepszym uzysku to jedyna ocena nachylenia na modelu. PV: moduły o sprawności około 20% (0,20 kWp na m²) i współczynniku wydajności 0,80 (IEC 61724-1) dają energię elektryczną. Termika: kolektor płaski czytany krzywą sprawności EN ISO 9806 przy typowych współczynnikach (η0 0,78, a1 3,5, a2 0,015), w średniej temperaturze czynnika 50 °C przeciw temperaturze powietrza każdego miesiąca, daje ciepło, które potrafi zebrać — więcej, niż dom ciągnie latem, więc udział solarny prawdziwej instalacji jest niższy. Karta katalogowa prawdziwego modułu albo kolektora zastępuje te liczby. Bez danych miejsca liczby opierają się na założonym indeksie przejrzystości 0,55 i tak mówią. Pola zostają w granicach dachu domu — około 40 m² PV, 20 m² termiki — żeby kilowaty pozostały takie, jakie gospodarstwo domowe może zużyć; większe żądania są przycinane i tak mówią. Każde pole dostaje ocenę względem najlepszego nachylenia — <b>dobra</b> od 90%, <b>średnia</b> od 70%, <b>słaba</b> poniżej — w zieleni, żółci i czerwieni, z rocznymi kilowatogodzinami i z tym, ilu domom to mniej więcej odpowiada.',
   'vent-form':
     'Dwa odczyty pod modelem kwalifikują <b>formę</b> narysowaną w Terenie — belkę, jej załamanie, jej dziedziniec — dla powietrza, cokolwiek wokół posadzono. <b>Lato</b>: każde pół metra piętra patrzy wzdłuż dwóch osi planu do pierwszej ściany z każdej strony. Przy oknach na obu przeciwległych ścianach nie dalej niż pięć wysokości piętra od siebie (tu %1 m) da się wentylować poprzecznie; w przeciwnym razie w 2,5 wysokości piętra (%2 m) od ściany z oknem jest jednostronne; poza oboma jest poza zasięgiem wentylacji naturalnej. Głębokości 5× i 2,5× to reguły kciuka CIBSE AM10, czytane na ścianach planu, nie na pokojach. Wąska belka, skrzydło, wnęka albo dziedziniec sprowadzają piętro w zasięg; głęboki kwadratowy plan zostawia środek poza. Odczyt mówi też, czy ciągi poprzeczne biegną z wiatrem czerwiec–sierpień, czy w poprzek niego. <b>Zima</b>: wiatr grudzień–luty wiedziony jest na każdą ścianę ku niemu obróconą, a ściana liczy się jako osłonięta tam, gdzie linia wstecz pod wiatr spotyka inną część budynku — wewnętrzne ściany dziedzińca, zawietrzną skrzydła. Udział całego szkła, które zostało ku temu wiatrowi nieosłonięte, to odczyt: 15% i mniej czyta się jako zamknięte, powyżej 35% jako otwarte (dydaktyczne cięcia tej aplikacji). Forma wchodzi do obu ocen: własna zawietrzna budynku tnie zimowy wiatr na ścianach, które osłania, a letnia ocena czyta tylko ciąg poprzeczny sięgający co najmniej ćwierci piętra.',
   'vent-scores':
@@ -30890,6 +31721,28 @@ Object.assign(PT, {
   "Roof window size": "Tamanho da janela de cobertura",
 });
 
+Object.assign(PT, {
+  "south": "sul", "north": "norte", "Mounted on": "Montado em", "the roof": "na cobertura", "a facade": "numa fachada", "Racked, facing": "Em estrutura, virado a",
+  "Facing": "Orientação", "Tilt": "Inclinação", "latitude": "latitude", "Back to the latitude": "Voltar à latitude", "Tilt from the horizontal": "Inclinação sobre a horizontal",
+  "flat on the wall": "rente à parede", "Kind": "Tipo", "at": "a", "peak": "pico", "of useful heat": "de calor útil",
+  "on the facade facing": "na fachada virada a", "on brackets at": "em consolas a", "racked on a metal frame at": "em estrutura metálica a",
+  "no slope faces the main facade": "nenhuma vertente virada para a fachada principal", "on the flat roof": "na cobertura plana", "of the best here": "do melhor aqui",
+  "House of": "Casa de", "people": "pessoas", "hot water": "água quente", "this field": "este campo", "suited to the house": "adequado à casa",
+  "far more than the house uses: reduce the field": "muito acima do que a casa consome: reduza o campo",
+  "far more than the house uses: the extra heat is lost, and overheats the collectors in summer": "muito acima do que a casa consome: o calor a mais perde-se e sobreaquece os coletores no verão",
+  "more than the house uses": "acima do que a casa consome", "more heat than the house draws": "mais calor do que a casa gasta", "about": "cerca de",
+  "module is enough": "módulo basta", "collector is enough": "coletor basta", "modules are enough": "módulos bastam", "collectors are enough": "coletores bastam", "of the house’s use": "do consumo da casa",
+  "PV · of house use": "FV · do consumo", "Heat · of house use": "Calor · do consumo",
+  "PV peak · kWp": "FV pico · kWp", "kWh/yr · PV": "kWh/ano · FV", "kWh/yr · heat": "kWh/ano · calor",
+  "no room on that facade under the eave: lower it, tilt it more, or put it on the roof": "não cabe nessa fachada sob o beirado: baixe-o, incline-o mais ou ponha-o na cobertura",
+  "no room on the roof for a rack here: move it, or tilt it less": "não cabe aqui uma estrutura na cobertura: mova-a ou incline-a menos",
+  "Flat — no pitch to judge; racked collectors take the tilt set beside them": "Plana — sem inclinação a avaliar; os colectores em estrutura tomam a inclinação escolhida ao lado",
+  "main facade": "fachada principal", "cut back from": "reduzido de", "to": "para", "no room for more here": "não cabe mais aqui",
+  "flat plate": "colector plano", "tank": "depósito", "people at": "pessoas a", "hot-water need": "necessidade de AQS", "collected": "captado", "used": "aproveitado",
+  "solar fraction": "fracção solar", "months fully solar": "meses só com solar", "Solar fraction · hot water": "Fracção solar · AQS",
+  "no room for the tank above the collectors: move the kit down the roof or toward its middle": "não há lugar para o depósito acima dos colectores: desça o kit na cobertura ou aproxime-o do meio"
+});
+PT_HINT['roof-solar-mount'] = '<b>Onde e como ficam os colectores.</b> Cada campo — fotovoltaico, térmico ou ambos — pode ser <b>montado na cobertura</b> ou <b>numa fachada</b>. Na cobertura fica, por omissão, numa estrutura metálica: virado para o equador (sul verdadeiro, aqui no hemisfério norte), seja qual for o sentido das vertentes — numa vertente virada a nascente ou a poente, na vertente de trás, numa cobertura plana — inclinado à latitude; rode-o em <b>Orientação</b> (nascente −, poente +) e incline-o em <b>Inclinação</b> para ver o que cada grau custa ou rende, ou assente-o <b>Na vertente</b>, virado para a fachada principal. Numa fachada fica em consolas na parede exterior mais virada para o equador, sob o beirado, inclinado a partir da horizontal (90° fica rente à parede) — toma a orientação da própria parede, e as janelas ou portas por trás não são verificadas. <b>Tipo</b> fixa os valores: fotovoltaico monocristalino cerca de 20 % ou policristalino cerca de 16 % (kWp por m² é esse rendimento aos 1 000 W/m² do ensaio normalizado, IEC 61215), índice de desempenho 0,80; térmico plano (η0 0,78, a1 3,5 W/m²K, a2 0,015 W/m²K²) ou de tubos de vácuo (η0 0,55, a1 1,2, a2 0,008, na área bruta), lidos a 50 °C pela EN ISO 9806 — ou um <b>kit termossifão</b>: um ou dois colectores planos numa só fila com um depósito horizontal acima do seu bordo superior (150 L em 2 m², 300 L em 4 m²), a água aquecida a subir para ele sem bomba. Um kit lê-se contra a água quente que serve: um depósito por dia, 40 L por pessoa aquecidos 35 K (a convenção do REH — confirme no regulamento em vigor); o que os colectores captam para além do consumo de cada mês perde-se, pelo que o seu quadro dá o calor aproveitado e a <b>fracção solar</b> — a parte dessa água quente que o sol assegura. São valores típicos de catálogo — a ficha técnica real substitui-os. Os quadros dão os <b>kWh FV</b> e os <b>kWh de calor</b> do ano e a <b>potência de pico em kWp</b> do FV — a potência instalada que o licenciamento e as regras do autoconsumo contam — e a linha sob cada campo dá os seus valores, a produção específica (kWh/kWp·ano) e a parte do melhor que um colector desse tipo faria aqui, virado ao equador à melhor inclinação.';
 /* The Polish dictionary, final: every key the template carried, in Polish or dropped to its English */
 (() => { const F = {
 "Turn the plate anticlockwise": "Obróć płytę przeciwnie do ruchu wskazówek zegara",
@@ -32687,6 +33540,27 @@ Object.assign(PT, {
 "Roof window size": "Wielkość okna dachowego",
 "Fetch the ground round this site: 300 m at 10 m from the EU-DEM, else the 240 m grid": "Pobierz teren wokół tej działki: 300 m co 10 m z EU-DEM, w przeciwnym razie siatka 240 m",
 "Save the model as a variant before trying another idea; each column below reads one version against the archetype (✓ near it, ✗ away from it). Open a variant to keep working on it — save the model first if you want to keep it too. The variants are kept with the study.": "Zapisz model jako wariant, zanim wypróbujesz inny pomysł; każda kolumna poniżej odczytuje jedną wersję względem archetypu (✓ blisko niego, ✗ daleko od niego). Otwórz wariant, aby dalej nad nim pracować — najpierw zapisz model, jeśli też chcesz go zachować. Warianty są przechowywane razem ze studium.",
+"+ Bathroom (basin + WC)": "+ Łazienka (umywalka + WC)",
+"+ Bathroom (basin, WC, bath)": "+ Łazienka (umywalka, WC, wanna)",
+"+ Bathroom (basin, WC, shower)": "+ Łazienka (umywalka, WC, prysznic)",
+"Bathroom (basin + WC)": "Łazienka (umywalka + WC)",
+"Bathroom (basin, WC, bath)": "Łazienka (umywalka, WC, wanna)",
+"Bathroom (basin, WC, shower)": "Łazienka (umywalka, WC, prysznic)",
+"Back to the latitude": "Wróć do szerokości geograficznej",
+"latitude": "szerokość geograficzna",
+"Cut open — see the rooms": "Przekrój — zobacz pomieszczenia",
+"Cut the model 1.2 m over the floor picked for rooms (click a plan to pick another) and show the rooms and the bathroom fittings": "Przetnij model 1,2 m nad kondygnacją wybraną dla pomieszczeń (kliknij rzut, aby wybrać inną) i pokaż pomieszczenia oraz wyposażenie łazienek",
+"Each bathroom is drawn with its fittings and ≈ 0.6–0.7 m clear in front of each: an indicative layout, not a legal minimum — check the RGEU, and DL 163/2006 if it must be accessible (1.5 m turning circle). Change the kit in the table; see it in 3D with «Cut open» over the isometric.": "Każda łazienka jest rysowana z wyposażeniem i ≈ 0,6–0,7 m wolnej przestrzeni przed każdym urządzeniem: układ orientacyjny, nie minimum prawne — sprawdź warunki techniczne (WT), a jeśli ma być dostępna, przepisy o dostępności (okrąg manewrowy 1,5 m). Zmień wyposażenie w tabeli; zobacz je w 3D przyciskiem «Przekrój» nad aksonometrią.",
+"Facing": "Orientacja",
+"From the left corner": "Od lewego narożnika",
+"Mounted on": "Montaż na",
+"Racked, facing": "Na konstrukcji, zwrócone na",
+"The result of the openings as you size them below": "Wynik otworów w miarę, jak je wymiarujesz poniżej",
+"Tilt": "Nachylenie",
+"Tilt from the horizontal": "Nachylenie od poziomu",
+"a facade": "fasadzie",
+"the roof": "dachu",
+"flat on the slope": "płasko na połaci",
 "Bodies drawn": "Narysowane bryły",
 "Footprint": "Powierzchnia zabudowy",
 "Floor area": "Powierzchnia użytkowa",
