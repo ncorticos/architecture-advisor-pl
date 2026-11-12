@@ -971,7 +971,7 @@ const L_MAX = 50;
 const APP = {
   name:        'Architecture Advisor PL',
   tag:         'AA PL',
-  version:     '1.165.0',
+  version:     '1.166.0',
   author:      'Nuno Dinis Cortiços',
   institution: 'Lisbon School of Architecture, Universidade de Lisboa',
   builtWith:   'Claude Opus 5 (Anthropic)',
@@ -8322,22 +8322,96 @@ function buildEnvironment(host) {
      mainland and its house the southern one: 1:1.3, one storey.
    Orientation keeps Olgyay's figures: the main facade 20° (Csa) or 17°
    (Csb) east of south. Null outside Csa and Csb. */
+/* v1.166.0 — the optimum for Poland read from the site itself, not from the
+   voivodeship's zone. Every step names its source; where a figure is this
+   application's own teaching value it says so, here and on the page.
+   1. Winter severity: heating degree-days, base 18 °C, from the site's twelve
+      monthly means. The normals stand at the station's (or the blend's)
+      altitude; the building's own altitude shifts them by 0.5 K per 100 m —
+      the gradient behind Hess's (1965) climatic belts of the Polish Western
+      Carpathians, 2 K of annual mean per 400–450 m.
+   2. Mesoclimate: the student's reading of the plot (PL_MESO) shifts the
+      monthly means again and, for sun lost to a slope or to neighbours,
+      scales the winter sun. Direction after Olgyay's site selection, Geiger
+      and the Polish valley-inversion and heat-island literature (Hess;
+      Obrębska-Starklowa; Błażejczyk et al.); the magnitudes are teaching
+      values.
+   3. Elongation: Olgyay's own optimum shapes (1963) — 1:1.1 in the cool
+      region (Minneapolis), 1:1.6 in the temperate (New York) — interpolated
+      on degree-days between those two cities, about 4 650 and 2 700 °C·d on
+      mid-century normals.
+   4. Latitude: the stretch beyond the square is earned by winter sun on the
+      south wall. It is scaled by the October–March sun a vertical south wall
+      takes under a clear sky at the site's latitude, against 42.9° N, midway
+      between Olgyay's two anchors — the beam thinned by 0.7 per air mass, so
+      the low northern sun pays for its long path. No cloud in it.
+   Orientation: 17° east of south, Olgyay's New York–New Jersey figure. */
+const PL_MESO = {
+  open:  { dT:0,    sun:1,   name:{ en:'Open, level ground', pl:'Teren otwarty, płaski' },
+    tip:{ en:'No correction: the normals are read as they stand.', pl:'Bez poprawki: normy czytane tak, jak są.' } },
+  valley:{ dT:-1,   sun:0.9, name:{ en:'Valley floor or basin (cold-air pool)', pl:'Dno doliny lub kotliny (zastoisko chłodu)' },
+    tip:{ en:'Cold air drains downhill at night and pools on the floor; fog and the horizon take some winter sun. Build above the floor if the plot allows; here, more compact.', pl:'Chłodne powietrze spływa nocą i zalega na dnie; mgła i horyzont zabierają część zimowego słońca. Buduj powyżej dna, jeśli działka pozwala; tutaj — zwarciej.' } },
+  sslope:{ dT:0.5,  sun:1,   name:{ en:'South-facing mid-slope (thermal belt)', pl:'Stok południowy, środek zbocza (ciepła strefa stokowa)' },
+    tip:{ en:'Above the cold-air pool and below the windy crest: the warmest band of the slope, with the winter sun unobstructed. The stretch east–west is worth most here.', pl:'Ponad zastoiskiem chłodu, poniżej wietrznego grzbietu: najcieplejszy pas stoku, z niezasłoniętym zimowym słońcem. Rozciągnięcie wschód–zachód opłaca się tu najbardziej.' } },
+  nslope:{ dT:-0.5, sun:0.5, name:{ en:'North-facing slope', pl:'Stok północny' },
+    tip:{ en:'The low winter sun is largely lost behind the slope, so a long south wall earns little: the plan closes toward the square.', pl:'Niskie zimowe słońce w dużej mierze ginie za stokiem, więc długa ściana południowa niewiele zyskuje: rzut zbliża się do kwadratu.' } },
+  ridge: { dT:0,    sun:1,   name:{ en:'Exposed ridge, hilltop or open shore', pl:'Odsłonięty grzbiet, wierzchowina lub otwarty brzeg' },
+    tip:{ en:'The sun is free but so is the wind (Olgyay: exposed ground, wind × 1.4). The proportion is unchanged; shelter the north and west on the Ventilation tab.', pl:'Słońce jest wolne, ale wiatr też (Olgyay: teren odsłonięty, wiatr × 1,4). Proporcja bez zmian; osłoń północ i zachód w zakładce Wentylacja.' } },
+  urban: { dT:1,    sun:0.8, name:{ en:'Dense city centre (heat island)', pl:'Zwarte śródmieście (miejska wyspa ciepła)' },
+    tip:{ en:'The centre runs warmer than the airport station, mostly at night, while neighbours take part of the winter sun from the south wall.', pl:'Śródmieście jest cieplejsze niż stacja lotniskowa, głównie nocą, a sąsiedzi zabierają część zimowego słońca ze ściany południowej.' } } };
+const PL_LAPSE = 0.005;                       // K per m — Hess (1965)
+const PL_HDD_NY = 2700, PL_HDD_MSP = 4650;    // °C·d, base 18 °C — Olgyay's temperate and cool anchors
+const hdd18 = tM => [31, 28.25, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31].reduce((a, d, i) => a + d * Math.max(0, 18 - tM[i]), 0);
+/** October–March clear-sky beam sun on a vertical south wall, in relative
+    units: at each mid-month declination the day is stepped every 6 minutes,
+    the beam thinned by 0.7 per air mass (Kasten's air mass; 0.7 is the
+    textbook clear-sky transmittance) and weighed by how squarely it meets
+    the wall. No cloud: it is a measure of latitude alone. */
+function southWinterSun(latDeg) {
+  const f = latDeg * Math.PI / 180;
+  return [-9.6, -18.9, -23.0, -20.9, -13.0, -2.4].reduce((a, dDeg) => {
+    const d = dDeg * Math.PI / 180;
+    let sum = 0;
+    for (let h = -6; h <= 6; h += 0.1) {
+      const w = h * Math.PI / 12;
+      const sinAlt = Math.sin(f) * Math.sin(d) + Math.cos(f) * Math.cos(d) * Math.cos(w);
+      if (sinAlt <= 0.01) continue;
+      const altDeg = Math.asin(sinAlt) * 180 / Math.PI;
+      const m = 1 / (sinAlt + 0.50572 * Math.pow(altDeg + 6.07995, -1.6364));
+      const cosInc = Math.sin(f) * Math.cos(d) * Math.cos(w) - Math.cos(f) * Math.sin(d);   // south vertical
+      if (cosInc > 0) sum += Math.pow(0.7, m) * cosInc;
+    }
+    return a + sum;
+  }, 0);
+}
+/** The altitude the site's normals stand at: the IMGW station's, or the
+    blend's; null where they were typed by hand or sampled at the point. */
+function plRefAlt() {
+  const C = STATE.clim, S = STATE.site;
+  if (!C || !S) return null;
+  const src = C.source || '';
+  if (IMGW_DATA[src]) return IMGW_DATA[src].alt;
+  if (C.mode === 'blend' || /^(Blend of|Uśrednienie|Mistura de) /.test(src)) { const B = blendAt(S.lat, S.lon); return B ? B.alt : null; }
+  return null;
+}
 function plOptimum(code, tMonths, nuts) {
   if (code !== 'Dfb' && code !== 'Dfc' && code !== 'Cfb') return null;
+  const S = STATE.site || {}, lat = isFinite(S.lat) ? S.lat : 52;
   const Tc = Math.min(...tMonths), A = Math.max(...tMonths) - Tc;
-  const base = { pl:true, pt:true, A, Tc };
-  const wi = ((VOIV_ZONE[nuts] || [])[0]) || 2;
-  if (code === 'Dfc') return Object.assign(base, { az:160, r:1.1, fl:2, type:'pl-mountain' });
-  if (code === 'Cfb') return Object.assign(base, { az:165, r:1.4, fl:2, type:'pl-coast' });
-  if (wi >= 4) return Object.assign(base, { az:165, r:1.2, fl:2, type:'pl-cold' });
-  if (wi === 3) return Object.assign(base, { az:160, r:1.3, fl:2, type:'pl-cont' });
-  return Object.assign(base, { az:160, r:1.4, fl:2, type:'pl-mild' });
+  const mk = MASS && PL_MESO[MASS.meso] ? MASS.meso : 'open', M = PL_MESO[mk];
+  const zRef = plRefAlt(), dz = zRef === null ? 0 : (S.alt || 0) - zRef, dTz = -PL_LAPSE * dz;
+  const hdd0 = hdd18(tMonths), hdd = hdd18(tMonths.map(v => v + dTz + M.dT));
+  const f = clamp((hdd - PL_HDD_NY) / (PL_HDD_MSP - PL_HDD_NY), 0, 1);
+  const g = southWinterSun(lat) / southWinterSun(42.85);
+  const r = +clamp(1 + (0.6 - 0.5 * f) * g * M.sun, 1.1, 1.6).toFixed(2);
+  return { pl:true, pt:true, A, Tc, az:163, r, fl:2, type:r >= 1.33 ? 'pl-mild' : r >= 1.22 ? 'pl-cont' : 'pl-cold',
+    hdd0, hdd, dz, dTz, zRef, meso:mk, f, g, lat };
 }
 /** What each Polish type of the optimum asks for, in a line. */
 const PL_TYPE = {
-  'pl-mild':'Poland zones I–II — a compact two-storey house, 1:1.4',
-  'pl-cont':'Poland zone III — a compact two-storey house, 1:1.3',
-  'pl-cold':'Poland zones IV–V — a very compact two-storey house, 1:1.2',
+  'pl-mild':'Poland, milder winter — a compact two-storey house, stretched east–west',
+  'pl-cont':'Poland, cold winter — a compact two-storey house, moderately stretched',
+  'pl-cold':'Poland, severe winter or little winter sun — a very compact two-storey house',
   'pl-mountain':'Polish mountains — a very compact two-storey house, 1:1.1',
   'pl-coast':'Polish coast — a compact two-storey house, 1:1.4' };
 
@@ -8425,7 +8499,7 @@ function buildSite(host) {
   /** Long-axis direction in [0,180): 90 runs east–west, 0/180 north–south. */
   const longAxis = () => ((G.L >= G.D ? G.rot - 90 : G.rot) % 180 + 180) % 180;
   function formClass() {
-    if (labRatio() < 1.15) return 'sq';
+    if (labRatio() < Math.min(1.15, OI.r - 0.04)) return 'sq';
     const la = longAxis();
     if (Math.abs(la - 90) <= 30) return 'ew';
     if (Math.min(la, 180 - la) <= 30) return 'ns';
@@ -8467,6 +8541,15 @@ function buildSite(host) {
    * stated here as pure geometry with no limits attached.
    */
   const labFF = () => formFactor(G, RF);
+  /** The optimum's own form factor: its box, unbroken, under the roof set on
+      Roof — the figure the student's form factor is read against. */
+  const optFF = () => {
+    try { const b = optBox();
+      const ff = formFactor(Object.assign({}, G, { L:b.Li, D:b.Di, fl:OI.fl || G.fl, form:'rect', wing:null, patio:Object.assign({}, G.patio, { on:false }), balc:[] }), RF).ff;
+      return isFinite(ff) && ff > 0 ? ff : null;
+    } catch (e) { return null; }
+  };
+  const ffBand = ff => { const tf = optFF(); return tf ? (ff <= tf * 1.1 ? 'ok' : ff <= tf * 1.3 ? 'empty' : 'bad') : (ff <= 0.7 ? 'ok' : ff <= 1.1 ? 'empty' : 'bad'); };
   /** The plan outline, shared with every later tab. */
   const planOf = () => planModel(G);
   /**
@@ -8663,6 +8746,7 @@ function buildSite(host) {
   const pillForm = el('span', { class:'pill ok' });
   const pillWin = el('span', { class:'pill ok' });
   const pillFl = el('span', { class:'pill ok' });
+  const pillFF = el('span', { class:'pill empty' });
   let refreshCol = () => {};   // the wall-colour pill, set up with its section below
   let refreshShade = () => {};   // the plan-form pill, set up with the model below
   /** The orientations with the most and the least glass, named by the way
@@ -8685,11 +8769,14 @@ function buildSite(host) {
     if (dev <= 10) { pillOri.className = 'pill ok'; pillOri.textContent = t(OI.pt ? 'At the optimum' : 'At the Olgyay optimum'); }
     else if (dev <= 25) { pillOri.className = 'pill empty'; pillOri.textContent = t('Close — nudge it east of south'); }
     else { pillOri.className = 'pill bad'; pillOri.textContent = t('Far from the optimum — follow the green normal'); }
-    if (fc === 'ew' && Math.abs(r - OI.r) <= 0.35) { pillForm.className = 'pill ok'; pillForm.textContent = t('East–west near 1 : ') + fmt(OI.r, 1); }
+    if (fc === 'ew' && Math.abs(r - OI.r) <= 0.35) { pillForm.className = 'pill ok'; pillForm.textContent = t('East–west near 1 : ') + fmt(OI.r, OI.pl ? 2 : 1); }
     else if (fc === 'ns') { pillForm.className = 'pill bad'; pillForm.textContent = t('North–south — the least efficient'); }
-    else if (fc === 'sq') { pillForm.className = 'pill empty'; pillForm.textContent = t('Square — never the optimum'); }
+    else if (fc === 'sq') { pillForm.className = 'pill empty'; pillForm.textContent = OI.r < 1.25 ? t('Square — stretch slightly toward 1 : ') + fmt(OI.r, 1) : t('Square — never the optimum'); }
     else if (fc === 'ew') { pillForm.className = 'pill empty'; pillForm.textContent = t('East–west — stretch toward 1 : ') + fmt(OI.r, 1); }
     else { pillForm.className = 'pill empty'; pillForm.textContent = t('Diagonal — settle the long axis east–west'); }
+    { const ffv = labFF().ff, tf = optFF();
+      pillFF.className = 'pill ' + ffBand(ffv);
+      pillFF.textContent = t('Form factor') + ' ' + fmt(ffv, 2) + ' m⁻¹' + (tf ? ' — ' + t('the optimum’s') + ' ' + fmt(tf, 2) + (ffv <= tf * 1.1 ? '' : ' (+' + fmt(100 * (ffv / tf - 1), 0) + ' %)') : ''); }
     pillFl.style.display = OI.fl ? '' : 'none';
     if (OI.fl === 1) {   // the southern house: one storey, grown in length
       if (G.fl === 1) { pillFl.className = 'pill ok'; pillFl.textContent = t('One storey — the single-storey house this climate asks for'); }
@@ -9208,7 +9295,7 @@ function buildSite(host) {
       };
       const sc = labScore(), ff = labFF();
       badge(0, String(sc.total), t(OI.pt ? 'Optimum fit' : 'Olgyay fit') + ' /100', sc.total >= 80 ? GREEN : sc.total >= 50 ? '#D97706' : '#DC2626');
-      badge(1, fmt(ff.ff, 2), t('Form factor'), ff.ff <= 0.7 ? GREEN : ff.ff <= 1.1 ? '#D97706' : '#DC2626');
+      badge(1, fmt(ff.ff, 2), t('Form factor'), { ok:GREEN, empty:'#D97706', bad:'#DC2626' }[ffBand(ff.ff)]);
       // the wall colour: its fit to this summer, then the albedo it reads as
       const af = albedoFit(), fin = finishOf(G.col);
       const acol = af === null ? CH.faint : af >= 80 ? GREEN : af >= 50 ? '#D97706' : '#DC2626';
@@ -9325,6 +9412,11 @@ function buildSite(host) {
       ['Optimum azimuth (°)', +OI.az.toFixed(0)],
       ['Optimum elongation (long:short)', +OI.r.toFixed(2)],
       ...(OI.pt ? [['Annual range of the monthly means (K)', +OI.A.toFixed(1)], ['Coldest month mean (°C)', +OI.Tc.toFixed(1)]] : []),
+      ...(OI.pl && !OI.vern ? [['Terrain and mesoclimate', PL_MESO[OI.meso].name.en],
+        ['Heating degree-days of the normals (°C·d, base 18)', Math.round(OI.hdd0)], ['Altitude of the normals (m)', OI.zRef === null ? 'site' : OI.zRef],
+        ['Altitude correction (K)', +OI.dTz.toFixed(2)], ['Mesoclimate correction (K)', PL_MESO[OI.meso].dT],
+        ['Heating degree-days at the plot (°C·d)', Math.round(OI.hdd)], ['Winter sun factor (latitude × terrain)', +(OI.g * PL_MESO[OI.meso].sun).toFixed(2)],
+        ['Optimum form factor (m⁻¹)', optFF() ? +optFF().toFixed(2) : '']] : []),
       ['Storeys the climate asks for', OI.fl || 'any'], ['Student storeys', G.fl],
       ['Envelope per floor area (m²/m²)', +(labFF().A / (planOf().area * G.fl)).toFixed(2)],
       ['Deviation (°)', +circDev(G.rot, OI.az).toFixed(0)],
@@ -9556,12 +9648,27 @@ function buildSite(host) {
   optGrp.appendChild(el('div', { class:'hint', html:(OI.vern ? '<b>' + VL({ en:'Popular model', pt:'Model ludowy' }) + '</b> · ' + t(PT_TYPE[OI.type]) : OI.pt ? '<b>' + t('Olgyay adapted to Poland') + '</b> · ' + t(PT_TYPE[OI.type]) : '<b>' + t('Olgyay (1963)') + '</b> · ' + K.code)
     + ' — 1 : ' + fmt(OI.r, 2) + (OI.fl ? ' · ' + t(OI.fl === 1 ? 'one storey' : 'two storeys') : '') + ' · ' + fmt(Math.abs(180 - OI.az), 0) + '° ' + t('east of south')
     + (OI.pt ? '<br>' + t('annual range') + ' ' + fmt(OI.A, 1) + ' K · ' + t('coldest month') + ' ' + fmt(OI.Tc, 1) + ' °C' : '') }));
+  if (OI.pl && !OI.vern) {
+    optGrp.appendChild(el('div', { class:'gh', text:t('Terrain and mesoclimate') }));
+    const ms = el('select', { 'aria-label':t('Terrain and mesoclimate'), style:'width:100%', onchange:e => { G.meso = e.target.value; refreshAll(); } });
+    Object.keys(PL_MESO).forEach(k => ms.appendChild(el('option', { value:k, text:VL(PL_MESO[k].name), selected:k === OI.meso ? '' : null })));
+    optGrp.appendChild(ms);
+    const M = PL_MESO[OI.meso], tf = optFF();
+    optGrp.appendChild(el('div', { class:'hint', html:VL(M.tip)
+      + '<br><b>' + t('Heating degree-days') + '</b> ' + fmt(OI.hdd, 0) + ' °C·d'
+      + (Math.round(OI.hdd) !== Math.round(OI.hdd0) ? ' (' + t('normals') + ' ' + fmt(OI.hdd0, 0) + ')' : '')
+      + (OI.zRef === null ? '<br>' + t('Altitude: normals taken as the site’s own, no correction')
+          : '<br>' + t('Altitude') + ' ' + fmt(S.alt || 0, 0) + ' m · ' + t('normals at') + ' ' + fmt(OI.zRef, 0) + ' m → ' + (OI.dTz > 0 ? '+' : '') + fmt(OI.dTz, 1) + ' K')
+      + (M.dT ? '<br>' + t('Mesoclimate') + ' ' + (M.dT > 0 ? '+' : '') + fmt(M.dT, 1) + ' K' : '')
+      + '<br>' + t('Winter sun at') + ' ' + fmt(OI.lat, 1) + '° N: × ' + fmt(OI.g * M.sun, 2)
+      + '<br><b>1 : ' + fmt(OI.r, 2) + '</b>' + (tf ? ' · ' + t('target form factor') + ' <b>' + fmt(tf, 2) + ' m⁻¹</b>' : '') }));
+  }
   rail.appendChild(el('div', { class:'keys', text:t('Drag the black points on the model: a corner stretches the bar, the break’s point sizes a wing or carves a recess (a U has one on each leg and one in the middle of its court), the patio’s corner point opens it wider or deeper and its centre point moves it, a balcony’s round point slides it along the walls and round the corners, its square point sizes it.') }));
   syncFormTools();
   /* the readings, under the model: what each decision does, in words */
   const pillShade = el('span', { class:'pill empty' });
   info.appendChild(el('div', { class:'gh', text:'Readings' }));
-  info.appendChild(el('div', { class:'limitrow readings' }, [pillOri, pillForm, pillFl, pillWin, pillShade, pillCol]));
+  info.appendChild(el('div', { class:'limitrow readings' }, [pillOri, pillForm, pillFl, pillFF, pillWin, pillShade, pillCol]));
   stick();
   refreshShade = () => {
     const pl = planOf();
@@ -9582,8 +9689,8 @@ function buildSite(host) {
   host.appendChild(hint('ori-height',
     'The two boxes extrude the plan — floors above ground times an editable floor height. The sun below it is driven, not decorative: pick 21 December, 20 March or 21 June, drag the solar hour — or press play — and the shadow follows the trajectory, long and northern in the December morning, short and tight at the June noon. The December noon shadow stays the governing case for spacing. Height moves the fit badge only where the climate asks for a number of storeys (Dfb: two); elsewhere the badge knows orientation and plan form alone.'));
   if (OI.pt && !OI.vern) host.appendChild(hint('site-pt',
-    '<b>Heating-led optimum for Poland.</b> Olgyay’s method still rules — most sun on the facade in the underheated period — but here that period is October to March, and the December noon sun stands only about 14° above the horizon at 52° N, so the south facade works a short, low arc. The optimum stays compact and on two storeys in every Polish class and stretches east–west only as far as the winter allows: <b>1:1.4</b> in zones I–II, <b>1:1.3</b> in zone III, <b>1:1.2</b> in zones IV–V and <b>1:1.1</b> in the mountains. Here: <b>%1</b> — range %2 K, coldest month %3 °C, so 1:%4. The proportions and storeys are this application’s teaching values, set from heating degree-days and winter sun geometry — neither a regulation nor figures printed in one. Orientation keeps Olgyay’s figures: the main facade about 20° east of south.',
-    [t(PT_TYPE[OI.type]), fmt(OI.A, 1), fmt(OI.Tc, 1), fmt(OI.r, 2)]));
+    '<b>Heating-led optimum for Poland.</b> Olgyay’s method still rules — most sun on the facade in the underheated period — but here that period is October to March, and the December noon sun stands only 12° to 18° above the horizon between the Baltic and the Tatra. The optimum stays compact and on two storeys, and stretches east–west only as far as the winter allows. It is read from this plot, in four steps. <b>1 · Winter.</b> Heating degree-days, base 18 °C, from the twelve monthly means: <b>%5 °C·d</b>. <b>2 · Altitude and terrain.</b> The normals stand at the station’s height; the building’s own altitude shifts them by 0.5 K per 100 m (the gradient of Hess’s climatic belts of the Polish Carpathians, 1965), and the terrain chosen under <i>Terrain and mesoclimate</i> shifts them again — a valley floor colder, a south-facing mid-slope and a city centre warmer — giving <b>%6 °C·d</b> at the plot. <b>3 · Proportion.</b> Olgyay’s optimum shapes are 1:1.1 for his cool region (Minneapolis, about 4 650 °C·d) and 1:1.6 for his temperate one (New York, about 2 700 °C·d); the plot is placed between them by its degree-days. <b>4 · Latitude.</b> The stretch beyond the square is earned by winter sun on the south wall, so it is scaled by the clear-sky October–March sun a south wall takes at this latitude against 43° N, where Olgyay’s two cities lie — the lower the sun, the longer its path through the air (transmittance 0.7 per air mass, no cloud) — and by the sun the terrain takes: <b>× %7</b>. Result: <b>1 : %4</b> — %1. Orientation keeps Olgyay’s figure for New York–New Jersey: the main facade about 17° east of south. Olgyay’s ratios and the degree-day method are published; placing a Polish plot between his two cities, the latitude scaling and the terrain corrections (−1 K valley floor, +0.5 K south slope, −0.5 K north slope, +1 K city centre; half the sun on a north slope) are this application’s teaching values, not a regulation.',
+    [t(PT_TYPE[OI.type]), fmt(OI.A, 1), fmt(OI.Tc, 1), fmt(OI.r, 2), fmt(OI.hdd0, 0), fmt(OI.hdd, 0), fmt(OI.g * PL_MESO[OI.meso].sun, 2)]));
   if (OI.fl === 1) host.appendChild(hint('site-storey1',
     'In <b>%1</b> the optimum stands on one storey: every room on the ground, within reach of the garden and of cross-ventilation, a long east–west bar giving each room a south wall for the low winter sun. <b>Snap to the optimum for Poland</b> keeps your floor area and lays it out on one storey; the green volume shows it. A second storey is not wrong — it halves the roof and the footprint — but it gives up the plan’s reach to the south.',
     [K.code]));
@@ -9593,7 +9700,7 @@ function buildSite(host) {
   host.appendChild(hint('site-windows',
     'The windows on the model are the ones sized on <b>Windows &amp; Shading</b> — the same width, sill and head, each set by its facade’s window-to-wall ratio — so turning the plan here turns them with it. Each blue tag names the way that window really faces once the plan is turned, then its width × height and the facade’s WWR; on Windows &amp; Shading the facades keep the names they have with the main facade to the south. The rule to read them by: <b>the larger the window, the more it should face south; the smaller, the more it faces north</b> (north and south swap below the equator). South glass collects the low winter sun and is the easiest to shade from the high summer sun; north glass gives even, diffuse light but gains almost no winter sun while it loses heat (Lechner; Gonçalves &amp; Graça). <b>Window fit</b> reads it: every window counts as an arrow out of its facade, as long as the glass its WWR asks for, and the fit is 100 when their sum points due south, 50 east or west, 0 north. The sizes change on Windows &amp; Shading; the plan’s turn, here, decides where they look. Windows &amp; Shading draws each window as one strip on the ground floor, no wider than 92 % of its wall — on two or three floors the strips can reach that limit and look alike while their WWR, and the fit, still differ. On a broken plan every wall at least 1.5 m long carries its orientation’s window, sized from its own area, and the tag counts the windows facing that way with their widths; <b>Window fit</b> then adds all the glass of each orientation.'));
   host.appendChild(hint('ori-ff',
-    'Form factor FF = exterior envelope ÷ heated volume, in m⁻¹ — walls to the eaves, gable triangles, roof planes and ground floor over the volume they enclose, one single zone, everything exterior. Lower is more compact: the sphere is the geometric extreme. It is stated here as pure geometry with no limits attached. The badge paints it green at or below 0.7 (compact), amber to 1.1 (moderate) and red above (dispersed): didactic bands, not limits. It does not move the fit badge.'));
+    'Form factor FF = exterior envelope ÷ heated volume, in m⁻¹ — walls to the eaves, gable triangles, roof planes and ground floor over the volume they enclose, one single zone, everything exterior. Lower is more compact: the sphere is the geometric extreme. <b>The target is the optimum’s own form factor</b>: the green box — your floor area at the optimum’s proportion and storeys, unbroken — under the roof set on Roof. The badge and the reading turn green within 10 % of it, amber within 30 %, red beyond; every break, wing, patio or extra storey of roof shows as a percentage above it. Polish regulation once priced this number directly: between 2009 and 2013 the limit on primary energy for heating and ventilation of a dwelling was EP = 55 + 90 · A/V<sub>e</sub> kWh/(m²·year) for A/V<sub>e</sub> between 0.2 and 1.05 (Warunki Techniczne, § 329, Dz.U. 2008 nr 201 poz. 1238), so each 0.1 m⁻¹ of form factor was allowed 9 kWh/(m²·year) more. Today’s limit is a single figure whatever the shape, so a dispersed form no longer earns an allowance: it has to be paid for in insulation. The bands are didactic, not limits, and do not move the fit badge.'));
 
   /* --- direct manipulation: drag the body to stretch, the knob to turn ----- */
   const cv = labPanel.canvas;
@@ -30744,7 +30851,7 @@ Object.assign(PT_HINT, {
   'site-storey1':
     'W <b>%1</b> optimum stoi na jednym piętrze: każde pomieszczenie na gruncie, w zasięgu ogrodu i wentylacji poprzecznej, długa belka wschód–zachód dająca każdemu pomieszczeniu ścianę południową na niskie zimowe słońce. <b>Dociągnij do optimum dla Polski</b> zachowuje twoją powierzchnię podłóg i rozkłada ją na jednym piętrze; zielona bryła je pokazuje. Drugie piętro nie jest błędem — o połowę zmniejsza dach i obrys — lecz traci zasięg planu ku południu.',
   'site-pt':
-    '<b>Grzewcze optimum dla Polski.</b> Metoda Olgyaya wciąż rządzi — najwięcej słońca na fasadzie w okresie niedogrzanym — lecz tutaj ten okres to październik–marzec, a grudniowe słońce w południe stoi zaledwie około 14° nad horyzontem na 52° N, więc fasada południowa pracuje na krótkim, niskim łuku. Optimum zostaje zwarte i dwupiętrowe w każdej polskiej klasie, a rozciąga się wschód–zachód tylko tak daleko, jak zima pozwala: <b>1:1,4</b> w strefach I–II, <b>1:1,3</b> w strefie III, <b>1:1,2</b> w strefach IV–V i <b>1:1,1</b> w górach. Tutaj: <b>%1</b> — amplituda %2 K, najzimniejszy miesiąc %3 °C, więc 1:%4. Proporcje i piętra to dydaktyczne wartości tej aplikacji, ustalone ze stopniodni grzania i geometrii zimowego słońca — ani przepis, ani liczby z niego wydrukowane. Orientacja zachowuje liczby Olgyaya: fasada główna około 20° na wschód od południa.',
+    '<b>Grzewcze optimum dla Polski.</b> Metoda Olgyaya wciąż rządzi — najwięcej słońca na fasadzie w okresie niedogrzanym — lecz tutaj ten okres to październik–marzec, a grudniowe słońce w południe stoi zaledwie 12° do 18° nad horyzontem między Bałtykiem a Tatrami. Optimum zostaje zwarte i dwukondygnacyjne, a rozciąga się wschód–zachód tylko tak daleko, jak zima pozwala. Jest czytane z tej działki, w czterech krokach. <b>1 · Zima.</b> Stopniodni grzania, baza 18 °C, z dwunastu średnich miesięcznych: <b>%5 °C·d</b>. <b>2 · Wysokość i teren.</b> Normy stoją na wysokości stacji; wysokość samego budynku przesuwa je o 0,5 K na 100 m (gradient pięter klimatycznych polskich Karpat Hessa, 1965), a teren wybrany w polu <i>Teren i mezoklimat</i> przesuwa je ponownie — dno doliny chłodniej, środek stoku południowego i śródmieście cieplej — co daje <b>%6 °C·d</b> na działce. <b>3 · Proporcja.</b> Optymalne kształty Olgyaya to 1:1,1 dla regionu chłodnego (Minneapolis, około 4 650 °C·d) i 1:1,6 dla umiarkowanego (Nowy Jork, około 2 700 °C·d); działka trafia między nie według swoich stopniodni. <b>4 · Szerokość geograficzna.</b> Rozciągnięcie ponad kwadrat zarabia zimowe słońce na ścianie południowej, więc skaluje je słońce października–marca przy bezchmurnym niebie, jakie ściana południowa dostaje na tej szerokości, wobec 43° N, gdzie leżą oba miasta Olgyaya — im niżej słońce, tym dłuższa jego droga przez powietrze (przepuszczalność 0,7 na masę powietrza, bez chmur) — oraz słońce, które zabiera teren: <b>× %7</b>. Wynik: <b>1 : %4</b> — %1. Orientacja zachowuje liczbę Olgyaya dla Nowego Jorku–New Jersey: fasada główna około 17° na wschód od południa. Proporcje Olgyaya i metoda stopniodni są opublikowane; umieszczenie polskiej działki między jego dwoma miastami, skalowanie szerokością i poprawki terenowe (−1 K dno doliny, +0,5 K stok południowy, −0,5 K stok północny, +1 K śródmieście; połowa słońca na stoku północnym) to wartości dydaktyczne tej aplikacji, nie przepis.',
   'site-albedo':
     'Kolor ścian decyduje, ile słońca obudowa pochłania. Wykończenia grupują się w trzy klasy absorpcji — jasna α 0,4, średnia 0,5, ciemna 0,8 (klasy za RCCTE Quadro V.5, użyte tu jako czysta fizyka) — a pokazywane albedo to część odbita, 1 − α. Kolor to decyzja letnia: tylko słońce pochłonięte w sezonie chłodzenia potrafi przegrzać, a jasne powierzchnie to standardowa rada przeciw niemu (Lechner). Dlatego <b>Dopasowanie albeda</b> waży każdy stopień powyżej jasnej klasy latem tej działki — czerwiec–wrzesień daje tu średnio <b>%1 °C</b>, lato <b>%2</b> — bez wagi przy 17 °C i poniżej, z pełną wagą przy 23 °C i powyżej. Pudełko pod spodem podaje samo albedo i nazywa lato, przeciw któremu jest czytane. W klasie jedna wartość; świeże bielenie odbija więcej niż kremowa farba. Pasma 80/50 to dydaktyczne cięcia tej aplikacji. Ściany biorą kolor we wszystkich widokach 3D; dach zachowuje własne wykończenie.',
   'roof-score':
@@ -30752,7 +30859,7 @@ Object.assign(PT_HINT, {
   'ori-roof':
     'Południowa powierzchnia zbiera najwięcej, gdy promień południa spotyka ją prawie prostopadle: <b>zima = szerokość + 15°, lato = szerokość − 15°, cały rok = szerokość</b> (Galloway; Lechner) — tutaj <b>%1° / %2° / %3°</b>. %4. Tradycyjne polskie strome dachy (kraj śnieżny, często 35–45°) siadają blisko letniego ideału, lecz daleko poniżej zimowego, więc zimowe kolektory zwykle potrzebują własnej, bardziej stromej konstrukcji — napięcie jest lekcją.',
   'ori-ff':
-    'Współczynnik kształtu FF = obudowa zewnętrzna ÷ kubatura ogrzewana, w m⁻¹ — ściany do okapu, trójkąty szczytowe, połacie i parter nad kubaturą, którą zamykają, jedna strefa, wszystko zewnętrzne. Niżej znaczy zwarciej: kula to geometryczne ekstremum. Stanowi tu czystą geometrię bez dołączonych limitów. Odznaka maluje go na zielono do 0,7 (zwarty), bursztynowo do 1,1 (umiarkowany), a powyżej na czerwono (rozproszony): pasma dydaktyczne, nie limity. Nie rusza odznaki dopasowania.',
+    'Współczynnik kształtu FF = obudowa zewnętrzna ÷ kubatura ogrzewana, w m⁻¹ — ściany do okapu, trójkąty szczytowe, połacie i parter nad kubaturą, którą zamykają, jedna strefa, wszystko zewnętrzne. Niżej znaczy zwarciej: kula to geometryczne ekstremum. <b>Celem jest współczynnik kształtu samego optimum</b>: zielonej bryły — twojej powierzchni podłóg w proporcji i liczbie kondygnacji optimum, bez załamań — pod dachem ustawionym w zakładce Dach. Odznaka i odczyt są zielone do 10 % powyżej niego, bursztynowe do 30 %, dalej czerwone; każde załamanie, skrzydło, patio czy dodatkowy dach widać jako procent ponad cel. Polskie przepisy wyceniały kiedyś tę liczbę wprost: w latach 2009–2013 graniczna energia pierwotna na ogrzewanie i wentylację budynku mieszkalnego wynosiła EP = 55 + 90 · A/V<sub>e</sub> kWh/(m²·rok) dla A/V<sub>e</sub> od 0,2 do 1,05 (Warunki Techniczne, § 329, Dz.U. 2008 nr 201 poz. 1238), czyli każde 0,1 m⁻¹ współczynnika kształtu dostawało 9 kWh/(m²·rok) więcej. Dzisiejsza granica to jedna liczba niezależnie od kształtu, więc rozczłonkowana bryła nie dostaje już ulgi: trzeba za nią zapłacić izolacją. Pasma są dydaktyczne, nie graniczne, i nie ruszają odznaki dopasowania.',
   'open-wwr':
     'Pasma WWR idą za klasyfikacją Chinga &amp; Shapiro (niskie &lt;10%, umiarkowane 10–20%, wysokie 20–30%, bardzo wysokie &gt;30%; s. 242) czytaną pod światło wskazówek orientacyjnych Lechnera — południe bierze najwięcej szkła, północ najmniej ze słonecznych lic, a wschód/zachód są minimalizowane tam, gdzie klimat chyli się ku gorącu (ss. 130–132, 416). Pasmo pokazane dla %1 w tym klimacie to <b>%2–%3%</b>. Północ trzymana jest na 5–10% i startuje od 5%: prawie nie bierze zimowego słońca i traci ciepło cały rok. To bioclimatyczny wybór tej aplikacji, nie reguła żadnego kodeksu — kodeks nie stawia maksimum, sam próg: pomieszczenia dla ludzi potrzebują powierzchni okien co najmniej 1:8 podłogi (WT §57), a odczyt strony północnej mówi, ile powierzchni pokoi jego szkło obsłuży. To własna synteza tej aplikacji przez źródła, nie jedna cytowalna liczba — traktuj ją jak cel, nie test zdany/oblany. Każda strona sądzona jest po tym, ku czemu naprawdę patrzy po obrocie planu w Terenie, a jej WWR stosuje się do każdej ściany planu po tej stronie — skrzydła, wnęki, dziedzińca. Na dwóch albo trzech piętrach szkło dzieli się równo między piętra: każda ściana bierze jedno okno na piętro, wszystkie jednej szerokości, z parapetem i nadprożem mierzonymi od każdego piętra, nadprożem stopującym 0,10 m pod piętrem wyżej. Odznaka dopasowania WWR uśrednia ten test przez cztery strony.',
   'open-shading':
@@ -33738,7 +33845,20 @@ PT_HINT['roof-solar-mount'] = '<b>Onde e como ficam os colectores.</b> Cada camp
 "south face": "stok południowy",
 "No popular model is recorded for this place. The archetypes cover the regional houses of Poland by voivodeship — go back to the setup and choose <b>Olgyay</b>, or a site inside Poland.": "Dla tego miejsca nie zapisano modelu ludowego. Archetypy obejmują regionalne domy Polski według województw — wróć do ustawień i wybierz <b>Olgyay</b> albo działkę w Polsce.",
 "Click a room or an opening on the plan and press Delete to remove it, or use ✕ in the table. Rename a room in the table or by double-clicking it on the plan. <b>Sień</b> is the hall of the Polish folk house — entered straight from outside, often through the whole depth of the house, it gives on the living room (izba) on one side and the chamber (komora) or a second room on the other; in the smoke hut it held the hearth’s smoke on its way to the roof (Pokropek 1976). <b>Room</b> is a room of free use.": "Kliknij pomieszczenie lub otwór na rzucie i naciśnij Delete, aby je usunąć, albo użyj ✕ w tabeli. Zmień nazwę pomieszczenia w tabeli lub klikając je dwukrotnie na rzucie. <b>Sień</b> to wejściowe pomieszczenie polskiego domu ludowego — wchodzi się do niej prosto z zewnątrz, często przechodzi przez całą głębokość domu i prowadzi z jednej strony do izby, z drugiej do komory lub drugiej izby; w chałupie kurnej przez sień uchodził dym z paleniska ku dachowi (Pokropek 1976). <b>Pomieszczenie</b> to pomieszczenie o dowolnym przeznaczeniu.",
-"Houses": "Domy"
+"Houses": "Domy",
+"Terrain and mesoclimate": "Teren i mezoklimat",
+"Heating degree-days": "Stopniodni grzania",
+"normals": "normy",
+"normals at": "normy na",
+"Altitude: normals taken as the site’s own, no correction": "Wysokość: normy przyjęte jako własne działki, bez poprawki",
+"Mesoclimate": "Mezoklimat",
+"Winter sun at": "Zimowe słońce na",
+"target form factor": "docelowy współczynnik kształtu",
+"the optimum’s": "optimum",
+"Square — stretch slightly toward 1 : ": "Kwadrat — rozciągnij lekko do 1 : ",
+"Poland, milder winter — a compact two-storey house, stretched east–west": "Polska, łagodniejsza zima — zwarty dom dwukondygnacyjny, rozciągnięty wschód–zachód",
+"Poland, cold winter — a compact two-storey house, moderately stretched": "Polska, mroźna zima — zwarty dom dwukondygnacyjny, umiarkowanie rozciągnięty",
+"Poland, severe winter or little winter sun — a very compact two-storey house": "Polska, surowa zima lub mało zimowego słońca — bardzo zwarty dom dwukondygnacyjny"
 };
   Object.keys(PT).forEach(k => { delete PT[k]; }); Object.assign(PT, F); vernNames(); })();
 
