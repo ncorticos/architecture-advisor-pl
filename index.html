@@ -971,7 +971,7 @@ const L_MAX = 50;
 const APP = {
   name:        'Architecture Advisor PL',
   tag:         'AA PL',
-  version:     '1.166.0',
+  version:     '1.167.0',
   author:      'Nuno Dinis Cortiços',
   institution: 'Lisbon School of Architecture, Universidade de Lisboa',
   builtWith:   'Claude Opus 5 (Anthropic)',
@@ -6051,8 +6051,13 @@ function segWindow(sg, G) {
     return { f:'C', w, h, sill:o.sillZ, head, uc:sg.len / 2, n:1, rows, area:o.bandM > 0 ? glass : w * h, glass, base, ceil };
   }
   const n = Math.max(1, Math.round(G.fl || 1)), H0 = n * G.fh;
-  const head = n > 1 ? Math.max(o.sillZ + 0.3, Math.min(o.headZ, G.fh - 0.1)) : o.headZ, h = Math.max(0.3, head - o.sillZ);
-  const w = o.bandM > 0 ? o.bandM : Math.min(sg.len * 0.92, o.wwr * sg.len * H0 / (n * h));
+  let head = n > 1 ? Math.max(o.sillZ + 0.3, Math.min(o.headZ, G.fh - 0.1)) : o.headZ, h = Math.max(0.3, head - o.sillZ);
+  /* a band in metres stays inside its wall: one carried from a longer plan (an archetype's, before the plan was
+     shortened) is cut back to 92 % of this wall rather than running past its corner */
+  const cap = sg.len * 0.92;
+  let w = o.bandM > 0 ? Math.min(o.bandM, cap) : o.wwr * sg.len * H0 / (n * h);
+  /* a share the 92 % band cannot hold at this height is made up in height, up to 0.10 m under the floor or eave above */
+  if (!(o.bandM > 0) && w > cap) { const hMax = Math.max(head, G.fh - 0.1); head = Math.min(hMax, o.sillZ + o.wwr * sg.len * H0 / (n * cap)); h = Math.max(0.3, head - o.sillZ); w = cap; }
   const zR = raiseH(MASS), rows = Array.from({ length:n }, (_, k) => ({ sill:zR + k * G.fh + o.sillZ, head:zR + k * G.fh + head }));
   return { f, w, h, sill:o.sillZ, head, uc:sg.len / 2, n, rows, area:o.bandM > 0 ? o.wwr * sg.len * H0 : n * w * h, glass:o.wwr * sg.len * H0 };
 }
@@ -6077,7 +6082,7 @@ function openMetres() {
   ['S', 'N', 'E', 'W'].forEach(f => { const o = OPEN[f]; if (!o) return;
     const segs = pl.segs.filter(sg => !sg.step && segFace(sg) === f); if (!segs.length) return;
     const ref = segs.reduce((a, q) => q.len > a.len ? q : a, segs[0]);
-    if (!(o.bandM > 0)) { const w = o.wwr > 0 ? segWindow(ref, MASS) : null; if (!w) return; openBandToMetres(o, f, w, ref.len); }
+    if (!(o.bandM > 0)) { const w = o.wwr > 0 ? segWindow(ref, MASS) : null; if (!w) return; if (w.head > o.headZ) o.headZ = +w.head.toFixed(2); openBandToMetres(o, f, w, ref.len); }
     let wall = 0, built = 0;
     segs.forEach(sg => { wall += sg.len * n * MASS.fh; const wn = segWindow(sg, MASS); if (!wn) return;
       /* a brick panel is no glass, nor a popular house's timber door */
@@ -29111,7 +29116,7 @@ function mountApp(site, clim, keepTab, keepModel, keepScroll) {
      own wall area (L or D × the eave height). */
   const faceDefault = () => ({ wwr:0.20, sillZ:0.9, headZ:2.1, ovD:0, ovN:1, ovL:0, ovR:0, finD:0, finN:0, finSide:'both', units:[{ on:true, frac:1 }] });
   OPEN = { S:faceDefault(), N:faceDefault(), E:faceDefault(), W:faceDefault(), C:faceDefault() };
-  OPEN.S.wwr = 0.35;   // a defensible start, not a recommendation — the badge judges it live
+  OPEN.S.wwr = 0.40;   // south 40 %, east and west 20 % (the top of their heating bands), north 5 % — a start, not a rule: the badge judges it live
   OPEN.N.wwr = 0.05;   // north starts at the low end of its band
   OPEN.C.wwr = 0.30;   // clerestory: high glass earns its keep as daylight, shaded by the upper roof
   /* the defaults first, then the study over them: set after it, they wiped the sunspace, roof windows and turbine
