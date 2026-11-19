@@ -971,7 +971,7 @@ const L_MAX = 50;
 const APP = {
   name:        'Architecture Advisor PL',
   tag:         'AA PL',
-  version:     '1.169.0',
+  version:     '1.170.0',
   author:      'Nuno Dinis Cortiços',
   institution: 'Lisbon School of Architecture, Universidade de Lisboa',
   builtWith:   'Claude Opus 5 (Anthropic)',
@@ -12728,7 +12728,7 @@ const gelCount = f => { const us = faceUnits(f); return winsOf(f).reduce((a, x) 
     if (o.ovD > 0) ovPositions(o.ovN, { v0:bd.v0, v1:bd.v1 }).forEach(z => plates.push({ za:z, zb:z, d:o.ovD, t0:bd.x0, t1:bd.x1 }));
     if (o.finN > 0 && o.finD > 0) faceFins(f).forEach(tq => fins.push({ t:bd.x0 + tq * (bd.x1 - bd.x0), d:o.finD, z0:bd.v0, z1:bd.v1 }));
     /* the eave canopy, falling at its pitch from its root */
-    if (cpC && cpC.sg === sg) plates.push({ za:cpC.z0, zb:cpC.z1, d:cpC.d, t0:cpC.u0, t1:cpC.u1, per:isPergola(cpC.c) ? cpC.c : null });
+    (cpC || []).forEach(cp => { if (cp.sg === sg) plates.push({ za:cp.z0, zb:cp.z1, d:cp.d, t0:cp.u0, t1:cp.u1, per:isPergola(cp.c) ? cp.c : null }); });
     /* the roof eave over this window: from the roof's height at the wall
        line out to its edge, along the whole wall and past its corners */
     const ev = eaveEdge(MmE, H0E, beiE, sg, sp.a, sp.b);
@@ -12787,27 +12787,38 @@ const gelCount = f => { const us = faceUnits(f); return winsOf(f).reduce((a, x) 
   function shadeFactors(f) {
     if (f === 'C') return null;
     const rects = shadeRects(f); if (!rects.length) return null;
-    const o8 = ori8(faceAz(f)), acc = { Fh:0, Foi:0, Fov:0, Ffi:0, Ffv:0, Fsi:0, Fsv:0, a:0, bL:0, bR:0, g:0, A:0 };
+    const o8 = ori8(faceAz(f)), acc = { Fh:0, Foi:0, Fov:0, Ffi:0, Ffv:0, Fsi:0, Fsv:0, a:0, bL:0, bR:0, g:0, A:0, aP:0, tw:0, ts:0, AP:0 };
     rects.forEach(rc => {
       const tc = rc.pts.reduce((a, q) => a + q[0], 0) / rc.pts.length, zc = rc.pts.reduce((a, q) => a + q[1], 0) / rc.pts.length, E = rc.els, sg = E.sg;
-      let a = 0, bL = 0, bR = 0, g = 0;
-      E.plates.forEach(P => { if (P.per) return; const ze = Math.max(P.za, P.zb); if (ze <= zc + 0.05 || tc < P.t0 - 0.05 || tc > P.t1 + 0.05) return; a = Math.max(a, Math.atan2(P.d, Math.max(0.05, Math.min(P.za, P.zb) - zc)) / RAD); });
+      let a = 0, aP = 0, perC = null, bL = 0, bR = 0, g = 0;
+      E.plates.forEach(P => { const ze = Math.max(P.za, P.zb); if (ze <= zc + 0.05 || tc < P.t0 - 0.05 || tc > P.t1 + 0.05) return;
+        const ang = Math.atan2(P.d, Math.max(0.05, Math.min(P.za, P.zb) - zc)) / RAD;
+        if (P.per) { if (ang > aP) { aP = ang; perC = P.per; } } else a = Math.max(a, ang); });
       E.fins.forEach(F => { if (zc < F.z0 - 0.3 || zc > F.z1 + 0.3) return; const dx = F.t - tc; if (Math.abs(dx) < 0.05) return; const b = Math.atan2(F.d, Math.abs(dx)) / RAD;
         if (dx * rc.sgnT > 0) bR = Math.max(bR, b); else bL = Math.max(bL, b); });
       if (E.blocks && E.blocks.length) { const tx = (sg.b[0] - sg.a[0]) / sg.len, ty = (sg.b[1] - sg.a[1]) / sg.len, px = sg.a[0] + tx * tc, py = sg.a[1] + ty * tc;
         E.blocks.forEach(B => B.poly.forEach((q, i) => { const r = B.poly[(i + 1) % B.poly.length]; [q, [(q[0] + r[0]) / 2, (q[1] + r[1]) / 2]].forEach(m => {
           const dx = m[0] - px, dy = m[1] - py, d = Math.hypot(dx, dy); if (d < 0.3) return; const c = (dx * sg.n[0] + dy * sg.n[1]) / d; if (c < 0.5) return;   // within 60° of the normal
           g = Math.max(g, Math.atan2(B.h - zc, d) / RAD); }); })); }
-      const k = shadeStdFactors(o8, a, bL, bR, g, STATE.site);
+      let k = shadeStdFactors(o8, a, bL, bR, g, STATE.site);
+      /* a pergola is an overhang that lets part of the beam through — its leaves or mat by season: the factor
+         is the open one and the closed one mixed by the share it lets pass in each season */
+      if (perC && aP > a + 0.5) {
+        const kP = shadeStdFactors(o8, aP, bL, bR, g, STATE.site), so = !!(STATE.site && STATE.site.lat < 0);
+        const tw = pergolaTau(perC, so ? 196 : 15), ts = pergolaTau(perC, so ? 15 : 196), mx = (p, q, tq) => p == null ? p : tq * p + (1 - tq) * q;
+        k = { Fh:k.Fh, Foi:mx(k.Foi, kP.Foi, tw), Fov:mx(k.Fov, kP.Fov, ts), Ffi:k.Ffi, Ffv:k.Ffv, Fsi:mx(k.Fsi, kP.Fsi, tw), Fsv:mx(k.Fsv, kP.Fsv, ts) };
+        acc.aP += aP * rc.area; acc.tw += tw * rc.area; acc.ts += ts * rc.area; acc.AP += rc.area;
+      }
       ['Fh', 'Foi', 'Fov', 'Ffi', 'Ffv', 'Fsi', 'Fsv'].forEach(q => { acc[q] += k[q] * rc.area; });
       acc.a += a * rc.area; acc.bL += bL * rc.area; acc.bR += bR * rc.area; acc.g += g * rc.area; acc.A += rc.area; });
     const out = { ori:o8 }; ['Fh', 'Foi', 'Fov', 'Ffi', 'Ffv', 'Fsi', 'Fsv', 'a', 'bL', 'bR', 'g'].forEach(q => { out[q] = acc[q] / acc.A; });
+    out.per = acc.AP > 0 ? { a:acc.aP / acc.AP, tw:acc.tw / acc.AP, ts:acc.ts / acc.AP } : null;
     return out;
   }
   /** Every window rectangle of a side, storey by storey, with its devices and the points that sample its glass. */
   function shadeRects(f) {
     const bg = balcGeo(G), us = faceUnits(f), MmE = Mod(), H0E = MmE.H0, beiE = beiAny(RF) ? 1 : 0;
-    const cpC = (() => { const Mm = Mod(); for (const { c } of roofCanopies(RF)) { const h = canopySpanFor(Mm.pl.segs, c, h0(), Mm); if (h) return h; } return null; })();
+    const cpC = (() => { const Mm = Mod(), out = []; for (const { c } of roofCanopies(RF)) { const h = canopySpanFor(Mm.pl.segs, c, h0(), Mm); if (h) out.push(h); } return out; })();
     const rects = [];
     winsOf(f).forEach(x => x.w.rows.forEach((r, k) => {
       const head = Math.min(r.head, h0()), u0 = x.w.uc - x.w.w / 2, u1 = x.w.uc + x.w.w / 2;
@@ -12828,7 +12839,7 @@ const gelCount = f => { const us = faceUnits(f); return winsOf(f).reduce((a, x) 
     const doys = Array.isArray(days) ? days : [days];
     const wallAz = faceAz(f), bg = balcGeo(G), us = faceUnits(f);
     const MmE = Mod(), H0E = MmE.H0, beiE = beiAny(RF) ? 1 : 0;
-    const cpC = (() => { const Mm = Mod(); for (const { c } of roofCanopies(RF)) { const h = canopySpanFor(Mm.pl.segs, c, h0(), Mm); if (h) return h; } return null; })();
+    const cpC = (() => { const Mm = Mod(), out = []; for (const { c } of roofCanopies(RF)) { const h = canopySpanFor(Mm.pl.segs, c, h0(), Mm); if (h) out.push(h); } return out; })();
     /* every window rectangle, storey by storey, with its devices and the
        grid of points that samples its glass */
     const rects = [];
@@ -12917,7 +12928,9 @@ const gelCount = f => { const us = faceUnits(f); return winsOf(f).reduce((a, x) 
     const K = shadeFactors(f); if (!K) return null;
     const cut = shadeEffectiveness(f, SHADE_SUMMER).pct / 100;
     const cM = C.t.filter(v => v >= 18).length + 1, hM = C.t.filter(v => v < 12).length + 1, wc = cM / (cM + hM), wh = hM / (cM + hM);
-    const v = clamp(50 + 125 * (1.5 * wc * cut - wh * (1 - K.Fsi)), 0, 100);
+    /* 50 is the bare glass; 100 every summer beam stopped and no heating sun lost; 0 all the heating sun lost for no summer cut */
+    const b = 1.5 * wc * cut - wh * (1 - K.Fsi);
+    const v = clamp(b >= 0 ? 50 + 50 * b / (1.5 * wc) : 50 + 50 * b / wh, 0, 100);
     if (SHADE_MEMO.size > 64) SHADE_MEMO.clear();
     SHADE_MEMO.set(key, v);
     return v;
@@ -12941,9 +12954,10 @@ const gelCount = f => { const us = faceUnits(f); return winsOf(f).reduce((a, x) 
     }
     const sc = shadingScore(curFace), K = sc === null ? null : shadeFactors(curFace), cut = sc === null ? 0 : shadeEffectiveness(curFace, SHADE_SUMMER).pct;
     const kTxt = K ? ' · ' + SHADE_STD_NAME + ': F_ov ' + fmt(K.Foi, 2) + ' · F_fin ' + fmt(K.Ffi, 2) + ' → F_sh ' + t('heating') + ' ' + fmt(K.Fsi, 2) + ' (' + t('loses') + ' ' + Math.round(100 * (1 - K.Fsi)) + ' %) · '
-      + t('summer, computed') + ': ' + t('cuts') + ' ' + Math.round(cut) + ' % · α ' + Math.round(K.a) + '° βL ' + Math.round(K.bL) + '° βR ' + Math.round(K.bR) + '°' : '';
+      + t('summer, computed') + ': ' + t('cuts') + ' ' + Math.round(cut) + ' % · α ' + Math.round(K.a) + '° βL ' + Math.round(K.bL) + '° βR ' + Math.round(K.bR) + '°'
+      + (K.per ? ' · ' + t('pergola') + ' α ' + Math.round(K.per.a) + '° (' + t('lets through') + ' ' + Math.round(100 * K.per.tw) + ' % ' + t('winter') + ', ' + Math.round(100 * K.per.ts) + ' % ' + t('summer') + ')' : '') : '';
     if (sc === null) { pillShade.className = 'pill empty'; pillShade.textContent = t('No shading device on this facade'); }
-    else if (sc >= 60) { pillShade.className = 'pill ok'; pillShade.textContent = t('Cuts more summer sun than it costs in winter') + kTxt; }
+    else if (sc >= 55) { pillShade.className = 'pill ok'; pillShade.textContent = t('Cuts more summer sun than it costs in winter') + kTxt; }
     else if (sc >= 45) { pillShade.className = 'pill empty'; pillShade.textContent = t('About as much winter sun lost as summer sun cut') + kTxt; }
     else { pillShade.className = 'pill bad'; pillShade.textContent = t('Costs more winter sun than the summer sun it cuts') + kTxt; }
     [[cRwN, 'N'], [cRwE, 'E'], [cRwW, 'W']].forEach(([c, sl]) => { c.style.display = RF.n !== 0 && planeFor(sl) ? '' : 'none'; });
@@ -22849,6 +22863,7 @@ function pergolaCoverCtl(c, after) {
 }
 Object.assign(PT, { 'Canopy':'Alpendre', 'Pergola':'Pérgola', 'Pergola cover':'Cobertura da pérgola', 'pergola':'pérgola',
   'sun let through':'sol que passa', 'in June':'em Junho', 'in December':'em Dezembro', 'Eave canopy or pergola':'Alpendre ou pérgola' });
+Object.assign(PT, { 'lets through':'deixa passar' });
 Object.assign(PT, { 'Roof step opening':'Abertura da parede de remate',
   'selected — drag it along the wall; door and brick ventilation are under Roof step walls':'seleccionada — arraste-a ao longo da parede; porta e ventilação em tijolo estão em Paredes de remate da cobertura' });
 Object.assign(PT, { 'Whole facade':'Fachada inteira', 'Stretch it along the whole wall it stands on':'Estica-a ao longo de toda a parede onde está' });
