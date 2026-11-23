@@ -971,7 +971,7 @@ const L_MAX = 50;
 const APP = {
   name:        'Architecture Advisor PL',
   tag:         'AA PL',
-  version:     '1.177.0',
+  version:     '1.178.0',
   author:      'Nuno Dinis Cortiços',
   institution: 'Lisbon School of Architecture, Universidade de Lisboa',
   builtWith:   'Claude Opus 5 (Anthropic)',
@@ -8628,18 +8628,65 @@ function buildSite(host) {
    * opposite sides that it points nowhere. The sizes are set on Windows &
    * Shading; the plan's turn, here, decides where they look.
    */
-  const winAim = () => {
-    let vx = 0, vy = 0, tot = 0;
-    WIN_KEYS.forEach(f => {
-      const g = glassOf(f);
-      if (!(g > 0)) return;
-      const a = faceAz(f) * RAD;
-      vx += g * Math.sin(a); vy += g * Math.cos(a); tot += g;
-    });
-    if (tot <= 0 || Math.hypot(vx, vy) < 0.05 * tot) return null;
-    const az = (Math.atan2(vx, vy) / RAD + 360) % 360;
-    return { fit:Math.round(50 * (1 + Math.cos((az - EQ_AZ) * RAD))), az };
+  /* --- the winter sun through the glass, roof windows included: the Polish method adapted (v1.178) -------------
+     The methodology of Dz.U. 2015 poz. 376 sums each month's solar gain through the glazing as Σ C · A · I · g · k_α · Z:
+     C the glazed share of the window (0.7 on average), A its area, I the month's solar energy on its plane from the
+     station's typical meteorological year, g the glass's solar factor, k_α its inclination correction, Z its shading.
+     Here I is this application's own irradiance on each window's true plane — slope and orientation as built, from the
+     site's ERA5 irradiation by the monthly mean day (the Solar radiation tab's) — which carries k_α within it, and Z is
+     read by following the sun's ray from each window past the neighbouring buildings, hour by hour; the diffuse sky is
+     left whole. October to April. Against it, a teaching reference carried over from the Portuguese method (Manual SCE,
+     Eq. 142): 0.146 × 15 % of the floor × the season's sun on a south wall. */
+  const PLS_C = 0.7, PLS_G = 0.6;   // C: the methodology's mean glazed share; g: double glazing with a low-e coating, a teaching value
+  const PLS_M = lat < 0 ? [3, 4, 5, 6, 7, 8, 9] : [9, 10, 11, 0, 1, 2, 3];
+  const plsW = (x, y) => { const b = (G.rot - 180) * RAD; return [x * Math.cos(b) + y * Math.sin(b), -x * Math.sin(b) + y * Math.cos(b)]; };
+  /** The houses round the plot as prisms, in metres east and north of it: OpenStreetMap's and the popular model's other bodies. */
+  const plsNbs = () => {
+    const out = [], bbOf = P => P.reduce((b, q) => [Math.min(b[0], q[0]), Math.min(b[1], q[1]), Math.max(b[2], q[0]), Math.max(b[3], q[1])], [Infinity, Infinity, -Infinity, -Infinity]);
+    try { vmCompanionBlocks(plsW).forEach(b => out.push({ pts:b.pts, h:b.h, bb:bbOf(b.pts) })); } catch (e) {}
+    if (ENV.nb !== false && NB.list.length) {
+      const pp = ENV.plot || { lat:S.lat, lon:S.lon }, cl = Math.cos(pp.lat * RAD);
+      NB.list.forEach(b => { const pts = b.ll.map(q => [(q[1] - pp.lon) * 111320 * cl, (q[0] - pp.lat) * 111320]);
+        if (inPoly(0, 0, pts) || pts.every(q => Math.hypot(q[0], q[1]) > 150)) return; out.push({ pts, h:b.h, bb:bbOf(pts) }); });
+    }
+    return out;
   };
+  const plsSees = (p, s, nbs) => {
+    if (s[2] <= 0.02) return false;
+    for (const P of nbs) { if (p[2] >= P.h) continue;
+      const l = (P.h - p[2]) / s[2], qx = p[0] + s[0] * l, qy = p[1] + s[1] * l;
+      if (Math.max(p[0], qx) < P.bb[0] || Math.min(p[0], qx) > P.bb[2] || Math.max(p[1], qy) < P.bb[1] || Math.min(p[1], qy) > P.bb[3]) continue;
+      const Q = P.pts; for (let i = 0, j = Q.length - 1; i < Q.length; j = i++) if (segCross(p[0], p[1], qx, qy, Q[j][0], Q[j][1], Q[i][0], Q[i][1])) return false; }
+    return true;
+  };
+  /** The season's solar energy on a plane of unit normal n (east, north, up), kWh/m² — shaded beam where nbs is given. */
+  const plsI = (n, p, nbs) => PLS_M.reduce((a, m) => { const D = sfDay(m);
+    return a + MDAYS[m] * D.hrs.reduce((s2, hr) => { const q = sfPlaneIrr(hr, n), sun = !nbs || !p || plsSees(p, hr.s, nbs); return s2 + (sun ? q.beam : 0) + q.dif; }, 0) / 1000; }, 0);
+  /** Every glazed opening with its plane, its season's irradiance and its gain. */
+  function plSolar() {
+    let D0 = null; try { D0 = sfDay(PLS_M[0]); } catch (e) { return null; }
+    if (!D0) return null;
+    const nbs = plsNbs(), rows = [];
+    winList().forEach(o => { const sg = o.sg, w = o.w, A = w.glass; if (!(A > 0)) return;
+      const u = w.uc / sg.len, pc = [sg.a[0] + (sg.b[0] - sg.a[0]) * u + sg.n[0] * 0.2, sg.a[1] + (sg.b[1] - sg.a[1]) * u + sg.n[1] * 0.2], pw = plsW(pc[0], pc[1]);
+      const nw = plsW(sg.n[0], sg.n[1]), r0 = w.rows && w.rows[0], z = r0 ? (r0.sill + r0.head) / 2 : 1.5;
+      rows.push({ kind:'wall', n:[nw[0], nw[1], 0], p:[pw[0], pw[1], z], A, tilt:90, az:(Math.atan2(nw[0], nw[1]) / RAD + 360) % 360 }); });
+    roofWindowQuads(G, ROOF).forEach(o => { const q = o.q, e1 = [q[1][0] - q[0][0], q[1][1] - q[0][1], q[1][2] - q[0][2]], e2 = [q[3][0] - q[0][0], q[3][1] - q[0][1], q[3][2] - q[0][2]];
+      let n = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]]; const A = Math.hypot(...n); if (!(A > 0)) return;
+      if (n[2] < 0) n = n.map(v => -v);
+      const nh = plsW(n[0] / A, n[1] / A), c = [(q[0][0] + q[2][0]) / 2, (q[0][1] + q[2][1]) / 2, (q[0][2] + q[2][2]) / 2], pw = plsW(c[0], c[1]);
+      rows.push({ kind:'roof', n:[nh[0], nh[1], n[2] / A], p:[pw[0], pw[1], c[2] + 0.1], A, tilt:Math.acos(clamp(n[2] / A, -1, 1)) / RAD, az:Math.hypot(nh[0], nh[1]) > 1e-6 ? (Math.atan2(nh[0], nh[1]) / RAD + 360) % 360 : null }); });
+    const south = lat < 0 ? [0, 1, 0] : [0, -1, 0], Is = plsI(south, null, null);
+    let Q = 0, AI = 0, AA = 0;
+    rows.forEach(r => { r.I0 = plsI(r.n, null, null); r.I = plsI(r.n, r.p, nbs); r.Z = r.I0 > 0 ? r.I / r.I0 : 1; r.Q = PLS_C * r.A * r.I * PLS_G; Q += r.Q; AI += r.A * r.I0; AA += r.A; });
+    const Ap = planOf().area * G.fl, Qref = 0.146 * 0.15 * Ap * Is;
+    return { rows, Q, Qref, pct:Qref > 0 ? 100 * Q / Qref : null, Is, Ap, nNb:nbs.length, fit:AA > 0 ? Math.round(clamp(100 * AI / (AA * Is), 0, 100)) : null,
+      perSouth:PLS_C * Is * PLS_G, perRoof:PLS_C * 0.78 * 1.40 * PLS_G * plsI(lat < 0 ? [0, Math.sin(40 * RAD), Math.cos(40 * RAD)] : [0, -Math.sin(40 * RAD), Math.cos(40 * RAD)], null, null), measured:D0.Hmeasured };
+  }
+  /** Window fit: the glass's winter irradiance, area-weighted, against a south wall's — 100 when all of it faces south,
+      roof windows counted on their own slope. Null with no glass at all. */
+  const winAim = () => { let R = null; try { R = plSolar(); } catch (e) { console.error(e); } return R && R.fit !== null ? { fit:R.fit } : null; };
+
   SCORES.site = () => ({ 'Olgyay fit /100':labScore().total, 'Form factor':+labFF().ff.toFixed(2),
     'Albedo fit /100':albedoFit(), 'Wall albedo':finishOf(G.col) ? +(1 - FINISH_ALPHA[finishOf(G.col).cls]).toFixed(2) : null,
     'Window fit /100':winAim() ? winAim().fit : null,
@@ -8750,6 +8797,19 @@ function buildSite(host) {
   const pillOri = el('span', { class:'pill ok' });
   const pillForm = el('span', { class:'pill ok' });
   const pillWin = el('span', { class:'pill ok' });
+  const pillPls = el('span', { class:'pill empty' });
+  /** The season's solar gain through all the glass against the teaching reference, and what would make up the rest. */
+  function refreshPls() {
+    let R = null; try { R = plSolar(); } catch (e) { console.error(e); }
+    pillPls.style.display = R ? '' : 'none'; if (!R) return;
+    const pct = R.pct === null ? 0 : R.pct;
+    pillPls.className = 'pill ' + (pct >= 100 ? 'ok' : pct >= 70 ? 'empty' : 'bad');
+    let txt = t('Winter sun through the glass, Oct–Apr') + ': ' + fmt(R.Q, 0) + ' kWh — ' + fmt(pct, 0) + ' % ' + t('of the reference');
+    if (pct < 100 && R.Qref > R.Q) { const need = R.Qref - R.Q, nr = Math.ceil(need / R.perRoof);
+      txt += ' · ' + t('to make it up') + ': ' + fmt(need / R.perSouth, 1) + ' m² ' + t('of unshaded south glass, or') + ' ' + nr + ' ' + t(nr === 1 ? 'roof window 0.78 × 1.40' : 'roof windows 0.78 × 1.40'); }
+    pillPls.textContent = txt;
+  }
+  radiationFor(S, () => { try { refreshWin(); } catch (e) {} });
   const pillFl = el('span', { class:'pill ok' });
   const pillFF = el('span', { class:'pill empty' });
   let refreshCol = () => {};   // the wall-colour pill, set up with its section below
@@ -8757,12 +8817,17 @@ function buildSite(host) {
   /** The orientations with the most and the least glass, named by the way
       they face (ties joined). */
   function refreshWin() {
+    refreshPls();
+    const rA = roofWindowQuads(G, ROOF).reduce((a2, o) => { const q = o.q; return a2 + Math.hypot(q[1][0] - q[0][0], q[1][1] - q[0][1], q[1][2] - q[0][2]) * Math.hypot(q[3][0] - q[0][0], q[3][1] - q[0][1], q[3][2] - q[0][2]); }, 0);
     const ws = WIN_KEYS.map(f => ({ f, g:glassOf(f) })).filter(o => o.g > 0);
+    const roofTxt = rA > 0 ? t('roof windows') + ' ' + fmt(rA, 1) + ' m²' : '';
+    if (!ws.length && rA > 0) { const aim0 = winAim(); pillWin.className = 'pill ' + (aim0 && aim0.fit >= 80 ? 'ok' : 'empty'); pillWin.textContent = t('Glass only in the roof') + ': ' + roofTxt; return; }
     if (!ws.length) { pillWin.className = 'pill empty'; pillWin.textContent = t('No windows yet — size them on Windows & Shading'); return; }
     const amax = Math.max.apply(null, ws.map(o => o.g)), amin = Math.min.apply(null, ws.map(o => o.g));
     const dirs = a => ws.filter(o => Math.abs(o.g - a) <= 0.01 * amax).map(o => faceDir(o.f)).join('/');
     let txt = t('Most glass faces') + ' ' + dirs(amax);
     if (amax - amin > 0.01 * amax) txt += ' · ' + t('least faces') + ' ' + dirs(amin);
+    if (roofTxt) txt += ' · ' + roofTxt;
     const aim = winAim(), south = lat < 0 ? 'north' : 'south';
     if (!aim) { pillWin.className = 'pill empty'; pillWin.textContent = txt + ' — ' + t('opposite windows are equal: make the ' + south + ' one larger'); }
     else if (aim.fit >= 80) { pillWin.className = 'pill ok'; pillWin.textContent = txt + ' — ' + t('the right way round'); }
@@ -9313,6 +9378,8 @@ function buildSite(host) {
       // the plan form: the winter sun its own wings take off its walls
       const shW = Math.round(selfShade(355));
       badge(5, String(shW), t('Own shade · winter %'), shW <= 5 ? GREEN : shW <= 15 ? '#D97706' : '#DC2626');
+      { let R = null; try { R = plSolar(); } catch (e) {}
+        if (R && R.pct !== null) badge(6, fmt(R.pct, 0), t('Winter sun · % of ref.'), R.pct >= 100 ? GREEN : R.pct >= 70 ? '#D97706' : '#DC2626', 8); }
       swatchKey(ctx, 8, H - 30,
         [{ color:CH.ink, label:'Your plan' }, { color:GREEN, label:OPT_NAME }, { color:BLUE, label:'Windows' },
          { color:'#D97706', label:'Sun' }, { color:'rgba(20,23,26,.45)', label:'Shadow' }],
@@ -9435,6 +9502,12 @@ function buildSite(host) {
         return ['Windows ' + f + (f === 'S' ? ' (main facade side)' : '') + ' — face ' + COMPASS8_EN[Math.round(faceAz(f) / 45) % 8] + ', w × h (m)',
           ws.length ? ws.map(o => (o.w.n > 1 ? o.w.n + ' × ' : '') + +o.w.w.toFixed(2) + ' × ' + +o.w.h.toFixed(2)).join(' + ') : 'none']; }))
       .concat(WIN_KEYS.map(f => ['Glass ' + f + ' asked by its WWR (m²)', +glassOf(f).toFixed(2)]))
+      .concat((() => { let R = null; try { R = plSolar(); } catch (e) {} if (!R) return [];
+        return [['Season (months)', PLS_M.map(m => MON3_EN[m]).join(' ')], ['C (glazed share) · g (solar factor)', PLS_C + ' · ' + PLS_G],
+          ['South wall, season (kWh/m²)', fmt(R.Is, 0)], ['Floor area A_p (m²)', fmt(R.Ap, 1)], ['Neighbouring buildings read for Z', R.nNb], ['Irradiation', R.measured ? 'ERA5 1991–2020 (Open-Meteo)' : 'estimate, clearness 0.55']]
+          .concat(R.rows.map((r, k) => [(r.kind === 'roof' ? 'Roof window ' : 'Wall glass ') + (k + 1) + ' — slope ' + fmt(r.tilt, 0) + '°, faces ' + (r.az === null ? 'up' : COMPASS8_EN[Math.round(r.az / 45) % 8]) + ': A · I unshaded · Z · I · Q (kWh)',
+            [fmt(r.A, 2), fmt(r.I0, 0), fmt(r.Z, 2), fmt(r.I, 0), fmt(r.Q, 0)].join(' · ')]))
+          .concat([['Solar gain through the glass, Oct–Apr (kWh)', Math.round(R.Q)], ['Reference: 0.146 × 15 % of the floor × south-wall sun (kWh)', Math.round(R.Qref)], ['Gain / reference (%)', R.pct === null ? '' : Math.round(R.pct)]]); })())
       .concat([['Window fit (0–100)', winAim() ? winAim().fit : ''],
       ['Plan form', G.form || 'rect'],
       ['Break', G.form === 'U' && breakOn(G) ? 'U: west leg ' + G.wing.w + ' m wide, reach ' + G.wing.e + ' m; east leg ' + (G.wing.w2 || G.wing.w) + ' m wide, reach ' + G.wing.e2 + ' m; court reach ' + G.wing.c + ' m' + (G.wing.face > 0 ? ', back' : ', main facade')
@@ -9673,7 +9746,7 @@ function buildSite(host) {
   /* the readings, under the model: what each decision does, in words */
   const pillShade = el('span', { class:'pill empty' });
   info.appendChild(el('div', { class:'gh', text:'Readings' }));
-  info.appendChild(el('div', { class:'limitrow readings' }, [pillOri, pillForm, pillFl, pillFF, pillWin, pillShade, pillCol]));
+  info.appendChild(el('div', { class:'limitrow readings' }, [pillOri, pillForm, pillFl, pillFF, pillWin, pillPls, pillShade, pillCol]));
   stick();
   refreshShade = () => {
     const pl = planOf();
@@ -9704,6 +9777,8 @@ function buildSite(host) {
     [K.code]));
   host.appendChild(hint('site-windows',
     'The windows on the model are the ones sized on <b>Windows &amp; Shading</b> — the same width, sill and head, each set by its facade’s window-to-wall ratio — so turning the plan here turns them with it. Each blue tag names the way that window really faces once the plan is turned, then its width × height and the facade’s WWR; on Windows &amp; Shading the facades keep the names they have with the main facade to the south. The rule to read them by: <b>the larger the window, the more it should face south; the smaller, the more it faces north</b> (north and south swap below the equator). South glass collects the low winter sun and is the easiest to shade from the high summer sun; north glass gives even, diffuse light but gains almost no winter sun while it loses heat (Lechner; Gonçalves &amp; Graça). <b>Window fit</b> reads it: every window counts as an arrow out of its facade, as long as the glass its WWR asks for, and the fit is 100 when their sum points due south, 50 east or west, 0 north. The sizes change on Windows &amp; Shading; the plan’s turn, here, decides where they look. Windows &amp; Shading draws each window as one strip on the ground floor, no wider than 92 % of its wall — on two or three floors the strips can reach that limit and look alike while their WWR, and the fit, still differ. On a broken plan every wall at least 1.5 m long carries its orientation’s window, sized from its own area, and the tag counts the windows facing that way with their widths; <b>Window fit</b> then adds all the glass of each orientation.'));
+  host.appendChild(hint('site-pl-sol',
+    '<b>Window fit</b> reads every pane by the sun its own plane takes from October to April, against a south wall\u2019s — 100 when all the glass faces south — and counts the <b>roof windows</b> on their own slope and orientation. <b>Winter sun · % of ref.</b> is the solar gain through all the glass over the same months, built as the Polish methodology builds it (Dz.U. 2015 poz. 376): Σ C · A · I · g · Z, with C = 0.7 the glazed share of a window and g = 0.6 (double glazing with a low-e coating, a teaching value). Instead of the typical meteorological year\u2019s table and its inclination factor k<sub>α</sub>, I is this application\u2019s irradiance on each window\u2019s true plane (the Solar radiation tab\u2019s: the site\u2019s ERA5 irradiation by the monthly mean day), and Z follows the sun\u2019s ray from each window past the neighbouring buildings hour by hour, the diffuse sky left whole. The reference, 0.146 × 15 % of the floor × the season\u2019s sun on a south wall, is the Portuguese regulation\u2019s (Manual SCE, Eq. 142) carried over as a teaching yardstick — glazing of 15 % of the floor at that regulation\u2019s reference performance — not a Polish limit. Among close neighbours the walls\u2019 windows lose their low winter sun first; a roof window keeps more of it, and a steep one facing south keeps the most. In summer the same roof windows take the most sun of all and need an outside blind.'));
   host.appendChild(hint('ori-ff',
     'Form factor FF = exterior envelope ÷ heated volume, in m⁻¹ — walls to the eaves, gable triangles, roof planes and ground floor over the volume they enclose, one single zone, everything exterior. Lower is more compact: the sphere is the geometric extreme. <b>The target is the optimum’s own form factor</b>: the green box — your floor area at the optimum’s proportion and storeys, unbroken — under the roof set on Roof. The badge and the reading turn green within 10 % of it, amber within 30 %, red beyond; every break, wing, patio or extra storey of roof shows as a percentage above it. Polish regulation once priced this number directly: between 2009 and 2013 the limit on primary energy for heating and ventilation of a dwelling was EP = 55 + 90 · A/V<sub>e</sub> kWh/(m²·year) for A/V<sub>e</sub> between 0.2 and 1.05 (Warunki Techniczne, § 329, Dz.U. 2008 nr 201 poz. 1238), so each 0.1 m⁻¹ of form factor was allowed 9 kWh/(m²·year) more. Today’s limit is a single figure whatever the shape, so a dispersed form no longer earns an allowance: it has to be paid for in insulation. The bands are didactic, not limits, and do not move the fit badge.'));
 
@@ -32021,6 +32096,8 @@ Object.assign(PT, {
 
 /* --- the long captions, keyed by identifier ----------------------------- */
 Object.assign(PT_HINT, {
+  'site-pl-sol':
+    '<b>Dopasowanie okien</b> ocenia każdą szybę słońcem, które jej własna płaszczyzna otrzymuje od października do kwietnia, wobec ściany południowej — 100, gdy całe szkło patrzy na południe — i liczy <b>okna dachowe</b> z ich własnym nachyleniem i orientacją. <b>Słońce zimą · % wzorca</b> to zyski słoneczne przez całe szkło w tych samych miesiącach, zbudowane tak jak w polskiej metodologii (Dz.U. 2015 poz. 376): Σ C · A · I · g · Z, przy C = 0,7 (udział oszklenia w oknie) i g = 0,6 (szyba zespolona z powłoką niskoemisyjną, wartość dydaktyczna). Zamiast tabeli typowego roku meteorologicznego i współczynnika nachylenia k<sub>α</sub>, I to napromieniowanie liczone przez aplikację na rzeczywistej płaszczyźnie każdego okna (jak w zakładce Promieniowanie słoneczne: napromieniowanie ERA5 działki metodą średniego dnia miesiąca), a Z śledzi promień słońca od każdego okna obok sąsiednich budynków, godzina po godzinie; promieniowanie rozproszone pozostaje całe. Wzorzec, 0,146 × 15 % podłogi × słońce sezonu na ścianie południowej, pochodzi z przepisów portugalskich (Manual SCE, równ. 142) i jest przeniesiony jako miara dydaktyczna — przeszklenie 15 % podłogi o referencyjnej sprawności tamtych przepisów — nie polski wymóg. Wśród bliskich sąsiadów okna w ścianach tracą niskie zimowe słońce najpierw; okno dachowe zachowuje go więcej, a strome, zwrócone na południe — najwięcej. Latem te same okna dachowe dostają najwięcej słońca ze wszystkich i potrzebują zewnętrznej rolety.',
   'env-snow':
     'Jak drzewo zimą tam, gdzie zima bardzo mocna: gdzie pada śnieg, powiedz to słowami — ta strona nie rysuje śniegu, który oko mogłoby przeoczyć. Dni śniegu liczą tu dni ERA5 z co najmniej 0,5 cm świeżego śniegu, 1991–2020, czytane w tych dokładnych współrzędnych: prowizoryczna reanaliza, jak normy sieciowe na stronie startowej, nie obserwacja stacji — a reanaliza wygładza góry, więc wysokie miejsce czyta mniej dni śniegu niż jego stacja. W Suwałkach i w Tatrach to kilkadziesiąt dni w roku, od listopada do kwietnia; w Szczecinie — kilka. Gdzie liczba nie jest zerem, zanieś ją do projektu: śnieg obciąża dach, nawiewa na attykę, zasypuje okapy i potrafi zamknąć drogę — zimne miejsce zarabia nachylenie, odśnieżony dojazd i detal, który przeżyje odwilż.', 
   'open-shape':
@@ -35125,7 +35202,17 @@ PT_HINT['roof-solar-mount'] = '<b>Onde e como ficam os colectores.</b> Cada camp
 "Solar radiation": "Promieniowanie słoneczne",
 "Outdoor temperature": "Temperatura zewnętrzna",
 "Daylight": "Światło dzienne",
-"Noise": "Hałas"
+"Noise": "Hałas",
+"Winter sun through the glass, Oct–Apr": "Słońce zimowe przez szyby, X–IV",
+"of the reference": "wzorca",
+"to make it up": "by uzupełnić",
+"of unshaded south glass, or": "niezacienionego szkła na południe albo",
+"roof windows 0.78 × 1.40": "okien dachowych 0,78 × 1,40",
+"roof window 0.78 × 1.40": "okno dachowe 0,78 × 1,40",
+"Winter sun · % of ref.": "Słońce zimą · % wzorca",
+"the roof": "dach",
+"roof windows": "okna dachowe",
+"Glass only in the roof": "Szkło tylko w dachu"
 };
   Object.keys(PT).forEach(k => { delete PT[k]; }); Object.assign(PT, F); vernNames(); })();
 
